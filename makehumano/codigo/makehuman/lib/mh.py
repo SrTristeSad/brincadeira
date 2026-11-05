@@ -99,15 +99,15 @@ def renderAlphaMask(width, height, productionRender=True):
 
 
 def hasRenderSkin():
-    # renderSkin envolve geometria UV arbitrária e ainda não foi migrado.
     if _canvas_vulkan() is not None:
-        return False
+        return True
     return _hasRenderSkinOpenGL()
 
 
 def renderSkin(*args, **kwargs):
-    if _canvas_vulkan() is not None:
-        raise NotImplementedError("renderSkin ainda precisa ser portado para Vulkan")
+    canvas = _canvas_vulkan()
+    if canvas is not None:
+        return canvas.renderSkin(*args, **kwargs)
     return _renderSkinOpenGL(*args, **kwargs)
 
 
