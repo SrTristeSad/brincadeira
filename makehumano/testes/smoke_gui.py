@@ -83,7 +83,7 @@ def main():
                         marcador_offscreen.is_file()
                         and marcador_offscreen.read_text(
                             encoding="utf-8"
-                        ).startswith("vulkan-offscreen:")
+                        ).strip() == "vulkan-offscreen:320x240"
                     )
                     if gui_pronta and (
                         not piloto_vulkan or (
