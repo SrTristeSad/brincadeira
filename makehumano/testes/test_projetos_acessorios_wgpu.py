@@ -25,6 +25,7 @@ from motor_wgpu.projetos_acessorios import (
     carregar_acessorios_projeto, salvar_acessorios_projeto,
 )
 from motor_wgpu.roupas import carregar_peca_externa
+from motor_wgpu.acessorios import caminho_olhos_highpoly
 from test_roupas_wgpu import criar_proxy_externo
 from test_materiais_exportar_wgpu import decodificar_png_simples
 
@@ -125,6 +126,36 @@ class TestarProjetosAcessorios(unittest.TestCase):
                     "material ",
                     (diretorio / "proxy.mhclo").read_text(),
                 )
+
+    def test_proxy_highpoly_original_fica_portatil_sem_mhmat_legado(self):
+        """High-poly oficial usa offsets e material ../materials/ no original."""
+        peca = carregar_peca_externa(caminho_olhos_highpoly(), self.corpo)
+        self.assertIsNotNone(peca.material)
+        pixels = np.full((4, 4, 4), 255, dtype=np.uint8)
+        dados = {
+            "peca": peca, "pixels": pixels, "visivel": True,
+            "cor": peca.material.cor,
+            "rugosidade": peca.material.rugosidade,
+        }
+        with tempfile.TemporaryDirectory() as pasta:
+            projeto = Path(pasta) / "olhos.makehumano.json"
+            salvar_projeto_com_texturas(
+                projeto, self.documento(), self.catalogo,
+                self.imagens_corpo(), acessorios=[dados],
+            )
+            documento = carregar_documento(projeto, self.catalogo)
+            recuperado = carregar_acessorios_projeto(
+                projeto, documento, self.corpo, decodificar_png_simples
+            )[0]
+            self.assertIsNone(recuperado["peca"].material)
+            self.assertEqual(recuperado["peca"].tipo, "ponderado")
+            self.assertEqual(len(recuperado["peca"].modelo.malha.posicoes_base), 1064)
+            np.testing.assert_allclose(
+                recuperado["peca"].atualizar(self.corpo.posicoes_base),
+                peca.atualizar(self.corpo.posicoes_base),
+                rtol=1e-5, atol=3e-5,
+            )
+            np.testing.assert_array_equal(recuperado["pixels"], pixels)
 
     def test_regravar_reutiliza_hash_e_aceita_peca_duplicada(self):
         with tempfile.TemporaryDirectory() as pasta:
