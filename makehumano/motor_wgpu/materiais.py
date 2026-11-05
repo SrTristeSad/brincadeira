@@ -9,11 +9,13 @@ import numpy as np
 class Pele:
     cor: tuple[float, float, float] = (1.0, 0.83, 0.72)
     rugosidade: float = 0.65
+    dispersao: float = 0.25  # efeito artístico, não é SSS físico
 
     def __post_init__(self):
-        self.atualizar(cor=self.cor, rugosidade=self.rugosidade)
+        self.atualizar(cor=self.cor, rugosidade=self.rugosidade,
+                       dispersao=self.dispersao)
 
-    def atualizar(self, *, cor=None, rugosidade=None):
+    def atualizar(self, *, cor=None, rugosidade=None, dispersao=None):
         if cor is not None:
             if len(cor) != 3 or any(not (0.0 <= float(c) <= 1.0) for c in cor):
                 raise ValueError("A cor deve ter três canais entre 0 e 1")
@@ -22,6 +24,10 @@ class Pele:
             if not (0.05 <= float(rugosidade) <= 1):
                 raise ValueError("Rugosidade deve ficar entre 0.05 e 1")
             self.rugosidade = float(rugosidade)
+        if dispersao is not None:
+            if not (0.0 <= float(dispersao) <= 1.0):
+                raise ValueError("Dispersão precisa ficar entre 0 e 1")
+            self.dispersao = float(dispersao)
 
 
 def validar_rgba(pixels) -> np.ndarray:
