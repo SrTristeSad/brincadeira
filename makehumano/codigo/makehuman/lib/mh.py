@@ -40,7 +40,21 @@ from core import G
 from getpath import getPath, getDataPath, getSysDataPath, getSysPath, getRelativePath
 from makehuman import getVersion, getVersionStr, getBasemeshVersion, getShortVersion, isRelease, isBuild, getVersionDigitsStr, getCopyrightMessage, getAssetLicense, getThirdPartyLicenses, getSoftwareLicense, getCredits
 
-from glmodule import grabScreen, hasRenderSkin, renderSkin, getPickedColor, hasRenderToRenderbuffer, renderToBuffer, renderAlphaMask
+from glmodule import grabScreen, hasRenderSkin, renderSkin, hasRenderToRenderbuffer, renderToBuffer, renderAlphaMask
+from glmodule import getPickedColor as _getPickedColorOpenGL
+
+
+def getPickedColor(x=None, y=None):
+    """Interface original de seleção, roteada para o canvas Vulkan piloto.
+
+    A migração final substituirá as demais APIs do glmodule. Enquanto
+    isso, esta função evita glReadPixels e os efeitos colaterais da
+    picking buffer GL durante a interação na viewport Vulkan.
+    """
+    canvas = getattr(G, "canvas", None)
+    if canvas is not None and hasattr(canvas, "getPickedColor"):
+        return canvas.getPickedColor(x, y)
+    return _getPickedColorOpenGL(x, y)
 
 from image import Image
 from texture import Texture, getTexture, reloadTextures
