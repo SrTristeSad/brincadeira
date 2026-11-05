@@ -672,7 +672,7 @@ def iniciar():
                          "salvar_abrir", "exportar_obj", "material_textura",
                          "mapas_detalhe", "mapas_restaurados",
                          "dispersao", "importar_mhm", "olhos",
-                         "olhos_highpoly"}
+                         "olhos_highpoly", "mascara_corpo"}
             ok = eventos_smoke == esperados and motor.frames >= 6
             print(f"Smoke: eventos {sorted(eventos_smoke)}, aprovado={ok}", flush=True)
             aplicacao.exit(0 if ok else 2)
@@ -863,6 +863,21 @@ def iniciar():
                 flush=True,
             )
 
+        def mascara_smoke():
+            import numpy as np
+            apagados = np.zeros(len(malha.posicoes_base), dtype=bool)
+            apagados[malha.origens[malha.indices[0]]] = True
+            motor.atualizar_mascara_corpo(apagados)
+            assert motor.indices_corpo_ativos < len(malha.indices)
+            print(
+                f"Máscara de triângulos no Vulkan: "
+                f"{motor.indices_corpo_ativos // 3} faces visíveis",
+                flush=True,
+            )
+            motor.atualizar_mascara_corpo(None)
+            assert motor.indices_corpo_ativos == len(malha.indices)
+            eventos_smoke.add("mascara_corpo")
+
         def importar_mhm_smoke():
             from tempfile import TemporaryDirectory
             import numpy as np
@@ -907,6 +922,7 @@ def iniciar():
         QtCore.QTimer.singleShot(4500, deformar_negativo_smoke)
         QtCore.QTimer.singleShot(6400, macro_smoke)
         QtCore.QTimer.singleShot(7700, olhos_smoke)
+        QtCore.QTimer.singleShot(8300, mascara_smoke)
         QtCore.QTimer.singleShot(9000, restaurar_smoke)
         QtCore.QTimer.singleShot(10700, etnia_smoke)
         QtCore.QTimer.singleShot(13600, restaurar_tudo_smoke)
