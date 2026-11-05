@@ -27,6 +27,7 @@ from vulkan_scene import (
 )
 from vulkan_texture import Texture as TextureVulkan
 from vulkan_skin import preparar_skin, normalizar_cor_fundo
+from vulkan_lighting import dados_iluminacao_cena
 
 
 def objeto_original(face=None):
@@ -465,6 +466,58 @@ class TestarRasterizacaoSkinVulkan(unittest.TestCase):
         self.assertEqual(
             normalizar_cor_fundo((0.5, 0.5, 0.5, 0.0)), (0.5, 0.5, 0.5, 0.0),
         )
+
+
+class TestarLuzesOriginaisVulkan(unittest.TestCase):
+    def _luz(self, posicao=(2, 3, 4), cor=(0.9, 0.8, 0.7)):
+        return SimpleNamespace(
+            position=posicao, color=SimpleNamespace(values=cor),
+        )
+
+    def test_mapeia_ambiente_e_luz_pontual_do_makehuman(self):
+        cena = SimpleNamespace(
+            environment=SimpleNamespace(
+                ambience=SimpleNamespace(values=(0.2, 0.3, 0.4)),
+            ),
+            lights=[self._luz()],
+        )
+        ambiente, posicoes, cores, total = dados_iluminacao_cena(cena)
+        self.assertEqual(total, 1)
+        np.testing.assert_allclose(ambiente[:3], [0.2, 0.3, 0.4])
+        np.testing.assert_allclose(posicoes[0], [2, 3, 4, 1])
+        np.testing.assert_allclose(cores[0], [0.9, 0.8, 0.7, 1])
+        self.assertEqual(posicoes.shape, (8, 4))
+        self.assertEqual(cores.shape, (8, 4))
+        self.assertEqual(posicoes.dtype, np.float32)
+
+    def test_aceita_oito_luzes_sem_estourar_uniforms(self):
+        cena = SimpleNamespace(
+            environment=SimpleNamespace(ambience=(0.3, 0.3, 0.3)),
+            lights=[self._luz() for _ in range(12)],
+        )
+        _, posicoes, cores, total = dados_iluminacao_cena(cena)
+        self.assertEqual(total, 8)
+        self.assertEqual(posicoes.shape, (8, 4))
+        self.assertTrue(np.all(cores[:, 3] == 1))
+
+    def test_cena_sem_luzes_mantem_ambiente(self):
+        cena = SimpleNamespace(
+            environment=SimpleNamespace(ambience=(0.5, 0.4, 0.3)),
+            lights=[],
+        )
+        ambiente, posicoes, cores, total = dados_iluminacao_cena(cena)
+        self.assertEqual(total, 0)
+        np.testing.assert_array_equal(posicoes, np.zeros((8, 4)))
+        np.testing.assert_array_equal(cores, np.zeros((8, 4)))
+        np.testing.assert_allclose(ambiente[:3], [0.5, 0.4, 0.3])
+
+    def test_rejeita_luz_com_posicao_invalida(self):
+        cena = SimpleNamespace(
+            environment=SimpleNamespace(ambience=(0.3, 0.3, 0.3)),
+            lights=[self._luz(posicao=(float("nan"), 2, 3))],
+        )
+        with self.assertRaises(ValueError):
+            dados_iluminacao_cena(cena)
 
 
 if __name__ == "__main__":
