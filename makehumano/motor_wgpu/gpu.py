@@ -139,6 +139,9 @@ class MotorWgpu:
                 wgpu.BindGroupEntry(binding=2, resource=self.sampler),
             ],
         )
+        # Preservar cópia dos pixels realmente enviados à GPU para exportar
+        # a mesma textura, sem depender do arquivo de origem ainda existir.
+        self.textura_cpu = pixels.copy()
         if solicitar_redesenho:
             self.canvas.request_draw()
 
