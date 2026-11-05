@@ -133,6 +133,25 @@ def criar_canvas_vulkan(canvas_original):
                     flush=True,
                 )
             if self._cena.objetos_desenhados:
+                # Exercita o picking da janela original em smoke (sem
+                # glReadPixels); o valor RGB mantém contrato de FaceGroups.
+                picking = os.environ.get("MAKEHUMANO_VULKAN_PICK_FILE")
+                if picking and not os.path.exists(picking):
+                    px = max(0, G.windowWidth // 2)
+                    py = max(0, G.windowHeight // 2)
+                    cor = self.getPickedColor(px, py)
+                    if len(cor) != 3 or not all(
+                        isinstance(c, int) and 0 <= c <= 255 for c in cor
+                    ):
+                        raise RuntimeError(
+                            "Seleção Vulkan retornou cor RGB inválida"
+                        )
+                    with open(picking, "w", encoding="utf-8") as saida:
+                        saida.write(",".join(str(v) for v in cor) + "\n")
+                    print(
+                        "MAKEHUMANO_VULKAN: picking original RGB="
+                        + str(cor), flush=True,
+                    )
                 caminho = os.environ.get("MAKEHUMANO_VULKAN_FRAME_FILE")
                 if caminho and not os.path.exists(caminho):
                     with open(caminho, "w", encoding="utf-8") as saida:
