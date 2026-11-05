@@ -30,6 +30,7 @@ def main():
         marcador_picking = base / "vulkan-picking"
         marcador_offscreen = base / "vulkan-offscreen"
         marcador_render = base / "vulkan-render"
+        marcador_skin = base / "vulkan-skin"
         piloto_vulkan = os.environ.get("MAKEHUMANO_VULKAN_PILOT") == "1"
         logfile = base / "startup.log"
         home = base / "home"
@@ -43,6 +44,7 @@ def main():
             ambiente["MAKEHUMANO_VULKAN_PICK_FILE"] = str(marcador_picking)
             ambiente["MAKEHUMANO_VULKAN_OFFSCREEN_FILE"] = str(marcador_offscreen)
             ambiente["MAKEHUMANO_VULKAN_RENDER_FILE"] = str(marcador_render)
+            ambiente["MAKEHUMANO_VULKAN_SKIN_FILE"] = str(marcador_skin)
             ambiente["WGPU_BACKEND_TYPE"] = "Vulkan"
         ambiente["LIBGL_ALWAYS_SOFTWARE"] = "1"
         ambiente["QT_X11_NO_MITSHM"] = "1"
@@ -93,10 +95,16 @@ def main():
                             "vulkan-render:160x120:"
                         )
                     )
+                    skin_valido = (
+                        marcador_skin.is_file()
+                        and marcador_skin.read_text(encoding="utf-8").strip()
+                        == "vulkan-skin:96x96"
+                    )
                     if gui_pronta and (
                         not piloto_vulkan or (
                             quadro_vulkan and picking_valido
                             and framebuffer_valido and render_valido
+                            and skin_valido
                         )
                     ):
                         # Se a aplicação saiu imediatamente após iniciar, não considerar sucesso.
