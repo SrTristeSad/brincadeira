@@ -23,11 +23,17 @@ python -m motor_wgpu.app --backend vulkan
 
 Sem o argumento, wgpu seleciona automaticamente um backend disponível (Vulkan, Metal ou D3D12, conforme o sistema). Se a GPU/driver não suportar o backend escolhido, o programa pode falhar; nesse caso, execute novamente sem `--backend`. Na janela, escolha uma textura por `Carregar textura da pele…`. Use uma textura UV no layout do `base.obj` original para que corresponda ao modelo. A coluna de controles contém oito parâmetros gerais, três controles de mistura étnica interdependentes e um seletor de região (cabeça, nariz, braços e pernas etc.). Sliders bidirecionais funcionam de -100 a +100; unidirecionais, de 0 a +100. Ao trocar de grupo, os pesos permanecem ativos. **Restaurar todas as deformações** repõe as macrovariáveis iniciais do MakeHuman e zera os sliders anatômicos. O modelo inicial já recebe os macros padrão, não é a malha `.obj` absolutamente neutra.
 
+### Salvar e reabrir um personagem
+
+Use **Salvar personagem…** e **Abrir personagem…** na coluna de controles. A prévia usa arquivos **`.makehumano.json`** legíveis e editáveis; o arquivo guarda os onze parâmetros gerais, os modificadores anatômicos alterados e a cor/rugosidade da pele. A aplicação valida a versão e os valores antes de reconstituir a malha e reenviar os vértices à GPU.
+
+**Importante:** não é o formato `.mhm` do MakeHuman original. Texturas externas carregadas por arquivo, roupas, poses, animações, plugins e câmera não são armazenados nesse JSON. A textura UV pode ser selecionada novamente ao abrir o projeto.
+
 O arquivo de requisitos do novo motor é separado dos requisitos do editor antigo. **Não misture** as duas viewports na mesma janela por enquanto.
 
 ## Testes
 
-- CPU, leitura OBJ, UV, morph targets, macros e materiais: `python -m unittest discover -s testes -p 'test_*wgpu.py' -v`
+- CPU, leitura OBJ, UV, morph targets, macros, formato de projetos e comparação com `algos3d.Target.apply` original: `python -m unittest discover -s testes -p 'test_*wgpu.py' -v`
 - Interface com Vulkan por software, no Linux com Mesa/Lavapipe e Xvfb:
   `xvfb-run -a python -m motor_wgpu.app --backend vulkan --smoke`
 
@@ -39,6 +45,7 @@ O GitHub Actions executa esses testes em `.github/workflows/testar-wgpu.yml`.
 - `materiais.py`: parâmetros da pele e validação de pixels
 - `morphs.py`: leitura dos arquivos `.target`, combinação atômica de pesos e recomputação de normais
 - `modificadores.py`: catálogo de sliders a partir dos JSON oficiais do MakeHuman
+- `projetos.py`: serialização JSON versionada e validação antes de restaurar parâmetros
 - `macro.py`: interpolação de oito macrovariáveis e normalização dos três controles étnicos seguindo as fórmulas originais, combinando os 564 `.target`
 - `shaders/pele.wgsl`: material difuso + GGX simplificado
 - `gpu.py`: device, pipeline, texturas, uniforms, depth, vertex buffer mutável e draw
@@ -46,7 +53,7 @@ O GitHub Actions executa esses testes em `.github/workflows/testar-wgpu.yml`.
 
 ## Próximos marcos (não implementados)
 
-1. Conectar as macrovariáveis à lógica completa de dependências e eventos do editor principal e comparar a malha final do visualizador com o MakeHuman original sob combinações de modificadores.
+1. Avançar da comparação CPU com `algos3d` para os eventos, poses e dependências completos da GUI original; ainda não há teste de equivalência visual entre as duas interfaces.
 2. Converter os materiais atuais para mapas base-color, normal e roughness.
 3. Implementar câmera e picking equivalentes à viewport antiga.
 4. Testar shaders com várias GPUs/drivers e qualidade visual.
