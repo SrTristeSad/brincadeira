@@ -40,9 +40,19 @@ def preparar_malha_original(obj):
     vertices[:, 8:12] = cores.astype(np.float32) / 255.0
 
     face = np.asarray(obj.primitives)
+    # O MakeHuman cria também overlays auxiliares sem faces; eles podem
+    # chegar com array vazio unidimensional. Não são erros de geometria.
+    if face.size == 0:
+        return (
+            np.ascontiguousarray(vertices),
+            np.empty(0, dtype=np.uint32),
+        )
     if face.ndim != 2 or face.shape[1] not in (3, 4):
-        raise ValueError("Object3D original: somente faces triangulares/quads")
-    if face.size and (np.any(face < 0) or np.any(face >= n)):
+        raise ValueError(
+            "Object3D original: primitiva não triangular não suportada "
+            + str(face.shape)
+        )
+    if np.any(face < 0) or np.any(face >= n):
         raise ValueError("Object3D original: índice de face fora da malha")
     face = np.asarray(face, dtype=np.uint32)
     if face.shape[1] == 4:
@@ -184,6 +194,7 @@ struct Fragmento {
         self._depth_size = None
         self.frames = 0
         self.objetos_desenhados = 0
+        self._primitivas_pendentes = set()
 
     def _textura(self, caminho):
         chave = str(caminho or "")
@@ -258,7 +269,22 @@ struct Fragmento {
             for obj in sorted(mundo, key=lambda item: item.priority):
                 if not obj.visibility:
                     continue
-                vertices, indices = preparar_malha_original(obj)
+                try:
+                    vertices, indices = preparar_malha_original(obj)
+                except ValueError as erro:
+                    if "primitiva não triangular" not in str(erro):
+                        raise
+                    # Ainda não há pipeline de linhas/points do overlay Qt.
+                    # A migração será considerada parcial até esse caso
+                    # receber tratamento explícito; não lançar exceção em loop.
+                    if obj.name not in self._primitivas_pendentes:
+                        self._primitivas_pendentes.add(obj.name)
+                        print(
+                            "MAKEHUMANO_VULKAN: pendente primitiva auxiliar "
+                            + str(obj.name) + ": " + str(erro),
+                            flush=True,
+                        )
+                    continue
                 if not len(vertices) or not len(indices):
                     continue
                 cam = cameras[obj.cameraMode]
