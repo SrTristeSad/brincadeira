@@ -184,7 +184,8 @@ def iniciar():
     coluna.addWidget(QtWidgets.QLabel("<b>Peças externas (.mhclo)</b>"))
     aviso_roupas = QtWidgets.QLabel(
         "Carrega um .mhclo e seu OBJ local. Peças compatíveis acompanham os "
-        "morphs e aplicam suas máscaras. Sem rig, física ou materiais .mhmat."
+        "morphs e aplicam suas máscaras. Cor e textura difusa de .mhmat "
+        "são aproximadas; sem rig ou física."
     )
     aviso_roupas.setWordWrap(True)
     coluna.addWidget(aviso_roupas)
@@ -195,20 +196,32 @@ def iniciar():
         """Registra a peça somente depois de ler e validar o proxy/OBJ."""
         peca = carregar_peca_externa(caminho, malha)
         from .materiais import textura_neutra
-        pixels = textura_neutra() if textura is None else textura
+        material = peca.material
+        if textura is not None:
+            pixels = textura
+        elif material is not None and material.textura is not None:
+            pixels = ler_imagem_qt(material.textura)
+        else:
+            pixels = textura_neutra()
         novos_vertices = peca.atualizar(deformador.posicoes_atuais)
         proximo_acessorio[0] += 1
         chave = f"externo_{proximo_acessorio[0]}"
         motor.adicionar_acessorio(
             chave, peca.modelo.malha, novos_vertices, pixels,
             deletar_vertices=peca.deletar_vertices,
+            cor=material.cor if material is not None else (1.0, 1.0, 1.0),
+            rugosidade=material.rugosidade if material is not None else 0.28,
         )
         linha = QtWidgets.QWidget()
         botoes = QtWidgets.QHBoxLayout(linha)
         botoes.setContentsMargins(0, 0, 0, 0)
         visivel = QtWidgets.QCheckBox(Path(caminho).stem)
         visivel.setChecked(True)
-        visivel.setToolTip(str(Path(caminho)))
+        visivel.setToolTip(
+            str(Path(caminho))
+            + (("\nMaterial parcial: " + "; ".join(material.avisos))
+               if material is not None and material.avisos else "")
+        )
         remover = QtWidgets.QPushButton("Remover")
         remover.setToolTip(f"Remover {Path(caminho).name}")
         botoes.addWidget(visivel, 1)
@@ -235,7 +248,8 @@ def iniciar():
         print(
             f"Acessório externo {chave}: {Path(caminho).name}, "
             f"proxy {peca.tipo}, "
-            f"{len(peca.modelo.malha.indices) // 3} triângulos",
+            f"{len(peca.modelo.malha.indices) // 3} triângulos, "
+            f"material={material.origem.name if material else 'neutro'}",
             flush=True,
         )
         return chave
@@ -248,14 +262,22 @@ def iniciar():
         if not caminho:
             return
         try:
-            # A imagem é opcional: o .mhmat legado ainda não é interpretado.
+            # Cancelar usa a textura declarada no .mhmat, se existir.
             imagem, _ = QtWidgets.QFileDialog.getOpenFileName(
-                janela, "Textura opcional (cancelar para usar branco)",
+                janela, "Textura manual opcional (cancelar: usar .mhmat)",
                 str(Path(caminho).parent),
                 "Imagens (*.png *.jpg *.jpeg *.webp *.bmp)",
             )
             pixels = ler_imagem_qt(imagem) if imagem else None
-            adicionar_peca_externa(caminho, pixels)
+            chave = adicionar_peca_externa(caminho, pixels)
+            material = pecas_externas[chave][0].material
+            if material is not None and material.avisos:
+                QtWidgets.QMessageBox.information(
+                    janela, "Material importado parcialmente",
+                    "O material foi convertido para a prévia Vulkan. "
+                    "Recursos não reproduzidos:\n"
+                    + "\n".join(material.avisos),
+                )
         except (OSError, UnicodeError, ValueError, RuntimeError) as erro:
             QtWidgets.QMessageBox.warning(
                 janela, "Acessório não importado", str(erro)
