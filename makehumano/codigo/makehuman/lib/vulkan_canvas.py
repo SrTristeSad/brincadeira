@@ -48,6 +48,11 @@ def criar_canvas_vulkan(canvas_original):
             self.setSizePolicy(
                 QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Ignored
             )
+            # RenderCanvas descarta _draw_and_present() enquanto ainda não
+            # existe um canvas_context. A cena GPU (adapter/device/pipeline)
+            # pode ser criada depois, mas o contexto precisa existir AGORA.
+            # Caso contrário, o primeiro callback nunca será invocado.
+            self.get_wgpu_context()
             self._pronto = True
             print(
                 "MAKEHUMANO_VULKAN: Canvas Qt original conectado",
