@@ -292,5 +292,65 @@ class TestarBufferOffscreenVulkan(unittest.TestCase):
             decodificar_buffer_rgb(bytes(256), 1, 0, "rgba8unorm")
 
 
+class TestarProjecaoOffscreenVulkan(unittest.TestCase):
+    def _camera(self, perspectiva=True):
+        proj = np.eye(4, dtype=np.float32)
+        proj[0, 0] = 1.5
+        proj[1, 1] = 3.0
+        if perspectiva:
+            proj[2, 2] = -1.1
+            proj[2, 3] = -0.2
+            proj[3, 2] = -1.0
+            proj[3, 3] = 0.0
+        estado = dict(proj=proj.copy(), calls=0)
+        identidade = np.eye(4, dtype=np.float32)
+        def get_matrices(eye):
+            estado["calls"] += 1
+            return proj, identidade
+        camera = SimpleNamespace(
+            updated=True,
+            getMatrices=get_matrices,
+            getModelMatrix=lambda obj: identidade,
+        )
+        return camera, estado
+
+    def test_muda_proporcao_perspectiva_sem_mutar_proj_original(self):
+        camera, estado = self._camera(True)
+        matrix = matriz_wgpu(
+            camera, objeto_original(),
+            tamanho_origem=(640, 480), tamanho_destino=(800, 400),
+        )
+        self.assertAlmostEqual(matrix[0, 0], 1.5 * (640/480) / (800/400))
+        self.assertAlmostEqual(matrix[1, 1], 3.0)
+        np.testing.assert_array_equal(estado["proj"], camera.getMatrices(0)[0])
+
+    def test_muda_proporcao_ortografica_preservando_eixo_vertical(self):
+        camera, _ = self._camera(False)
+        matrix = matriz_wgpu(
+            camera, objeto_original(),
+            tamanho_origem=(640, 480), tamanho_destino=(400, 800),
+        )
+        self.assertAlmostEqual(matrix[0, 0], 1.5 * (640/480) / (400/800))
+        self.assertAlmostEqual(matrix[1, 1], 3.0)
+
+    def test_mesma_proporcao_nao_modifica_projecao(self):
+        camera, _ = self._camera()
+        original = matriz_wgpu(camera, objeto_original())
+        diferente_resolucao = matriz_wgpu(
+            camera, objeto_original(),
+            tamanho_origem=(640, 480), tamanho_destino=(1280, 960),
+        )
+        np.testing.assert_allclose(original, diferente_resolucao)
+
+    def test_rejeita_dimensoes_offscreen_invalidas(self):
+        camera, _ = self._camera()
+        with self.assertRaises(ValueError):
+            matriz_wgpu(camera, objeto_original(),
+                        tamanho_origem=(640, 480))
+        with self.assertRaises(ValueError):
+            matriz_wgpu(camera, objeto_original(),
+                        tamanho_origem=(640, 480), tamanho_destino=(0, 480))
+
+
 if __name__ == "__main__":
     unittest.main()
