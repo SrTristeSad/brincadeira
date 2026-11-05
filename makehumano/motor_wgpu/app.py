@@ -47,7 +47,7 @@ def iniciar():
     from .modificadores import carregar_catalogo, NOMES_GRUPOS
     from .projetos import montar_documento, salvar_documento, carregar_documento
     from .exportar import exportar_obj_com_material
-    from .materiais_obj import caminhos_materiais
+    from .materiais_obj import caminhos_materiais, caminhos_mapas
     from .macro import (
         ControladorMacros, VALORES_PADRAO, ROTULOS, ETNIAS,
         ETNIAS_PADRAO, ROTULOS_ETNIAS,
@@ -364,8 +364,10 @@ def iniciar():
             destino += ".obj"
         arquivo_mtl, arquivo_png = caminhos_materiais(destino)
         existentes = [
-            nome for nome in (Path(destino), arquivo_mtl, arquivo_png)
-            if nome.exists()
+            nome for nome in (
+                Path(destino), arquivo_mtl, arquivo_png,
+                *caminhos_mapas(destino),
+            ) if nome.exists()
         ]
         if existentes:
             resposta = QtWidgets.QMessageBox.question(
@@ -381,6 +383,13 @@ def iniciar():
             objeto, material, textura = exportar_obj_com_material(
                 destino, malha, deformador.vertices,
                 motor.pele, motor.textura_cpu,
+                mapa_normal_rgba=(
+                    motor.textura_normal_cpu if motor.normal_ativo else None
+                ),
+                mapa_rugosidade_rgba=(
+                    motor.textura_rugosidade_cpu if motor.rugosidade_ativa
+                    else None
+                ),
             )
         except (OSError, ValueError) as erro:
             QtWidgets.QMessageBox.warning(janela, "Falha ao exportar", str(erro))
@@ -390,12 +399,12 @@ def iniciar():
                 flush=True,
             )
 
-    botao_exportar = QtWidgets.QPushButton("Exportar OBJ com pele…")
+    botao_exportar = QtWidgets.QPushButton("Exportar OBJ com mapas de pele…")
     botao_exportar.clicked.connect(exportar_personagem)
     coluna.addWidget(botao_exportar)
     aviso_exportar = QtWidgets.QLabel(
-        "Cria OBJ + MTL + PNG da textura em uso, com a cor de pele "
-        "e rugosidade aproximada. Sem roupa, esqueleto ou pose."
+        "Cria OBJ, MTL, textura difusa e PNGs auxiliares de normais e "
+        "rugosidade. Sem roupa, esqueleto ou pose."
     )
     aviso_exportar.setWordWrap(True)
     coluna.addWidget(aviso_exportar)
@@ -593,6 +602,8 @@ def iniciar():
                 _, mtl, png = exportar_obj_com_material(
                     objeto, malha, deformador.vertices,
                     motor.pele, motor.textura_cpu,
+                    mapa_normal_rgba=motor.textura_normal_cpu,
+                    mapa_rugosidade_rgba=motor.textura_rugosidade_cpu,
                 )
                 assert mtl.is_file() and png.is_file()
                 texto_obj = objeto.read_text(encoding="utf-8")
@@ -601,6 +612,11 @@ def iniciar():
                 assert "usemtl PeleMakeHumano" in texto_obj
                 assert f"map_Kd {png.name}" in texto_mtl
                 assert png.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+                normal_png, rugosidade_png = caminhos_mapas(objeto)
+                assert normal_png.is_file() and rugosidade_png.is_file()
+                assert normal_png.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+                assert rugosidade_png.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+                assert "map_Bump" not in texto_mtl
                 eventos_smoke.add("material_textura")
                 print("Material MTL e textura PNG exportados da GPU", flush=True)
                 reimportado = carregar_obj(objeto)
