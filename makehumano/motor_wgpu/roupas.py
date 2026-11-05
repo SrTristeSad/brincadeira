@@ -2,7 +2,8 @@
 
 Os arquivos de roupa não acompanham o repositório. Esta etapa permite
 selecionar um proxy e o OBJ correspondente no disco, sem adivinhar a forma
-nem executar plugins/arquivos de material. Apenas 'verts 0' direto (1 campo)
+nem executar plugins. Lê somente cor, textura difusa e uma conversão
+artística da propriedade shininess de arquivos .mhmat. Apenas 'verts 0' direto (1 campo)
 ou ponderado (9 campos) é aceito, utilizando os leitores já testados.
 """
 
@@ -13,6 +14,7 @@ import numpy as np
 
 from .acessorios import carregar_proxy_direto, carregar_proxy_ponderado
 from .malha import Malha
+from .materiais_mhmat import MaterialMHMat, material_referenciado, carregar_mhmat
 
 
 @dataclass(frozen=True)
@@ -20,6 +22,7 @@ class PecaExterna:
     origem: Path
     modelo: object
     tipo: str
+    material: MaterialMHMat | None = None
 
     @property
     def deletar_vertices(self) -> np.ndarray | None:
@@ -73,9 +76,9 @@ def tipo_referencia_mhclo(caminho: str | Path) -> str:
 def carregar_peca_externa(caminho: str | Path, corpo: Malha) -> PecaExterna:
     """Carrega proxy/OBJ locais, revalida índices e só retorna se consistente.
 
-    Uma peça externa deve fornecer OBJ em sua própria pasta. Não é interpretado
-    o caminho de plugins, rig, roupa dinâmica ou material .mhmat. Não confunde
-    OBJ avulso com arquivo de deformação MakeHuman.
+    Uma peça externa deve fornecer OBJ em sua própria pasta. A referência ao
+    .mhmat é opcional e restrita a caminhos locais aprovados; shader e demais
+    propriedades não suportadas são relatados no objeto de material.
     """
     origem = Path(caminho)
     tipo = tipo_referencia_mhclo(origem)
@@ -89,4 +92,7 @@ def carregar_peca_externa(caminho: str | Path, corpo: Malha) -> PecaExterna:
     resultado = modelo.atualizar(corpo.posicoes_base)
     if not np.isfinite(resultado).all():
         raise ValueError("Geometria inválida ao carregar acessório")
-    return PecaExterna(origem=origem, modelo=modelo, tipo=tipo)
+    origem_material = material_referenciado(origem)
+    material = carregar_mhmat(origem_material) if origem_material else None
+    return PecaExterna(origem=origem, modelo=modelo, tipo=tipo,
+                       material=material)
