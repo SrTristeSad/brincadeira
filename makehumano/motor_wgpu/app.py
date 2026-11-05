@@ -45,7 +45,10 @@ def iniciar():
     from .gpu import MotorWgpu
     from .morphs import Deformador, ler_target, pasta_targets
     from .modificadores import carregar_catalogo, NOMES_GRUPOS
-    from .macro import ControladorMacros, VALORES_PADRAO, ROTULOS
+    from .macro import (
+        ControladorMacros, VALORES_PADRAO, ROTULOS, ETNIAS,
+        ETNIAS_PADRAO, ROTULOS_ETNIAS,
+    )
 
     malha = carregar_obj(caminho_base_obj())
     print(
@@ -134,6 +137,48 @@ def iniciar():
         coluna.addWidget(barra)
         controles_macros[chave] = barra
 
+    coluna.addWidget(QtWidgets.QLabel("<b>Misturas de alvos herdadas</b>"))
+    nota_etnias = QtWidgets.QLabel(
+        "Categorias históricas do MakeHuman, usadas para combinar morphs. "
+        "Não representam uma medição de identidade étnica."
+    )
+    nota_etnias.setWordWrap(True)
+    coluna.addWidget(nota_etnias)
+    controles_etnias = {}
+    rotulos_etnias = {}
+    for chave in ETNIAS:
+        texto = QtWidgets.QLabel()
+        coluna.addWidget(texto)
+        barra = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        barra.setRange(0, 1000)
+        barra.setValue(round(ETNIAS_PADRAO[chave] * 1000))
+        coluna.addWidget(barra)
+        controles_etnias[chave] = barra
+        rotulos_etnias[chave] = texto
+
+    def sincronizar_etnias():
+        # Apenas um callback faz o upload para GPU. Os sliders parceiros são
+        # atualizados sem emitir eventos adicionais.
+        for nome, slider in controles_etnias.items():
+            fracao = macros.perfil.etnias[nome]
+            slider.blockSignals(True)
+            slider.setValue(round(fracao * 1000))
+            slider.blockSignals(False)
+            rotulos_etnias[nome].setText(
+                f"{ROTULOS_ETNIAS[nome]}: {fracao * 100:.1f}%"
+            )
+
+    def alterar_etnia(chave, valor):
+        vertices_atualizados = macros.definir_etnia(chave, valor / 1000.0)
+        sincronizar_etnias()
+        motor.atualizar_vertices(vertices_atualizados)
+
+    for nome, slider in controles_etnias.items():
+        slider.valueChanged.connect(
+            lambda valor, chave=nome: alterar_etnia(chave, valor)
+        )
+    sincronizar_etnias()
+
     coluna.addWidget(QtWidgets.QLabel("<b>Modificadores MakeHuman</b>"))
     coluna.addWidget(QtWidgets.QLabel(
         "Definições oficiais: apenas alvos .target diretos. "
@@ -217,6 +262,7 @@ def iniciar():
         deformador.restaurar()
         # O MakeHuman padrão possui os macros iniciais ativos.
         motor.atualizar_vertices(macros.restaurar())
+        sincronizar_etnias()
 
     botao_restaurar = QtWidgets.QPushButton("Restaurar todas as deformações")
     botao_restaurar.clicked.connect(restaurar_morphs)
@@ -269,8 +315,8 @@ def iniciar():
             # rapidamente. Verificar eventos completados e múltiplos frames,
             # sem exigir um quadro para cada callback.
             esperados = {"textura", "modificador_positivo", "modificador_negativo",
-                         "macros", "restauracao"}
-            ok = eventos_smoke == esperados and motor.frames >= 5
+                         "macros", "restauracao", "etnias", "restauracao_total"}
+            ok = eventos_smoke == esperados and motor.frames >= 6
             print(f"Smoke: eventos {sorted(eventos_smoke)}, aprovado={ok}", flush=True)
             aplicacao.exit(0 if ok else 2)
 
@@ -298,12 +344,29 @@ def iniciar():
             eventos_smoke.add("restauracao")
             print("Macrovariáveis restauradas aos valores padrão", flush=True)
 
+        def etnia_smoke():
+            controles_etnias["african"].setValue(750)
+            proporcoes = macros.perfil.etnias
+            assert abs(sum(proporcoes.values()) - 1) < 1e-8
+            assert abs(proporcoes["african"] - 0.75) < 1e-8
+            eventos_smoke.add("etnias")
+            print(f"Alvos étnicos normalizados no Vulkan: {proporcoes}", flush=True)
+
+        def restaurar_tudo_smoke():
+            botao_restaurar.click()
+            proporcoes = macros.perfil.etnias
+            assert all(abs(proporcoes[chave] - 1 / 3) < 1e-8 for chave in ETNIAS)
+            eventos_smoke.add("restauracao_total")
+            print("Todos os modificadores e misturas restaurados", flush=True)
+
         QtCore.QTimer.singleShot(800, atualizar_smoke)
         QtCore.QTimer.singleShot(2000, deformar_smoke)
         QtCore.QTimer.singleShot(4500, deformar_negativo_smoke)
         QtCore.QTimer.singleShot(6400, macro_smoke)
         QtCore.QTimer.singleShot(9000, restaurar_smoke)
-        QtCore.QTimer.singleShot(13500, terminar_smoke)
+        QtCore.QTimer.singleShot(10700, etnia_smoke)
+        QtCore.QTimer.singleShot(13600, restaurar_tudo_smoke)
+        QtCore.QTimer.singleShot(17600, terminar_smoke)
 
     return aplicacao.exec_()
 
