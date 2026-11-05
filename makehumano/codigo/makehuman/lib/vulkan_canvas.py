@@ -1,9 +1,8 @@
-"""Canvas Vulkan PILOTO para a janela Qt ORIGINAL do MakeHuman.
+"""Canvas Vulkan definitivo da janela Qt original do MakeHuman.
 
-Somente ativado via MAKEHUMANO_VULKAN_PILOT=1 durante a migração.
-Reutiliza, sem alterar, os handlers de mouse e teclado do Canvas original.
-Não importa OpenGL e não solicita contexto QOpenGLWidget.
-Ainda não substitui renderização offscreen independente nem shaders legados.
+Reutiliza os handlers de eventos originais e o QRenderWidget. Não cria
+contexto OpenGL; framebuffers offscreen e operações de captura usam wgpu.
+Shaders GLSL personalizados continuam pendentes de migração.
 """
 
 import os
