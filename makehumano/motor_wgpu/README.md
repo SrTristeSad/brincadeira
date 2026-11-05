@@ -23,6 +23,12 @@ python -m motor_wgpu.app --backend vulkan
 
 Sem o argumento, wgpu seleciona automaticamente um backend disponível (Vulkan, Metal ou D3D12, conforme o sistema). Se a GPU/driver não suportar o backend escolhido, o programa pode falhar; nesse caso, execute novamente sem `--backend`. Na janela, escolha uma textura por `Carregar textura da pele…`. Use uma textura UV no layout do `base.obj` original para que corresponda ao modelo. A coluna de controles contém oito parâmetros gerais, três controles de mistura étnica interdependentes e um seletor de região (cabeça, nariz, braços e pernas etc.). Sliders bidirecionais funcionam de -100 a +100; unidirecionais, de 0 a +100. Ao trocar de grupo, os pesos permanecem ativos. **Restaurar todas as deformações** repõe as macrovariáveis iniciais do MakeHuman e zera os sliders anatômicos. O modelo inicial já recebe os macros padrão, não é a malha `.obj` absolutamente neutra.
 
+### Primeiro acessório adaptável: olhos low-poly
+
+O visualizador passou a renderizar também os **olhos de baixa resolução originais do MakeHuman**, em uma segunda malha GPU independente do corpo, com coordenadas UV e imagem `brown_eye.png` próprias. A posição dos 96 vértices canônicos dos olhos é recalculada a partir do arquivo oficial `low-poly.mhclo` (referências diretas) e das coordenadas deformadas do corpo. Assim, os olhos acompanham os morph targets sem modificar sua textura ou suas UVs. Há uma caixa **Mostrar olhos originais (low-poly)** para ligar/desligar a renderização.
+
+**Limitação do primeiro passo:** somente esse tipo simples de vínculo `mhclo` foi implementado. O MakeHuman suporta proxies mais complexos com três vértices de referência, pesos baricêntricos, deslocamentos e transformação; esses arquivos **ainda não são aceitos**. A pasta de roupas da aplicação original não está presente nesta cópia do repositório, e o protótipo não renderiza nem importa roupas, cabelo ou esqueletos. A segunda malha utiliza o mesmo shader básico e depth buffer, mas **ainda não tem transparência, oclusão por máscaras de roupas ou o rig de animação**. Os testes de CI são feitos com Vulkan por software, sem validação visual humana.
+
 ### Mapas de normal e rugosidade
 
 O painel **Mapas de detalhe da pele** permite **carregar/remover** dois mapas diretamente na GPU, sem alterar a malha, os modificadores ou as UVs:
@@ -103,14 +109,16 @@ O GitHub Actions executa esses testes em `.github/workflows/testar-wgpu.yml`.
 - `macro.py`: interpolação de oito macrovariáveis e normalização dos três controles étnicos seguindo as fórmulas originais, combinando os 564 `.target`
 - `shaders/pele.wgsl`: material difuso + GGX simplificado
 - `gpu.py`: device, pipeline, texturas, uniforms, depth, vertex buffer mutável e draw
+- `acessorios.py`: vínculo `.mhclo` de referência direta dos olhos low-poly, com atualizações após os morphs
 - `app.py`: widget Qt e controles de demonstração
 
 ## Próximos marcos (não implementados)
 
 1. Ampliar a importação `.mhm` com ensaios sobre arquivos reais históricos e avançar da comparação CPU para poses, eventos e dependências da GUI original; ainda não há teste de equivalência visual entre as interfaces.
 2. Evoluir da dispersão visual aproximada para SSS fisicamente mais fiel (espessura e difusão), depois avaliar exportação PBR como glTF.
-3. Implementar câmera e picking equivalentes à viewport antiga.
-4. Testar shaders com várias GPUs/drivers e qualidade visual.
-5. Migrar o canvas oficial quando houver paridade de recursos.
+3. Ampliar proxies `.mhclo` para pesos baricêntricos e offsets, depois importar roupas de forma correta (quando disponíveis).
+4. Implementar câmera e picking equivalentes à viewport antiga.
+5. Testar shaders com várias GPUs/drivers e qualidade visual.
+6. Migrar o canvas oficial quando houver paridade de recursos.
 
 A pasta `codigo/` preserva avisos e licenças do [MakeHuman Community](https://github.com/makehumancommunity/makehuman). O novo protótipo é parte do experimento MakeHumano; manter atribuições e termos AGPL pertinentes.
