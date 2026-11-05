@@ -1381,16 +1381,10 @@ class MHApplication(gui3d.Application, mh.Application):
             return
 
         if event.objectWasChanged:
-            # A GUI original utiliza a cena original em ambos os backends.
-            # No Vulkan, nunca importar glmodule para atualizar as luzes.
-            if os.environ.get("MAKEHUMANO_VULKAN_PILOT") == "1":
-                canvas = getattr(G, "canvas", None)
-                atualizar = getattr(canvas, "atualizar_iluminacao", None)
-                if callable(atualizar):
-                    atualizar(self.scene)
-            else:
-                from glmodule import setSceneLighting
-                setSceneLighting(self.scene)
+            canvas = getattr(G, "canvas", None)
+            atualizar = getattr(canvas, "atualizar_iluminacao", None)
+            if callable(atualizar):
+                atualizar(self.scene)
 
         for category in self.categories.values():
             self.callEventHandlers('onSceneChanged', event)
