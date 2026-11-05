@@ -364,7 +364,13 @@ struct Fragmento {
             (largura, altura, 1),
         )
         self.device.queue.submit([encoder.finish()])
-        dados = self.device.queue.read_buffer(buffer)
+        # queue.read_buffer() exige COPY_SRC, incompatível com MAP_READ
+        # no buffer de staging. Mapear diretamente é o contrato correto.
+        buffer.map_sync(self.wgpu.MapMode.READ)
+        try:
+            dados = buffer.read_mapped(copy=True)
+        finally:
+            buffer.unmap()
         return decodificar_buffer_rgb(dados, largura, altura, self.formato)
 
     def capturar_framebuffer(self, mundo, cameras):
