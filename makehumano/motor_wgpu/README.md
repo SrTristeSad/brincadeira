@@ -29,7 +29,15 @@ O visualizador Vulkan possui **dois modelos de olhos** com malha, UV e textura p
 
 O arquivo original `low-poly.mhclo` utiliza **referência direta** de cada vértice ao corpo. O `high-poly.mhclo` utiliza **três vértices de referência, três pesos e um deslocamento tridimensional** para cada vértice. Seu deslocamento é ajustado por uma matriz diagonal calculada das distâncias do corpo deformado nos eixos x/y/z, segundo `TMatrix.getMatrix()` do MakeHuman. O código compara os resultados com **`Proxy.getCoords()` e `TMatrix.getMatrix()` originais**, inclusive após deformações. Em cada atualização, as normais são recalculadas e as UVs preservadas.
 
-**Ainda não é um sistema completo de roupas:** a cópia do repositório não inclui arquivos de peças de roupa, e o suporte a `.mhclo` é limitado a referências diretas e referências ponderadas com escala diagonal. Shear/transformações mais complexas, máscaras de ocultação do corpo, rigs, poses, materiais/transparência avançados e carregamento arbitrário de roupas não estão implementados. A resolução selecionada dos olhos também ainda não é persistida no JSON experimental. A verificação de CI usa Vulkan por software; não substitui uma inspeção visual em GPU física.
+**Ainda não é um sistema completo de roupas:** a cópia do repositório não inclui arquivos de peças de roupa. Já existem referências diretas, pesos/offsets, escala diagonal, shear e filtragem básica de triângulos por `delete_verts`, mas ainda não há um pipeline completo que aplique automaticamente essas máscaras a roupas selecionadas, nem rigs, poses, materiais/transparência avançados ou carregamento de um catálogo de roupas. A resolução selecionada dos olhos também ainda não é persistida no JSON experimental. A verificação de CI usa Vulkan por software; não substitui uma inspeção visual em GPU física.
+
+### Compatibilidade de roupas: shear e máscaras (infraestrutura)
+
+O leitor de acessórios `.mhclo` ponderados agora reconhece as transformações `shear_x/y/z`, `l_shear_x/y/z` e `r_shear_x/y/z`. O cálculo constrói os oito cantos das caixas de referência usadas em `TMatrix.matrixFromShear()` e ajusta uma transformação afim 3×3 para os offsets. O caminho existente `x_scale/y_scale/z_scale` continua prioritário, como no MakeHuman original. Valores e combinações incompletos são rejeitados explicitamente.
+
+Também foram acrescentadas as seções `delete_verts` com índices e intervalos inclusivos (`10 - 25`), a transferência de visibilidade entre malha-base e proxy segundo `transferVertexMaskToProxy()` e a filtragem dos triângulos da malha-base usando o index buffer Vulkan. Isso **não altera a topologia canônica ou os morph targets**; o índice ativo pode ser restaurado integralmente.
+
+**Escopo:** esta etapa prepara as transformações e máscaras, com testes sintéticos e comparação com o código legado, mas **não instala nem renderiza roupas reais** — não há peças de roupa nesta cópia do repositório. Não há ainda seleção automática de máscaras por roupa, oclusão entre várias peças, solução de colisões, rigging ou shader de tecido. O teste gráfico exercita uma máscara temporária e sua restauração, sem apresentar essa máscara artificial como roupa.
 
 ### Mapas de normal e rugosidade
 
@@ -111,14 +119,16 @@ O GitHub Actions executa esses testes em `.github/workflows/testar-wgpu.yml`.
 - `macro.py`: interpolação de oito macrovariáveis e normalização dos três controles étnicos seguindo as fórmulas originais, combinando os 564 `.target`
 - `shaders/pele.wgsl`: material difuso + GGX simplificado
 - `gpu.py`: device, pipeline, texturas, uniforms, depth, vertex buffer mutável e draw
-- `acessorios.py`: vínculos `.mhclo` diretos e ponderados com escala x/y/z (olhos low/high-poly), atualizados após morphs
+- `acessorios.py`: vínculos `.mhclo` diretos e ponderados com escala ou shear (olhos low/high-poly), leitura de `delete_verts`
+- `transformacoes_proxy.py`: matriz de shear dos oito cantos, sem importar a GUI original
+- `mascaras.py`: filtragem de triângulos e transferência de máscara conforme `transferVertexMaskToProxy()`
 - `app.py`: widget Qt e controles de demonstração
 
 ## Próximos marcos (não implementados)
 
 1. Ampliar a importação `.mhm` com ensaios sobre arquivos reais históricos e avançar da comparação CPU para poses, eventos e dependências da GUI original; ainda não há teste de equivalência visual entre as interfaces.
 2. Evoluir da dispersão visual aproximada para SSS fisicamente mais fiel (espessura e difusão), depois avaliar exportação PBR como glTF.
-3. Ampliar proxies `.mhclo` para shear, máscaras e acessórios/roupas reais quando os assets estiverem disponíveis; o suporte atual já contempla pesos e offsets com escala diagonal.
+3. Integrar automaticamente as máscaras das roupas à viewport quando houver assets reais, lidar com várias peças/oclusão e validar shear em arquivos históricos.
 4. Implementar câmera e picking equivalentes à viewport antiga.
 5. Testar shaders com várias GPUs/drivers e qualidade visual.
 6. Migrar o canvas oficial quando houver paridade de recursos.
