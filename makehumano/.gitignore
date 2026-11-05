@@ -1,4 +1,4 @@
-# Arquivos gerados localmente pelo Python e ferramentas de desenvolvimento
+# Python
 __pycache__/
 *.py[cod]
 .venv/
@@ -6,8 +6,8 @@ venv/
 .pytest_cache/
 .ruff_cache/
 
-# Importações e backups são cópias locais; não substituem commits do projeto.
-# O código modificado deve ser versionado explicitamente quando for validado.
-codigo/
+# Backups temporários, não a cópia de trabalho em codigo/
 codigo-backup-*/
 .importacao-*/
+
+# NÃO ignorar codigo/: alterações do MakeHuman podem ser salvas no GitHub.
