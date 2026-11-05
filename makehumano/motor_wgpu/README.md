@@ -33,14 +33,16 @@ O arquivo original `low-poly.mhclo` utiliza **referência direta** de cada vért
 
 ### Importar acessórios e roupas externos (`.mhclo`)
 
-O botão **Adicionar peça .mhclo…** permite selecionar manualmente um arquivo de proxy MakeHuman externo e, opcionalmente, uma imagem de textura. O **OBJ deve estar na mesma pasta que o `.mhclo`**, como definido em `obj_file`. Sem textura selecionada, usa-se RGBA branco neutro. O sistema identifica automaticamente a primeira linha da seção `verts 0`:
+O botão **Adicionar peça .mhclo…** permite selecionar manualmente um arquivo de proxy MakeHuman externo e, opcionalmente, uma imagem de textura. O **OBJ deve estar na mesma pasta que o `.mhclo`**, como definido em `obj_file`. Se cancelar a escolha manual de textura, o programa tenta usar automaticamente a imagem `diffuseTexture` do material `.mhmat` associado ao proxy; sem material ou sem mapa difuso, usa RGBA branco neutro. A escolha manual substitui apenas a imagem, mantendo a cor e a rugosidade do material. O sistema identifica automaticamente a primeira linha da seção `verts 0`:
 
 - **Uma referência por vértice:** vínculo direto, como os olhos low-poly oficiais.
 - **Três referências, três pesos e três offsets:** proxy ponderado, com escala `x_scale/y_scale/z_scale` ou shear compatível.
 
 Ao carregar, a peça recebe uma entrada independente na interface, com **visibilidade** e botão **Remover**. Os vértices da peça seguem os morph targets do corpo; sua máscara `delete_verts`, quando definida, oculta os triângulos correspondentes do corpo **somente enquanto a peça está visível**. É possível carregar várias peças, cada uma com sua malha e textura. O corpo não é modificado permanentemente, e remover uma peça restaura sua parte da máscara.
 
-**Ainda é uma importação experimental e parcial:** não interpreta `.mhmat`, ossos/rigs, poses, pesos de skinning, colisões, ajuste físico, transparência de tecido ou oclusão entre camadas de roupa. Alguns proxies oficiais podem ter diretivas que o parser recusa explicitamente; são necessárias adaptações antes de importar esses casos. A seleção e a textura das peças externas **não são persistidas no projeto `.makehumano.json` e não entram na exportação OBJ do corpo**. Por enquanto, carregue novamente os acessórios ao reabrir o visualizador. O teste gráfico exercita uma **peça sintética temporária**, não uma roupa oficial de produção.
+**Materiais `.mhmat` (parciais):** o leitor reconhece a referência `material` do `.mhclo`, inclusive o padrão `../materials/` dos olhos oficiais, e utiliza `diffuseTexture`, `diffuseColor` e `shininess` (transformada em rugosidade GGX **aproximada**, não física). Os arquivos são resolvidos apenas em diretórios locais permitidos. Opções de shader, mapas adicionais, transparência, animação de material e outras propriedades **não são reproduzidas**; o programa apresenta avisos ao importar uma peça com esses recursos. A renderização ainda é opaca, mesmo que o `.mhmat` declare transparência.
+
+**Ainda é uma importação experimental e parcial:** não interpreta o sistema `.mhmat` completo, ossos/rigs, poses, pesos de skinning, colisões, ajuste físico, transparência de tecido ou oclusão entre camadas de roupa. Alguns proxies oficiais podem ter diretivas que o parser recusa explicitamente; são necessárias adaptações antes de importar esses casos. A seleção e a textura das peças externas **não são persistidas no projeto `.makehumano.json` e não entram na exportação OBJ do corpo**. Por enquanto, carregue novamente os acessórios ao reabrir o visualizador. O teste gráfico exercita uma **peça sintética temporária**, não uma roupa oficial de produção.
 
 ### Compatibilidade de roupas: shear e máscaras (infraestrutura)
 
@@ -134,6 +136,7 @@ O GitHub Actions executa esses testes em `.github/workflows/testar-wgpu.yml`.
 - `gpu.py`: device, pipeline, texturas, uniforms, depth, vertex buffer mutável e draw
 - `acessorios.py`: vínculos `.mhclo` diretos e ponderados com escala ou shear (olhos low/high-poly), leitura de `delete_verts`
 - `roupas.py`: identificação e validação de arquivos `.mhclo` selecionados pelo usuário (importação experimental de peça externa)
+- `materiais_mhmat.py`: parser seguro e parcial de `.mhmat` para textura difusa, RGB e rugosidade aproximada
 - `transformacoes_proxy.py`: matriz de shear dos oito cantos, sem importar a GUI original
 - `mascaras.py`: filtragem de triângulos, transferência de máscara conforme `transferVertexMaskToProxy()` e gerenciador de `delete_verts` por visibilidade
 - `app.py`: widget Qt e controles de demonstração
@@ -142,7 +145,7 @@ O GitHub Actions executa esses testes em `.github/workflows/testar-wgpu.yml`.
 
 1. Ampliar a importação `.mhm` com ensaios sobre arquivos reais históricos e avançar da comparação CPU para poses, eventos e dependências da GUI original; ainda não há teste de equivalência visual entre as interfaces.
 2. Evoluir da dispersão visual aproximada para SSS fisicamente mais fiel (espessura e difusão), depois avaliar exportação PBR como glTF.
-3. Expandir a importação manual de `.mhclo` para roupas históricas reais (incluindo diretivas ainda não suportadas), materiais `.mhmat`, sobreposição entre camadas e persistência no projeto. Máscaras por peça e carregamento externo básico já funcionam.
+3. Validar a importação manual de `.mhclo` com roupas históricas reais, ampliar propriedades `.mhmat` ainda não suportadas, sobreposição entre camadas e persistência no projeto. Máscaras por peça e material básico já funcionam.
 4. Implementar câmera e picking equivalentes à viewport antiga.
 5. Testar shaders com várias GPUs/drivers e qualidade visual.
 6. Migrar o canvas oficial quando houver paridade de recursos.
