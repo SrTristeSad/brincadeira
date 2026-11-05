@@ -142,6 +142,24 @@ class MotorWgpu:
         if solicitar_redesenho:
             self.canvas.request_draw()
 
+    def atualizar_vertices(self, vertices: np.ndarray):
+        """Transfere a geometria deformada para o vertex buffer já existente.
+
+        Os índices, as UVs e o pipeline Vulkan permanecem os mesmos.
+        """
+        vertices = np.asarray(vertices, dtype=np.float32)
+        if vertices.shape != self.malha.vertices.shape:
+            raise ValueError(
+                f"Malha deformada precisa ter formato {self.malha.vertices.shape}, "
+                f"recebido {vertices.shape}"
+            )
+        if not np.isfinite(vertices).all():
+            raise ValueError("A geometria contém NaN ou infinito")
+        self.device.queue.write_buffer(
+            self.vertex_buffer, 0, np.ascontiguousarray(vertices)
+        )
+        self.canvas.request_draw()
+
     def ajustar_pele(self, *, cor=None, rugosidade=None):
         self.pele.atualizar(cor=cor, rugosidade=rugosidade)
         self.canvas.request_draw()
