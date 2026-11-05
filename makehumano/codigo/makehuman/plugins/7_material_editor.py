@@ -40,7 +40,11 @@ import os
 import gui3d
 import gui
 import log
-import shader
+import os
+if os.environ.get("MAKEHUMANO_VULKAN_PILOT") == "1":
+    import vulkan_shader as shader
+else:
+    import shader
 import numpy as np
 import material
 import mh
