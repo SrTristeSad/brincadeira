@@ -915,6 +915,19 @@ def iniciar():
             motor.definir_mascara_acessorio("olhos", None)
             motor.definir_mascara_acessorio("olhos_high", None)
             assert motor.indices_corpo_ativos == corpo_inteiro
+
+            # Adição e remoção de acessório temporário com máscara própria.
+            motor.adicionar_acessorio(
+                "acessorio_teste_mascara", acessorio_olhos.malha,
+                acessorio_olhos.atualizar(deformador.posicoes_atuais),
+                textura_olhos, deletar_vertices=high,
+            )
+            assert motor.indices_corpo_ativos == len(
+                indices_corpo_visiveis(malha, high)
+            )
+            motor.remover_acessorio("acessorio_teste_mascara")
+            assert "acessorio_teste_mascara" not in motor.acessorios
+            assert motor.indices_corpo_ativos == corpo_inteiro
             assert motor.acessorios["olhos"]["visivel"]
             assert not motor.acessorios["olhos_high"]["visivel"]
             eventos_smoke.add("mascara_corpo")
