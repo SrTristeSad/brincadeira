@@ -16,6 +16,7 @@ RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "codigo" / "makehuman" / "lib"))
 
 from vulkan_capture import recortar_captura_rgb
+from vulkan_offscreen import bytes_por_linha_alinhados, decodificar_buffer_rgb
 
 from vulkan_scene import (
     CenaVulkan, preparar_malha_original, matriz_wgpu, assinatura_textura,
@@ -255,6 +256,40 @@ class TestarCapturaDaViewportOriginal(unittest.TestCase):
             recortar_captura_rgb(self.pixels[:, :, :2], 0, 0, 1, 1)
         with self.assertRaises(ValueError):
             recortar_captura_rgb(self.pixels.astype(np.float32), 0, 0, 1, 1)
+
+
+class TestarBufferOffscreenVulkan(unittest.TestCase):
+    def test_stride_rgba_alinhado_a_256(self):
+        self.assertEqual(bytes_por_linha_alinhados(1), 256)
+        self.assertEqual(bytes_por_linha_alinhados(64), 256)
+        self.assertEqual(bytes_por_linha_alinhados(65), 512)
+        self.assertEqual(bytes_por_linha_alinhados(128), 512)
+
+    def test_reconstroi_rgba_com_padding(self):
+        dados = bytearray(256 * 2)
+        dados[:8] = bytes([11, 22, 33, 255, 44, 55, 66, 255])
+        dados[256:264] = bytes([77, 88, 99, 255, 10, 20, 30, 255])
+        rgb = decodificar_buffer_rgb(dados, 2, 2, "rgba8unorm")
+        self.assertEqual(rgb.shape, (2, 2, 3))
+        np.testing.assert_array_equal(rgb[0, 0], [11, 22, 33])
+        np.testing.assert_array_equal(rgb[1, 1], [10, 20, 30])
+        self.assertTrue(rgb.flags.c_contiguous)
+
+    def test_bgra_converte_canais_em_ordem_rgb(self):
+        dados = bytearray(256)
+        dados[:4] = bytes([33, 22, 11, 255])
+        rgb = decodificar_buffer_rgb(dados, 1, 1, "bgra8unorm-srgb")
+        np.testing.assert_array_equal(rgb[0, 0], [11, 22, 33])
+
+    def test_rejeita_stride_tamanho_e_formato_invalidos(self):
+        with self.assertRaises(ValueError):
+            bytes_por_linha_alinhados(0)
+        with self.assertRaises(ValueError):
+            decodificar_buffer_rgb(bytes(12), 1, 1, "rgba8unorm")
+        with self.assertRaises(ValueError):
+            decodificar_buffer_rgb(bytes(256), 1, 1, "r8unorm")
+        with self.assertRaises(ValueError):
+            decodificar_buffer_rgb(bytes(256), 1, 0, "rgba8unorm")
 
 
 if __name__ == "__main__":
