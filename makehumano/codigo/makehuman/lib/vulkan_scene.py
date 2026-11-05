@@ -47,7 +47,7 @@ def preparar_malha_original(obj):
             np.ascontiguousarray(vertices),
             np.empty(0, dtype=np.uint32),
         )
-    if face.ndim != 2 or face.shape[1] not in (3, 4):
+    if face.ndim != 2 or face.shape[1] not in (2, 3, 4):
         raise ValueError(
             "Object3D original: primitiva não triangular não suportada "
             + str(face.shape)
@@ -62,12 +62,16 @@ def preparar_malha_original(obj):
         )
     else:
         indices = face
-    # Quads degenerados são usados pelo MakeHuman para representar tris.
-    indices = indices[
-        (indices[:, 0] != indices[:, 1])
-        & (indices[:, 1] != indices[:, 2])
-        & (indices[:, 0] != indices[:, 2])
-    ]
+    if face.shape[1] == 2:
+        # O grid e outras linhas auxiliares têm pares de vértices.
+        indices = indices[indices[:, 0] != indices[:, 1]]
+    else:
+        # Quads degenerados são usados pelo MakeHuman para representar tris.
+        indices = indices[
+            (indices[:, 0] != indices[:, 1])
+            & (indices[:, 1] != indices[:, 2])
+            & (indices[:, 0] != indices[:, 2])
+        ]
     if not np.isfinite(vertices).all():
         raise ValueError("Object3D original: coordenadas não finitas")
     return (np.ascontiguousarray(vertices),
@@ -186,6 +190,42 @@ struct Fragmento {
                 targets=[wgpu.ColorTargetState(format=self.formato)],
             ),
         )
+        # A grade de referência original (back_grid) usa GL_LINES.
+        # Mantê-la com seus mesmos índices, cores e transformações.
+        self.pipeline_linhas = self.device.create_render_pipeline(
+            layout=wgpu.AutoLayoutMode.auto,
+            vertex=wgpu.VertexState(
+                module=shader, entry_point="vs_main",
+                buffers=[wgpu.VertexBufferLayout(
+                    array_stride=48, step_mode="vertex",
+                    attributes=[
+                        wgpu.VertexAttribute(
+                            format="float32x3", offset=0, shader_location=0
+                        ),
+                        wgpu.VertexAttribute(
+                            format="float32x3", offset=12, shader_location=1
+                        ),
+                        wgpu.VertexAttribute(
+                            format="float32x2", offset=24, shader_location=2
+                        ),
+                        wgpu.VertexAttribute(
+                            format="float32x4", offset=32, shader_location=3
+                        ),
+                    ],
+                )],
+            ),
+            primitive=wgpu.PrimitiveState(
+                topology="line-list", cull_mode="none"
+            ),
+            depth_stencil=wgpu.DepthStencilState(
+                format="depth24plus", depth_write_enabled=False,
+                depth_compare="less-equal"
+            ),
+            fragment=wgpu.FragmentState(
+                module=shader, entry_point="fs_main",
+                targets=[wgpu.ColorTargetState(format=self.formato)],
+            ),
+        )
         self.amostra = self.device.create_sampler(
             mag_filter="linear", min_filter="linear"
         )
@@ -194,6 +234,7 @@ struct Fragmento {
         self._depth_size = None
         self.frames = 0
         self.objetos_desenhados = 0
+        self.linhas_desenhadas = 0
         self._primitivas_pendentes = set()
 
     def _textura(self, caminho):
@@ -265,6 +306,7 @@ struct Fragmento {
         )
         passagem.set_pipeline(self.pipeline)
         self.objetos_desenhados = 0
+        self.linhas_desenhadas = 0
         if mundo is not None:
             for obj in sorted(mundo, key=lambda item: item.priority):
                 if not obj.visibility:
@@ -287,6 +329,10 @@ struct Fragmento {
                     continue
                 if not len(vertices) or not len(indices):
                     continue
+                primitiva = np.asarray(obj.primitives)
+                linhas = primitiva.ndim == 2 and primitiva.shape[1] == 2
+                pipeline = self.pipeline_linhas if linhas else self.pipeline
+                passagem.set_pipeline(pipeline)
                 cam = cameras[obj.cameraMode]
                 mvp = matriz_wgpu(cam, obj)
                 material = getattr(obj, "material", None)
@@ -312,7 +358,7 @@ struct Fragmento {
                 )
                 textura = self._textura(getattr(obj, "texture", None))
                 bind = self.device.create_bind_group(
-                    layout=self.pipeline.get_bind_group_layout(0),
+                    layout=pipeline.get_bind_group_layout(0),
                     entries=[
                         wgpu.BindGroupEntry(
                             binding=0,
@@ -331,6 +377,8 @@ struct Fragmento {
                 passagem.set_index_buffer(buf_i, "uint32")
                 passagem.draw_indexed(len(indices))
                 self.objetos_desenhados += 1
+                if linhas:
+                    self.linhas_desenhadas += len(indices) // 2
         passagem.end()
         self.device.queue.submit([encoder.finish()])
         self.frames += 1
