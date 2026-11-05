@@ -28,6 +28,7 @@ def main():
         marker = base / "gui-ready"
         marcador_vulkan = base / "vulkan-frame"
         marcador_picking = base / "vulkan-picking"
+        marcador_offscreen = base / "vulkan-offscreen"
         piloto_vulkan = os.environ.get("MAKEHUMANO_VULKAN_PILOT") == "1"
         logfile = base / "startup.log"
         home = base / "home"
@@ -39,6 +40,7 @@ def main():
         if piloto_vulkan:
             ambiente["MAKEHUMANO_VULKAN_FRAME_FILE"] = str(marcador_vulkan)
             ambiente["MAKEHUMANO_VULKAN_PICK_FILE"] = str(marcador_picking)
+            ambiente["MAKEHUMANO_VULKAN_OFFSCREEN_FILE"] = str(marcador_offscreen)
             ambiente["WGPU_BACKEND_TYPE"] = "Vulkan"
         ambiente["LIBGL_ALWAYS_SOFTWARE"] = "1"
         ambiente["QT_X11_NO_MITSHM"] = "1"
@@ -77,8 +79,16 @@ def main():
                             encoding="utf-8"
                         ).strip().split(",")) == 3
                     )
+                    framebuffer_valido = (
+                        marcador_offscreen.is_file()
+                        and marcador_offscreen.read_text(
+                            encoding="utf-8"
+                        ).startswith("vulkan-offscreen:")
+                    )
                     if gui_pronta and (
-                        not piloto_vulkan or (quadro_vulkan and picking_valido)
+                        not piloto_vulkan or (
+                            quadro_vulkan and picking_valido and framebuffer_valido
+                        )
                     ):
                         # Se a aplicação saiu imediatamente após iniciar, não considerar sucesso.
                         time.sleep(1)
