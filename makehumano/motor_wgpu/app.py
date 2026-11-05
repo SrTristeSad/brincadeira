@@ -4,7 +4,7 @@ Na pasta makehumano:
     python -m motor_wgpu.app
     python -m motor_wgpu.app --backend vulkan
 
-É um protótipo: não substitui a viewport principal, não salva personagens.
+É um protótipo: não substitui a viewport principal nem exporta rigs/poses.
 """
 
 import argparse
@@ -46,6 +46,7 @@ def iniciar():
     from .morphs import Deformador, ler_target, pasta_targets
     from .modificadores import carregar_catalogo, NOMES_GRUPOS
     from .projetos import montar_documento, salvar_documento, carregar_documento
+    from .exportar import exportar_obj
     from .macro import (
         ControladorMacros, VALORES_PADRAO, ROTULOS, ETNIAS,
         ETNIAS_PADRAO, ROTULOS_ETNIAS,
@@ -350,6 +351,33 @@ def iniciar():
     botao_abrir.clicked.connect(carregar_projeto)
     coluna.addWidget(botao_abrir)
 
+    def exportar_personagem():
+        destino, _ = QtWidgets.QFileDialog.getSaveFileName(
+            janela, "Exportar malha corporal deformada",
+            str(Path.home() / "personagem.obj"),
+            "Modelo Wavefront OBJ (*.obj)",
+        )
+        if not destino:
+            return
+        if Path(destino).suffix.lower() != ".obj":
+            destino += ".obj"
+        try:
+            exportar_obj(destino, malha, deformador.vertices)
+        except (OSError, ValueError) as erro:
+            QtWidgets.QMessageBox.warning(janela, "Falha ao exportar", str(erro))
+        else:
+            print(f"Malha OBJ exportada: {destino}", flush=True)
+
+    botao_exportar = QtWidgets.QPushButton("Exportar malha OBJ…")
+    botao_exportar.clicked.connect(exportar_personagem)
+    coluna.addWidget(botao_exportar)
+    aviso_exportar = QtWidgets.QLabel(
+        "Exporta o corpo com deformações, UVs e normais. "
+        "Não inclui roupa, esqueleto, pose nem textura externa."
+    )
+    aviso_exportar.setWordWrap(True)
+    coluna.addWidget(aviso_exportar)
+
     estado = QtWidgets.QLabel("Textura: branca (tonalidade por shader)")
     estado.setWordWrap(True)
     coluna.addWidget(estado)
@@ -398,7 +426,7 @@ def iniciar():
             # sem exigir um quadro para cada callback.
             esperados = {"textura", "modificador_positivo", "modificador_negativo",
                          "macros", "restauracao", "etnias", "restauracao_total",
-                         "salvar_abrir"}
+                         "salvar_abrir", "exportar_obj"}
             ok = eventos_smoke == esperados and motor.frames >= 6
             print(f"Smoke: eventos {sorted(eventos_smoke)}, aprovado={ok}", flush=True)
             aplicacao.exit(0 if ok else 2)
@@ -465,6 +493,18 @@ def iniciar():
                 assert macros.perfil.etnias["asian"] == 0.6
                 eventos_smoke.add("salvar_abrir")
                 print("Projeto salvo e reaberto, malha restaurada no Vulkan", flush=True)
+
+                objeto = Path(pasta) / "corpo-deformado.obj"
+                exportar_obj(objeto, malha, deformador.vertices)
+                reimportado = carregar_obj(objeto)
+                np.testing.assert_array_equal(reimportado.origens, malha.origens)
+                np.testing.assert_array_equal(reimportado.indices, malha.indices)
+                np.testing.assert_allclose(
+                    reimportado.vertices[:, :3], deformador.vertices[:, :3],
+                    rtol=0, atol=1e-5,
+                )
+                eventos_smoke.add("exportar_obj")
+                print("Corpo deformado exportado como OBJ e reimportado", flush=True)
 
         QtCore.QTimer.singleShot(800, atualizar_smoke)
         QtCore.QTimer.singleShot(2000, deformar_smoke)
