@@ -40,15 +40,34 @@ from core import G
 from getpath import getPath, getDataPath, getSysDataPath, getSysPath, getRelativePath
 from makehuman import getVersion, getVersionStr, getBasemeshVersion, getShortVersion, isRelease, isBuild, getVersionDigitsStr, getCopyrightMessage, getAssetLicense, getThirdPartyLicenses, getSoftwareLicense, getCredits
 
-from glmodule import (
-    grabScreen as _grabScreenOpenGL,
-    getPickedColor as _getPickedColorOpenGL,
-    hasRenderSkin as _hasRenderSkinOpenGL,
-    renderSkin as _renderSkinOpenGL,
-    hasRenderToRenderbuffer as _hasRenderToRenderbufferOpenGL,
-    renderToBuffer as _renderToBufferOpenGL,
-    renderAlphaMask as _renderAlphaMaskOpenGL,
-)
+import os
+
+_VULKAN = os.environ.get("MAKEHUMANO_VULKAN_PILOT") == "1"
+
+
+def _backend_nao_disponivel(*args, **kwargs):
+    raise RuntimeError("Canvas Vulkan do MakeHuman ainda não foi inicializado")
+
+
+if _VULKAN:
+    # Não importar glmodule ou classes OpenGL enquanto Vulkan está ativo.
+    _grabScreenOpenGL = _backend_nao_disponivel
+    _getPickedColorOpenGL = _backend_nao_disponivel
+    _renderSkinOpenGL = _backend_nao_disponivel
+    _renderToBufferOpenGL = _backend_nao_disponivel
+    _renderAlphaMaskOpenGL = _backend_nao_disponivel
+    _hasRenderSkinOpenGL = lambda: False
+    _hasRenderToRenderbufferOpenGL = lambda: False
+else:
+    from glmodule import (
+        grabScreen as _grabScreenOpenGL,
+        getPickedColor as _getPickedColorOpenGL,
+        hasRenderSkin as _hasRenderSkinOpenGL,
+        renderSkin as _renderSkinOpenGL,
+        hasRenderToRenderbuffer as _hasRenderToRenderbufferOpenGL,
+        renderToBuffer as _renderToBufferOpenGL,
+        renderAlphaMask as _renderAlphaMaskOpenGL,
+    )
 
 
 def _canvas_vulkan():
@@ -114,8 +133,12 @@ def getPickedColor(x=None, y=None):
     return _getPickedColorOpenGL(x, y)
 
 from image import Image
-from texture import Texture, getTexture, reloadTextures
-from shader import Shader
+if _VULKAN:
+    from vulkan_texture import Texture, getTexture, reloadTextures
+    from vulkan_shader import Shader
+else:
+    from texture import Texture, getTexture, reloadTextures
+    from shader import Shader
 from camera import Camera, OrbitalCamera
 
 from qtui import Keys, Buttons, Modifiers, Application
