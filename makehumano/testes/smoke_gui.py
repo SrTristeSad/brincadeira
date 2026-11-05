@@ -27,6 +27,7 @@ def main():
         base = Path(pasta)
         marker = base / "gui-ready"
         marcador_vulkan = base / "vulkan-frame"
+        marcador_picking = base / "vulkan-picking"
         piloto_vulkan = os.environ.get("MAKEHUMANO_VULKAN_PILOT") == "1"
         logfile = base / "startup.log"
         home = base / "home"
@@ -37,6 +38,7 @@ def main():
         ambiente["MAKEHUMANO_SMOKE_READY_FILE"] = str(marker)
         if piloto_vulkan:
             ambiente["MAKEHUMANO_VULKAN_FRAME_FILE"] = str(marcador_vulkan)
+            ambiente["MAKEHUMANO_VULKAN_PICK_FILE"] = str(marcador_picking)
             ambiente["WGPU_BACKEND_TYPE"] = "Vulkan"
         ambiente["LIBGL_ALWAYS_SOFTWARE"] = "1"
         ambiente["QT_X11_NO_MITSHM"] = "1"
@@ -69,7 +71,15 @@ def main():
                             "vulkan-makehuman-original:"
                         )
                     )
-                    if gui_pronta and (not piloto_vulkan or quadro_vulkan):
+                    picking_valido = (
+                        marcador_picking.is_file()
+                        and len(marcador_picking.read_text(
+                            encoding="utf-8"
+                        ).strip().split(",")) == 3
+                    )
+                    if gui_pronta and (
+                        not piloto_vulkan or (quadro_vulkan and picking_valido)
+                    ):
                         # Se a aplicação saiu imediatamente após iniciar, não considerar sucesso.
                         time.sleep(1)
                         iniciou = processo.poll() is None
@@ -110,7 +120,7 @@ def main():
         if iniciou:
             print(
                 "SUCESSO: GUI original carregada"
-                + (" com quadro Vulkan original" if piloto_vulkan else "")
+                + (" com quadro e picking Vulkan originais" if piloto_vulkan else "")
                 + "."
             )
             return 0
