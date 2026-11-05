@@ -29,7 +29,9 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
             xvfb xauth libglu1-mesa libgl1-mesa-dri \
-            libxkbcommon-x11-0 libxcb-xinerama0 libxcb-cursor0
+            libxkbcommon-x11-0 libxcb-xinerama0 libxcb-cursor0 \
+            libxcb-keysyms1 libxcb-icccm4 libxcb-image0 libxcb-randr0 \
+            libxcb-render-util0 libxcb-xinput0 libxcb-util1 libfontconfig1
 
       - name: Instalar dependências Python originais
         run: |
@@ -45,4 +47,5 @@ jobs:
         env:
           LIBGL_ALWAYS_SOFTWARE: "1"
           QT_X11_NO_MITSHM: "1"
+          QT_DEBUG_PLUGINS: "1"
         run: xvfb-run -a -s "-screen 0 1280x800x24" python makehumano/testes/smoke_gui.py
