@@ -33,6 +33,15 @@ def caminhos_materiais(destino: str | Path) -> tuple[Path, Path]:
     return destino.with_name(nome + "_pele.mtl"), destino.with_name(nome + "_pele.png")
 
 
+def caminhos_mapas(destino: str | Path) -> tuple[Path, Path]:
+    """Mapas auxiliares do material; MTL não os referencia (sem padrão PBR)."""
+    _, png_cor = caminhos_materiais(destino)
+    return (
+        png_cor.with_name(png_cor.stem + "_normal.png"),
+        png_cor.with_name(png_cor.stem + "_rugosidade.png"),
+    )
+
+
 def validar_material(pele: Pele, pixels=None) -> np.ndarray:
     if not isinstance(pele, Pele):
         raise ValueError("Material deve ser do tipo Pele")
