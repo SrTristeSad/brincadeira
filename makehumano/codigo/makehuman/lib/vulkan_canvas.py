@@ -52,7 +52,7 @@ def criar_canvas_vulkan(canvas_original):
                 "MAKEHUMANO_VULKAN: Canvas Qt original conectado",
                 flush=True,
             )
-            self.request_draw(self._desenhar)
+            self.request_redraw()
 
         def makeCurrent(self):
             """Compatibilidade de chamada com handlers Qt, sem contexto GL."""
@@ -61,17 +61,16 @@ def criar_canvas_vulkan(canvas_original):
         def showEvent(self, event):
             super().showEvent(event)
             print("MAKEHUMANO_VULKAN: showEvent", flush=True)
-            self.update()
+            self.request_redraw()
             # A viewport pode ser mostrada antes da carga da cena.
-            # Uma segunda solicitação após onStart assegura a primeira
-            # apresentação da geometria original, sem loop contínuo.
-            QtCore.QTimer.singleShot(300, self.update)
+            QtCore.QTimer.singleShot(300, self.request_redraw)
 
-        def update(self):
+        def request_redraw(self):
+            # Não sobrescrever QWidget.update(): rendercanvas chama update()
+            # internamente para apresentar os quadros. Interceptar update()
+            # aqui impediria que o evento de pintura chegasse ao Qt.
             if getattr(self, "_pronto", False):
                 self.request_draw(self._desenhar)
-            else:
-                super().update()
 
         def resizeEvent(self, event):
             super().resizeEvent(event)
@@ -83,7 +82,7 @@ def criar_canvas_vulkan(canvas_original):
                     "onResizedCallback",
                     events3d.ResizeEvent(largura, altura, False),
                 )
-            self.update()
+            self.request_redraw()
 
         def _desenhar(self):
             if self.blockRedraw:
