@@ -166,6 +166,18 @@ def criar_canvas_vulkan(canvas_original):
             )
             return Image(data=mascarar_alfa_rgba(pixels))
 
+        def renderSkin(self, dst, vertsPerPrimitive, verts, index=None,
+                       objectMatrix=None, texture=None, UVs=None,
+                       textureMatrix=None, color=None, clearColor=None):
+            """Rasteriza skins e mapas UV originais diretamente em Vulkan."""
+            from vulkan_skin import render_skin
+            return render_skin(
+                self._garantir_cena(), dst, vertsPerPrimitive, verts,
+                index=index, objectMatrix=objectMatrix, texture=texture,
+                UVs=UVs, textureMatrix=textureMatrix, color=color,
+                clearColor=clearColor,
+            )
+
         def invalidar_texturas(self, caminho=None):
             """Expõe a recarga de texturas à API original do MakeHuman."""
             if self._cena is not None:
