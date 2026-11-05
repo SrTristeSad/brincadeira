@@ -1,0 +1,14 @@
+Coloque aqui:
+  avatar1.glb  -> personagem 1
+  avatar2.glb  -> personagem 2
+
+Sem esses arquivos, o projeto exibe bonecos 3D provisórios que se animam
+por programação Lua. Modelos GLB animados carregam seus próprios clipes.
+
+Arquivos FBX do MakeHuman/Mixamo precisam ser convertidos para GLB
+(incluindo o esqueleto, texturas e as animações que você deseja usar).
+O LÖVR não carrega FBX diretamente.
+
+Observação: o código não adiciona animações a uma malha estática.
+Para movimentos reais de braços, pernas e rosto de um humano importado,
+o GLB precisa conter clipes de animação compatíveis.
