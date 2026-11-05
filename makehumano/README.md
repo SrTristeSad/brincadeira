@@ -52,6 +52,32 @@ python executar.py --noshaders
 
 **Atenção:** o teste gráfico usa `--noshaders` em um servidor X virtual, portanto **não valida** shaders e aparência final. Malhas, rigs, morph targets e outros recursos **presentes no repositório original** já estão versionados nesta cópia. Recursos **externos** disponibilizados separadamente pelo projeto continuam podendo ser necessários para certas funções. Sintaxe válida não comprova compatibilidade completa com Python, Qt, NumPy ou OpenGL.
 
+## Primeira integração Vulkan na janela original (ainda incompleta)
+
+Foi iniciada a migração **dentro do MakeHuman original**. O arquivo
+`codigo/makehuman/lib/vulkan_scene.py` utiliza os objetos renderizáveis reais
+de `G.world`, seus índices de faces filtradas pelo `module3d`, vértices, UVs,
+normais e as matrizes das câmeras originais. O arquivo
+`codigo/makehuman/lib/vulkan_canvas.py` conecta a renderização por Vulkan
+aos mesmos handlers de mouse e ao mesmo layout de `qtui.Frame` original,
+sem criar um aplicativo independente.
+
+**Modo de validação exclusivamente para desenvolvedores:**
+
+```bash
+# Requer temporariamente as dependências originais e wgpu/rendercanvas.
+MAKEHUMANO_VULKAN_PILOT=1 python executar.py --noshaders
+```
+
+O flag liga somente a integração inicial; não é uma opção final de fallback.
+O teste de CI `vulkan-gui-original` tenta abrir a **GUI original** com esse
+canvas e exige pelo menos um objeto real renderizado por Vulkan.
+**Limitações:** picking, transparência, todos os shaders, renderização
+offscreen, parte dos materiais e plugins gráficos ainda não foram migrados.
+Durante a migração, PyOpenGL permanece necessário a partes do aplicativo;
+portanto **OpenGL ainda não foi eliminado e o objetivo não foi concluído**.
+Não usar o modo experimental como editor de produção até haver paridade.
+
 ## Histórico do protótipo isolado (fora do escopo de novas funcionalidades)
 
 **Apenas referência técnica.** O diretório `motor_wgpu/` foi desenvolvido antes da fixação do escopo. Não é o aplicativo a entregar. Os recursos listados abaixo documentam trabalhos já realizados e **não devem continuar sendo ampliados** sem autorização. A tarefa pendente é adaptar e integrar Vulkan na aplicação MakeHuman existente.
