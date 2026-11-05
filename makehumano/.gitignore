@@ -1,0 +1,13 @@
+# Arquivos gerados localmente pelo Python e ferramentas de desenvolvimento
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# Importações e backups são cópias locais; não substituem commits do projeto.
+# O código modificado deve ser versionado explicitamente quando for validado.
+codigo/
+codigo-backup-*/
+.importacao-*/
