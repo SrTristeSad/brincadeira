@@ -26,6 +26,7 @@ from vulkan_scene import (
     parametros_material_vulkan, pixels_textura_rgba,
 )
 from vulkan_texture import Texture as TextureVulkan
+from vulkan_skin import preparar_skin, normalizar_cor_fundo
 
 
 def objeto_original(face=None):
@@ -418,6 +419,52 @@ class TestarTexturasSemOpenGL(unittest.TestCase):
         sub = SimpleNamespace(data=np.zeros((3, 3, 4), dtype=np.uint8))
         with self.assertRaises(ValueError):
             tex.loadSubImage(sub, 2, 2)
+
+
+class TestarRasterizacaoSkinVulkan(unittest.TestCase):
+    def test_triangle_usa_cores_e_terceira_posicao_zero(self):
+        pos = np.asarray([[0, 0], [1, 0], [0, 1]], np.float32)
+        cores = np.array([[255, 0, 0, 255]] * 3, np.uint8)
+        vertices, indices, linhas = preparar_skin(
+            3, pos, index=np.array([[0, 1, 2]], np.uint32), color=cores,
+        )
+        self.assertEqual(vertices.shape, (3, 9))
+        np.testing.assert_array_equal(vertices[:, 2], [0, 0, 0])
+        np.testing.assert_array_equal(vertices[0, 5:], [1, 0, 0, 1])
+        np.testing.assert_array_equal(indices, [0, 1, 2])
+        self.assertFalse(linhas)
+
+    def test_quad_cria_dois_triangulos_e_descarta_degenerados(self):
+        pos = np.zeros((4, 2), dtype=np.float32)
+        _, indices, _ = preparar_skin(
+            4, pos, index=np.array([[0, 1, 2, 3], [0, 1, 1, 0]]),
+        )
+        np.testing.assert_array_equal(indices, [0, 1, 2, 0, 2, 3])
+
+    def test_uv_linhas_mantem_indices(self):
+        verts = np.zeros((4, 2), dtype=np.float32)
+        _, indices, linhas = preparar_skin(
+            2, verts, index=np.array([[0, 1], [1, 2], [2, 2]]),
+        )
+        np.testing.assert_array_equal(indices, [0, 1, 1, 2])
+        self.assertTrue(linhas)
+
+    def test_rejeita_faces_invalidas(self):
+        verts = np.zeros((3, 2), dtype=np.float32)
+        with self.assertRaises(ValueError):
+            preparar_skin(3, verts, index=np.array([[0, 1, 9]]))
+        with self.assertRaises(ValueError):
+            preparar_skin(3, verts, UVs=np.zeros((3, 3)))
+        with self.assertRaises(NotImplementedError):
+            preparar_skin(5, verts)
+
+    def test_normaliza_cores_rgba_legadas(self):
+        self.assertEqual(
+            normalizar_cor_fundo((0, 0, 0, 255)), (0., 0., 0., 1.),
+        )
+        self.assertEqual(
+            normalizar_cor_fundo((0.5, 0.5, 0.5, 0.0)), (0.5, 0.5, 0.5, 0.0),
+        )
 
 
 if __name__ == "__main__":
