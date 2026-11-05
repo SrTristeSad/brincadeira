@@ -11,6 +11,31 @@ import os
 import numpy as np
 
 
+def pixels_textura_rgba(dados):
+    """Converte imagem CPU original (cinza, LA, RGB ou RGBA) em RGBA."""
+    pixels = np.asarray(dados)
+    if pixels.dtype != np.uint8 or pixels.ndim != 3:
+        raise ValueError("Imagem Vulkan exige matriz uint8 [H,W,C]")
+    if pixels.shape[0] < 1 or pixels.shape[1] < 1:
+        raise ValueError("Dimensões da imagem Vulkan inválidas")
+    canais = pixels.shape[2]
+    if canais == 1:
+        cinza = np.repeat(pixels, 3, axis=2)
+        pixels = np.concatenate(
+            (cinza, np.full((*pixels.shape[:2], 1), 255, np.uint8)), axis=2
+        )
+    elif canais == 2:
+        cinza = np.repeat(pixels[:, :, :1], 3, axis=2)
+        pixels = np.concatenate((cinza, pixels[:, :, 1:2]), axis=2)
+    elif canais == 3:
+        pixels = np.concatenate(
+            (pixels, np.full((*pixels.shape[:2], 1), 255, np.uint8)), axis=2
+        )
+    elif canais != 4:
+        raise ValueError("Número de canais de textura não suportado")
+    return np.ascontiguousarray(pixels)
+
+
 def assinatura_textura(caminho):
     """Identifica mudanças de arquivo sem depender de OpenGL ou Qt."""
     if not caminho:
@@ -312,25 +337,34 @@ struct Fragmento {
             self._texturas.pop(str(caminho), None)
 
     def _textura(self, caminho):
-        chave = str(caminho or "")
-        assinatura = assinatura_textura(chave)
+        dinamica = (
+            caminho is not None and hasattr(caminho, "data")
+            and hasattr(caminho, "width") and hasattr(caminho, "height")
+        )
+        if dinamica:
+            chave = ("imagem", id(caminho))
+            origem = np.asarray(caminho.data)
+            assinatura = (
+                getattr(caminho, "modified", None), origem.shape,
+            )
+        else:
+            chave = str(caminho or "")
+            assinatura = assinatura_textura(chave)
         entrada = self._texturas.get(chave)
         if entrada is not None and entrada[0] == assinatura:
             return entrada[1]
-        if chave:
-            imagem = self.QtGui.QImage(chave)
+        if dinamica:
+            pixels = pixels_textura_rgba(origem)
         else:
-            imagem = self.QtGui.QImage()
-        if imagem.isNull():
-            pixels = np.array([[[255, 255, 255, 255]]], dtype=np.uint8)
-        else:
-            imagem = imagem.convertToFormat(
-                self.QtGui.QImage.Format_RGBA8888
-            )
-            w, h = imagem.width(), imagem.height()
-            pixels = np.frombuffer(
-                imagem.bits().asstring(w*h*4), dtype=np.uint8
-            ).reshape((h, w, 4)).copy()
+            imagem = self.QtGui.QImage(chave) if chave else self.QtGui.QImage()
+            if imagem.isNull():
+                pixels = np.array([[[255, 255, 255, 255]]], dtype=np.uint8)
+            else:
+                imagem = imagem.convertToFormat(self.QtGui.QImage.Format_RGBA8888)
+                w, h = imagem.width(), imagem.height()
+                pixels = np.frombuffer(
+                    imagem.bits().asstring(w * h * 4), dtype=np.uint8
+                ).reshape((h, w, 4)).copy()
         h, w = pixels.shape[:2]
         wgpu = self.wgpu
         textura = self.device.create_texture(
