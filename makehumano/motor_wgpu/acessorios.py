@@ -89,10 +89,12 @@ def carregar_proxy_direto(caminho_mhclo: str | Path, corpo: Malha) -> AcessorioD
                     raise ValueError(f"Linha {numero}: referência fora do corpo")
                 referencias.append(referencia)
             elif dados[0] in {
-                "uuid", "basemesh", "name", "tag", "z_depth",
+                "uuid", "basemesh", "name", "tag", "z_depth", "material",
+                "x_scale", "y_scale", "z_scale",
             }:
-                # Metadados sem efeito no vínculo; transformações adicionais
-                # precisam falhar explicitamente neste leitor direto.
+                # Os olhos low-poly oficiais possuem escala e material no
+                # cabeçalho; as referências diretas não usam offsets.
+                # Ignorar estes metadados não altera a geometria.
                 continue
             else:
                 raise ValueError(
