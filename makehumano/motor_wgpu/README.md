@@ -42,7 +42,7 @@ Ao carregar, a peça recebe uma entrada independente na interface, com **visibil
 
 **Materiais `.mhmat` (parciais):** o leitor reconhece a referência `material` do `.mhclo`, inclusive o padrão `../materials/` dos olhos oficiais, e utiliza `diffuseTexture`, `diffuseColor` e `shininess` (transformada em rugosidade GGX **aproximada**, não física). Os arquivos são resolvidos apenas em diretórios locais permitidos. Opções de shader, mapas adicionais, transparência, animação de material e outras propriedades **não são reproduzidas**; o programa apresenta avisos ao importar uma peça com esses recursos. A renderização ainda é opaca, mesmo que o `.mhmat` declare transparência.
 
-**Ainda é uma importação experimental e parcial:** não interpreta o sistema `.mhmat` completo, ossos/rigs, poses, pesos de skinning, colisões, ajuste físico, transparência de tecido ou oclusão entre camadas de roupa. Alguns proxies oficiais podem ter diretivas que o parser recusa explicitamente; são necessárias adaptações antes de importar esses casos. A seleção e a textura das peças externas **não são persistidas no projeto `.makehumano.json` e não entram na exportação OBJ do corpo**. Por enquanto, carregue novamente os acessórios ao reabrir o visualizador. O teste gráfico exercita uma **peça sintética temporária**, não uma roupa oficial de produção.
+**Ainda é uma importação experimental e parcial:** não interpreta o sistema `.mhmat` completo, ossos/rigs, poses, pesos de skinning, colisões, ajuste físico, transparência de tecido ou oclusão entre camadas de roupa. Alguns proxies oficiais podem ter diretivas que o parser recusa explicitamente; são necessárias adaptações antes de importar esses casos. A seleção, a visibilidade e a textura das peças externas já são **salvas na versão 4 do projeto `.makehumano.json`**. Elas ainda **não entram na exportação OBJ do corpo**. O teste gráfico exercita uma **peça sintética temporária**, não uma roupa oficial de produção.
 
 ### Compatibilidade de roupas: shear e máscaras (infraestrutura)
 
@@ -69,11 +69,13 @@ O slider **Dispersão da pele (aproximada)** vai de 0 a 100%. Em 0%, a iluminaç
 
 Este efeito é **artístico**, não um cálculo físico de `subsurface scattering`: não calcula espessura, iluminação transmitida, distância percorrida sob a superfície, dispersão espacial ou sombras translúcidas. Não espere comportamento realista de orelhas retroiluminadas. Ele serve para avaliar a direção visual com baixo custo antes de implementar um SSS mais completo.
 
-### Salvar e reabrir um personagem (versão 3)
+### Salvar e reabrir um personagem (versão 4)
 
-Use **Salvar personagem…** e **Abrir personagem…** na coluna de controles. O projeto experimental `.makehumano.json` versão **3** salva os parâmetros anatômicos, a cor, rugosidade e dispersão da pele e agora também **guarda os pixels das três texturas** em PNGs locais.
+Use **Salvar personagem…** e **Abrir personagem…** no visualizador experimental. O formato **`.makehumano.json` versão 4** conserva parâmetros anatômicos, tom/rugosidade/dispersão da pele, mapas RGBA e agora também **até 24 acessórios externos** com a visibilidade e o material efetivamente exibidos.
 
-Exemplo de arquivos salvos:
+Ao salvar um acessório `.mhclo`, o programa cria uma **cópia portátil** do seu proxy, do OBJ e da textura RGBA em `.assets/acessorios/<hash>/`. O proxy é normalizado para apontar para a cópia do OBJ, sem depender da localização original do `.mhmat`. Os controles de cor e rugosidade são armazenados no JSON; a aparência é aquela da prévia Vulkan, **não a reprodução integral do material legado**. O arquivo original do usuário não é modificado.
+
+Exemplo da estrutura:
 
 ```text
 personagem.makehumano.json
@@ -81,13 +83,18 @@ personagem.makehumano.json.assets/
   cor-<hash>.png
   normal-<hash>.png
   rugosidade-<hash>.png
+  acessorios/
+    <hash>/
+      proxy.mhclo
+      malha.obj
+      textura.png
 ```
 
-Os nomes são gerados a partir do conteúdo, não de caminhos fornecidos pelo usuário. Apenas os mapas ativos recebem PNGs; a textura difusa é sempre salva. Ao abrir, os PNGs são decodificados, validados e comparados com o hash de cada arquivo **antes** de atualizar os materiais da GPU. Mapas ausentes no projeto voltam ao padrão neutro. Se a pasta de imagens estiver faltando ou algum PNG estiver corrompido, o projeto não será aplicado.
+A aplicação verifica **todos os arquivos e hashes** de acessórios e texturas antes de aplicar o novo projeto à GPU. Arquivos ausentes ou corrompidos causam erro, em vez de carregar apenas parte do projeto. Se a peça estiver desativada, continuará desativada após a abertura, inclusive sua máscara `delete_verts`. Peças duplicadas podem compartilhar os mesmos arquivos na pasta de recursos. Recursos antigos não são apagados automaticamente, preservando snapshots anteriores.
 
-**Compatibilidade:** os JSONs de versão **1 e 2** continuam sendo aceitos e atualizados para versão 3 em memória; eles não contêm imagens salvas, portanto usam texturas neutras. A versão 1 também mantém a dispersão desativada (0%) para preservar a aparência antiga. Para mover ou fazer backup de um projeto versão 3, copie **o JSON e a pasta `.assets` juntos**. PNGs de versões anteriores não são apagados automaticamente; isso evita invalidar backups.
+**Compatibilidade:** projetos **v1, v2 e v3** abrem com as funcionalidades que possuíam; projetos v3 preservam seus PNGs e ficam sem acessórios externos até que novas peças sejam importadas. Para mover/fazer backup, copie **o JSON e toda a pasta `.assets`**.
 
-O formato ainda **não é o `.mhm`** do MakeHuman e não preserva roupas, poses, plugins ou câmera.
+**Limitações:** a persistência atualmente cobre apenas acessórios externos adicionados manualmente; os olhos low/high-poly oficiais ainda usam a seleção inicial padrão ao abrir. Não inclui animações, rigs, materiais `.mhmat` completos ou resolução de colisões. A exportação OBJ continua exportando apenas o corpo. O JSON experimental **não é um arquivo `.mhm` original**.
 
 ### Importar um personagem do MakeHuman original (`.mhm`)
 
@@ -127,7 +134,8 @@ O GitHub Actions executa esses testes em `.github/workflows/testar-wgpu.yml`.
 - `materiais.py`: parâmetros da pele e validação de pixels
 - `morphs.py`: leitura dos arquivos `.target`, combinação atômica de pesos e recomputação de normais
 - `modificadores.py`: catálogo de sliders a partir dos JSON oficiais do MakeHuman
-- `projetos.py`: serialização JSON versionada, migração v1/v2 e persistência local de texturas PNG com verificação de integridade
+- `projetos.py`: serialização JSON v4, migração v1–v3 e persistência local de texturas PNG
+- `projetos_acessorios.py`: snapshots portáteis de proxies, OBJ e textura, com verificação de integridade
 - `mhm.py`: importação parcial de `.mhm` original e relatório de propriedades ignoradas
 - `exportar.py`: gravação OBJ e vínculo opcional com MTL/PNG, preservando posições canônicas e UVs
 - `materiais_obj.py`: geração de MTL e PNGs RGBA8 (difuso, normal e rugosidade), sem depender de Qt para exportar
@@ -145,7 +153,7 @@ O GitHub Actions executa esses testes em `.github/workflows/testar-wgpu.yml`.
 
 1. Ampliar a importação `.mhm` com ensaios sobre arquivos reais históricos e avançar da comparação CPU para poses, eventos e dependências da GUI original; ainda não há teste de equivalência visual entre as interfaces.
 2. Evoluir da dispersão visual aproximada para SSS fisicamente mais fiel (espessura e difusão), depois avaliar exportação PBR como glTF.
-3. Validar a importação manual de `.mhclo` com roupas históricas reais, ampliar propriedades `.mhmat` ainda não suportadas, sobreposição entre camadas e persistência no projeto. Máscaras por peça e material básico já funcionam.
+3. Validar `.mhclo` em roupas históricas reais, ampliar propriedades `.mhmat` ainda não suportadas e tratar sobreposição entre camadas. A persistência de acessórios externos, suas máscaras e seus materiais básicos já funciona na versão 4.
 4. Implementar câmera e picking equivalentes à viewport antiga.
 5. Testar shaders com várias GPUs/drivers e qualidade visual.
 6. Migrar o canvas oficial quando houver paridade de recursos.
