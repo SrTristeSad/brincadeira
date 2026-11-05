@@ -527,7 +527,7 @@ def iniciar():
                 assert f"mtllib {mtl.name}" in texto_obj
                 assert "usemtl PeleMakeHumano" in texto_obj
                 assert f"map_Kd {png.name}" in texto_mtl
-                assert png.read_bytes().startswith(b"\\x89PNG\\r\\n\\x1a\\n")
+                assert png.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
                 eventos_smoke.add("material_textura")
                 print("Material MTL e textura PNG exportados da GPU", flush=True)
                 reimportado = carregar_obj(objeto)
