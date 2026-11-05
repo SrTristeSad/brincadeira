@@ -40,8 +40,56 @@ from core import G
 from getpath import getPath, getDataPath, getSysDataPath, getSysPath, getRelativePath
 from makehuman import getVersion, getVersionStr, getBasemeshVersion, getShortVersion, isRelease, isBuild, getVersionDigitsStr, getCopyrightMessage, getAssetLicense, getThirdPartyLicenses, getSoftwareLicense, getCredits
 
-from glmodule import grabScreen as _grabScreenOpenGL, hasRenderSkin, renderSkin, hasRenderToRenderbuffer, renderToBuffer, renderAlphaMask
-from glmodule import getPickedColor as _getPickedColorOpenGL
+from glmodule import (
+    grabScreen as _grabScreenOpenGL,
+    getPickedColor as _getPickedColorOpenGL,
+    hasRenderSkin as _hasRenderSkinOpenGL,
+    renderSkin as _renderSkinOpenGL,
+    hasRenderToRenderbuffer as _hasRenderToRenderbufferOpenGL,
+    renderToBuffer as _renderToBufferOpenGL,
+    renderAlphaMask as _renderAlphaMaskOpenGL,
+)
+
+
+def _canvas_vulkan():
+    canvas = getattr(G, "canvas", None)
+    if canvas is not None and callable(getattr(canvas, "renderToBuffer", None)):
+        return canvas
+    return None
+
+
+def hasRenderToRenderbuffer():
+    """Vulkan usa textura offscreen; fora do piloto preserva implementação antiga."""
+    if _canvas_vulkan() is not None:
+        return True
+    return _hasRenderToRenderbufferOpenGL()
+
+
+def renderToBuffer(width, height, productionRender=True):
+    canvas = _canvas_vulkan()
+    if canvas is not None:
+        return canvas.renderToBuffer(width, height, productionRender)
+    return _renderToBufferOpenGL(width, height, productionRender)
+
+
+def renderAlphaMask(width, height, productionRender=True):
+    canvas = _canvas_vulkan()
+    if canvas is not None:
+        return canvas.renderAlphaMask(width, height, productionRender)
+    return _renderAlphaMaskOpenGL(width, height, productionRender)
+
+
+def hasRenderSkin():
+    # renderSkin envolve geometria UV arbitrária e ainda não foi migrado.
+    if _canvas_vulkan() is not None:
+        return False
+    return _hasRenderSkinOpenGL()
+
+
+def renderSkin(*args, **kwargs):
+    if _canvas_vulkan() is not None:
+        raise NotImplementedError("renderSkin ainda precisa ser portado para Vulkan")
+    return _renderSkinOpenGL(*args, **kwargs)
 
 
 def grabScreen(x, y, width, height, filename=None, productionRender=False):
