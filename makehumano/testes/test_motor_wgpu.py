@@ -54,12 +54,19 @@ class TestarMaterial(unittest.TestCase):
         pele.atualizar(cor=(0.5, 0.4, 0.3), rugosidade=0.22)
         self.assertEqual(pele.cor, (0.5, 0.4, 0.3))
         self.assertAlmostEqual(pele.rugosidade, 0.22)
+        pele.atualizar(dispersao=0.6)
+        self.assertAlmostEqual(pele.dispersao, 0.6)
 
     def test_material_rejeita_intervalos_invalidos(self):
         with self.assertRaises(ValueError):
             Pele(cor=(1.2, 0, 0))
         with self.assertRaises(ValueError):
             Pele(rugosidade=0.0)
+        for valor in (-0.01, 1.01, float("nan"), float("inf")):
+            with self.subTest(valor=valor), self.assertRaises(ValueError):
+                Pele(dispersao=valor)
+        self.assertEqual(Pele(dispersao=0).dispersao, 0)
+        self.assertEqual(Pele(dispersao=1).dispersao, 1)
 
     def test_textura_rgba_validada(self):
         textura = validar_rgba(textura_neutra())
