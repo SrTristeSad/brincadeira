@@ -48,7 +48,7 @@ python executar.py --noshaders
 
 ## Prévia experimental com wgpu-py / Vulkan
 
-Foi acrescentado um **visualizador independente** em [`motor_wgpu/`](motor_wgpu/README.md). Ele carrega a malha original `base.obj`, mantém as coordenadas UV, possui material WGSL com difuso + reflexão GGX simplificada e permite alterar texturas durante a execução. O painel agora carrega **238 modificadores diretos** das definições oficiais do MakeHuman, agrupados por região do corpo. Os sliders aplicam morph targets positivos e negativos ao vertex buffer Vulkan, recalculando as normais sem alterar UVs. Também existem **oito controles gerais** na prévia — idade, gênero morfológico, peso, musculatura, altura, proporções corporais, volume e firmeza dos seios — que combinam até 564 alvos originais. Também foram adicionados os **três parâmetros étnicos interdependentes do MakeHuman**, com normalização comparada à função original `Human._setEthnicVals`. Eles controlam misturas de alvos morfológicos, não identidade étnica. A integração das regras completas de dependência com a GUI principal ainda está pendente.
+Foi acrescentado um **visualizador independente** em [`motor_wgpu/`](motor_wgpu/README.md). Ele carrega a malha original `base.obj`, mantém as coordenadas UV, possui material WGSL com difuso + reflexão GGX simplificada e permite alterar texturas difusas, mapas de normais em espaço tangente e mapas de rugosidade durante a execução. O painel agora carrega **238 modificadores diretos** das definições oficiais do MakeHuman, agrupados por região do corpo. Os sliders aplicam morph targets positivos e negativos ao vertex buffer Vulkan, recalculando as normais sem alterar UVs. Também existem **oito controles gerais** na prévia — idade, gênero morfológico, peso, musculatura, altura, proporções corporais, volume e firmeza dos seios — que combinam até 564 alvos originais. Também foram adicionados os **três parâmetros étnicos interdependentes do MakeHuman**, com normalização comparada à função original `Human._setEthnicVals`. Eles controlam misturas de alvos morfológicos, não identidade étnica. A integração das regras completas de dependência com a GUI principal ainda está pendente.
 
 Execute no diretório `makehumano/`:
 
@@ -57,7 +57,7 @@ python -m pip install -r motor_wgpu/requirements.txt
 python -m motor_wgpu.app
 ```
 
-O parâmetro `--backend vulkan` obriga o uso de Vulkan. O modo automático tenta escolher a API que funcione na máquina. Os testes em GitHub Actions verificam o processamento da malha, a correspondência de vértices com o método original `algos3d.Target.apply`, e a criação de quadros com Vulkan por software (Mesa/Lavapipe). O visualizador permite **salvar e abrir projetos experimentais `.makehumano.json`**, com os parâmetros anatômicos e o material básico da pele; esse formato **não é compatível com o `.mhm` original**. Também permite **exportar OBJ, MTL e PNG juntos**: a malha deformada mantém os índices de vértices, UVs e normais, enquanto o material MTL referencia uma cópia da última textura RGBA carregada na GPU e aproxima tonalidade e rugosidade. Não inclui roupas, esqueleto, poses ou materiais PBR completos. **Isto ainda não substitui a viewport principal** nem reproduz todas as regras de dependência, poses e plugins do MakeHuman original; também faltam subsurface scattering, picking e revisão visual em uma GPU física.
+O parâmetro `--backend vulkan` obriga o uso de Vulkan. O modo automático tenta escolher a API que funcione na máquina. Os testes em GitHub Actions verificam o processamento da malha, a correspondência de vértices com o método original `algos3d.Target.apply`, e a criação de quadros com Vulkan por software (Mesa/Lavapipe). O visualizador permite **salvar e abrir projetos experimentais `.makehumano.json`**, com os parâmetros anatômicos e o material básico da pele; esse formato **não é compatível com o `.mhm` original**. Também permite **exportar OBJ, MTL e três PNGs juntos**: textura difusa, mapa de normais e mapa de rugosidade. A malha deformada mantém os índices de vértices, UVs e normais. O MTL referencia apenas a textura difusa; os dois mapas de detalhe são PNGs auxiliares para conectar manualmente em outros editores, pois o MTL clássico não representa esses mapas PBR corretamente. Não inclui roupas, esqueleto, poses ou materiais PBR completos. **Isto ainda não substitui a viewport principal** nem reproduz todas as regras de dependência, poses e plugins do MakeHuman original; também faltam subsurface scattering, picking e revisão visual em uma GPU física.
 
 ## Como salvar as atualizações neste repositório
 
@@ -83,8 +83,9 @@ O diretório `codigo/` está versionado no GitHub em `brincadeira/makehumano/cod
 16. [ ] Conectar os modificadores à lógica completa de dependências e eventos da GUI principal.
 17. [x] Exportar malha corporal deformada para OBJ, preservando a topologia canônica e coordenadas UV, com teste de reimportação.
 18. [x] Gerar arquivos auxiliares MTL e PNG junto ao OBJ; validar material, textura e reimportação em 40 testes automatizados.
-19. [ ] Testar o formato `.mhm` original, exportação de roupas/rig e materiais avançados.
-20. [ ] Adaptar dependências e interface sem quebrar deformações, arquivos e plugins.
+19. [x] Acrescentar mapas de normais e rugosidade no shader Vulkan, controles Qt e exportação PNG auxiliar; verificar carregamento, remoção e renderização.
+20. [ ] Testar o formato `.mhm` original, exportação de roupas/rig e materiais avançados.
+21. [ ] Adaptar dependências e interface sem quebrar deformações, arquivos e plugins.
 
 ## Licenças e créditos
 
