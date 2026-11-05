@@ -3,6 +3,8 @@
 Não utiliza o formato .mhm do MakeHuman original: ele contém regras,
 plugins e referências que esta prévia ainda não reproduz integralmente.
 O documento JSON registra apenas parâmetros controlados nesta janela.
+Versão 2 adiciona dispersão da pele; arquivos da versão 1 são migrados
+na leitura com intensidade 0 para preservar a aparência anterior.
 """
 
 import json
@@ -15,7 +17,7 @@ from .macro import ETNIAS, VALORES_PADRAO
 
 
 FORMATO = "makehumano-wgpu"
-VERSAO = 1
+VERSAO = 2
 
 
 def _numero(valor, menor, maior, campo):
@@ -31,7 +33,8 @@ def validar_documento(documento: dict, catalogo) -> dict:
     """Valida o documento inteiro ANTES de modificar os controles ou a GPU."""
     if not isinstance(documento, dict):
         raise ValueError("O projeto precisa ser um objeto JSON")
-    if documento.get("formato") != FORMATO or documento.get("versao") != VERSAO:
+    versao_origem = documento.get("versao")
+    if documento.get("formato") != FORMATO or versao_origem not in (1, VERSAO):
         raise ValueError("Formato ou versão de projeto desconhecidos")
 
     macros = documento.get("macros")
@@ -65,13 +68,18 @@ def validar_documento(documento: dict, catalogo) -> dict:
             modificadores[nome] = valor
 
     pele = documento.get("pele")
-    if not isinstance(pele, dict) or set(pele) != {"cor", "rugosidade"}:
+    campos_pele = ({"cor", "rugosidade"} if versao_origem == 1
+                   else {"cor", "rugosidade", "dispersao"})
+    if not isinstance(pele, dict) or set(pele) != campos_pele:
         raise ValueError("Material de pele incompleto")
     cor = pele["cor"]
     if not isinstance(cor, (tuple, list)) or len(cor) != 3:
         raise ValueError("Cor precisa ter três canais RGB")
     rgb = [_numero(valor, 0, 1, "canal RGB") for valor in cor]
     rugosidade = _numero(pele["rugosidade"], 0.05, 1, "rugosidade")
+    # O projeto v1 não tinha dispersão: valor zero preserva a imagem antiga.
+    dispersao = (0.0 if versao_origem == 1 else
+                 _numero(pele["dispersao"], 0, 1, "dispersão"))
 
     return {
         "formato": FORMATO,
@@ -79,7 +87,8 @@ def validar_documento(documento: dict, catalogo) -> dict:
         "macros": macros,
         "etnias": etnias,
         "modificadores": modificadores,
-        "pele": {"cor": rgb, "rugosidade": rugosidade},
+        "pele": {"cor": rgb, "rugosidade": rugosidade,
+                 "dispersao": dispersao},
     }
 
 
@@ -91,7 +100,8 @@ def montar_documento(perfil, modificadores: dict, pele, catalogo) -> dict:
         "macros": dict(perfil.valores),
         "etnias": dict(perfil.etnias),
         "modificadores": dict(modificadores),
-        "pele": {"cor": list(pele.cor), "rugosidade": pele.rugosidade},
+        "pele": {"cor": list(pele.cor), "rugosidade": pele.rugosidade,
+                 "dispersao": pele.dispersao},
     }, catalogo)
 
 
