@@ -144,7 +144,7 @@ class TestarImportacaoExterna(unittest.TestCase):
             )
             direto.write_text(
                 direto.read_text(encoding="utf-8").replace(
-                    "verts 0", "unknown_key 1\\nverts 0"
+                    "verts 0", "unknown_key 1\nverts 0"
                 ),
                 encoding="utf-8",
             )
