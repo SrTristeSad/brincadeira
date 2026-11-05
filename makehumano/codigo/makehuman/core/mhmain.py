@@ -831,6 +831,14 @@ class MHApplication(gui3d.Application, mh.Application):
 
         self._processCommandlineArgs(beforeLoaded = False)
 
+        # Teste de integração opcional: sinalizar apenas após terminar a
+        # inicialização da interface, dos plugins e dos morph targets.
+        # Não altera o comportamento em execuções normais.
+        ready_file = os.environ.get("MAKEHUMANO_SMOKE_READY_FILE")
+        if ready_file:
+            with open(ready_file, "w", encoding="utf-8") as marker:
+                marker.write("ready\\n")
+
     def _processCommandlineArgs(self, beforeLoaded):
         if beforeLoaded:
             if self.args.get('noshaders', False):
