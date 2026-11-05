@@ -288,6 +288,23 @@ def criar_canvas_vulkan(canvas_original):
                         "MAKEHUMANO_VULKAN: renderToBuffer e renderAlphaMask OK",
                         flush=True,
                     )
+                skin_marker = os.environ.get("MAKEHUMANO_VULKAN_SKIN_FILE")
+                if skin_marker and not os.path.exists(skin_marker):
+                    import mh
+                    import numpy as np
+                    vertices = np.array(
+                        [[0.1, 0.1], [0.9, 0.1], [0.5, 0.9]], np.float32,
+                    )
+                    cores = np.array([[255, 40, 20, 255]] * 3, np.uint8)
+                    img = mh.renderSkin(
+                        (96, 96), 3, vertices, color=cores,
+                        clearColor=(0, 0, 0, 0),
+                    )
+                    if img.data.shape != (96, 96, 3) or img.data.max() == 0:
+                        raise RuntimeError("renderSkin Vulkan não desenhou UVs")
+                    with open(skin_marker, "w", encoding="utf-8") as saida:
+                        saida.write("vulkan-skin:96x96\n")
+                    print("MAKEHUMANO_VULKAN: renderSkin UV OK", flush=True)
                 caminho = os.environ.get("MAKEHUMANO_VULKAN_FRAME_FILE")
                 if caminho and not os.path.exists(caminho):
                     with open(caminho, "w", encoding="utf-8") as saida:
