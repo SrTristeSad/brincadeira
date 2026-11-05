@@ -399,7 +399,8 @@ struct Fragmento {
             dimension="2d",
             format=self.formato,
             usage=self.wgpu.TextureUsage.RENDER_ATTACHMENT
-                  | self.wgpu.TextureUsage.COPY_SRC,
+                  | self.wgpu.TextureUsage.COPY_SRC
+                  | self.wgpu.TextureUsage.COPY_DST,
         )
 
     def ler_framebuffer_rgba(self, alvo):
