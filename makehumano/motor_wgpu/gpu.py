@@ -264,7 +264,7 @@ class MotorWgpu:
     def adicionar_acessorio(
         self, nome: str, malha: Malha, vertices: np.ndarray,
         textura_rgba, *, rugosidade: float = 0.28,
-        deletar_vertices=None,
+        deletar_vertices=None, cor=(1.0, 1.0, 1.0),
     ):
         """Cria uma segunda malha com material e textura próprios.
 
@@ -279,6 +279,10 @@ class MotorWgpu:
         if not 0.05 <= float(rugosidade) <= 1:
             raise ValueError("Rugosidade inválida")
         rgba = validar_rgba(textura_rgba)
+        tint = np.asarray(cor, dtype=np.float32)
+        if (tint.shape != (3,) or not np.isfinite(tint).all()
+                or np.any(tint < 0) or np.any(tint > 1)):
+            raise ValueError("Cor do acessório precisa de três valores entre 0 e 1")
 
         def textura_gpu(pixels):
             pixels = validar_rgba(pixels)
@@ -334,6 +338,8 @@ class MotorWgpu:
             "bind": bind,
             "texturas": (cor, normal, rough),
             "rugosidade": float(rugosidade),
+            "cor": tuple(float(x) for x in tint),
+            "textura_cpu": rgba.copy(),
             "visivel": True,
         }
         self._sincronizar_mascara_corpo()
@@ -409,7 +415,7 @@ class MotorWgpu:
             extra = b"".join([
                 mvp.T.copy().tobytes(),
                 model.T.copy().tobytes(),
-                np.array([1, 1, 1, 1], dtype=np.float32).tobytes(),
+                np.array([*item["cor"], 1.0], dtype=np.float32).tobytes(),
                 np.array(
                     [item["rugosidade"], 0, 0, 0], dtype=np.float32
                 ).tobytes(),
