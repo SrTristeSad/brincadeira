@@ -62,7 +62,7 @@ class GerenciadorMascaras:
         self._mascaras = {}
         self._visibilidade = {}
 
-    def _validar_mascara(self, mascara) -> np.ndarray:
+    def validar_mascara(self, mascara) -> np.ndarray:
         if mascara is None:
             return np.zeros(self.quantidade_vertices, dtype=bool)
         dados = np.asarray(mascara)
@@ -76,14 +76,14 @@ class GerenciadorMascaras:
     def registrar(self, nome: str, mascara=None, *, visivel=True):
         if not isinstance(nome, str) or not nome or nome in self._mascaras:
             raise ValueError("Nome de acessório vazio ou duplicado")
-        validada = self._validar_mascara(mascara)
+        validada = self.validar_mascara(mascara)
         self._mascaras[nome] = validada
         self._visibilidade[nome] = bool(visivel)
 
     def definir_mascara(self, nome: str, mascara=None):
         if nome not in self._mascaras:
             raise KeyError(nome)
-        self._mascaras[nome] = self._validar_mascara(mascara)
+        self._mascaras[nome] = self.validar_mascara(mascara)
 
     def definir_visibilidade(self, nome: str, visivel: bool):
         if nome not in self._mascaras:
