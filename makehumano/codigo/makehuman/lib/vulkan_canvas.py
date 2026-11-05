@@ -3,7 +3,7 @@
 Somente ativado via MAKEHUMANO_VULKAN_PILOT=1 durante a migração.
 Reutiliza, sem alterar, os handlers de mouse e teclado do Canvas original.
 Não importa OpenGL e não solicita contexto QOpenGLWidget.
-Ainda não substitui as APIs glmodule de picking, offscreen e shaders.
+Ainda não substitui renderização offscreen independente nem shaders legados.
 """
 
 import os
@@ -88,6 +88,44 @@ def criar_canvas_vulkan(canvas_original):
                 G.world, G.cameras, x, y,
                 G.windowWidth, G.windowHeight,
             )
+
+        def grabScreen(self, x, y, width, height, filename=None,
+                       productionRender=False):
+            """Captura a viewport já apresentada, sem glReadPixels.
+
+            A API de produção pede outro passe de renderização; não a
+            substituímos por uma imagem da janela de forma silenciosa.
+            """
+            if productionRender:
+                raise NotImplementedError(
+                    "Captura de produção em Vulkan requer render offscreen"
+                )
+            if width <= 0 or height <= 0:
+                raise RuntimeError("width or height is 0")
+            if not self.isVisible():
+                raise RuntimeError("Canvas Vulkan não está visível")
+            from image import Image
+            from vulkan_capture import recortar_captura_rgb
+            import numpy as np
+
+            imagem = self.grab().toImage()
+            if imagem.isNull():
+                raise RuntimeError("Captura Qt da viewport Vulkan indisponível")
+            imagem = imagem.convertToFormat(imagem.Format_RGB888)
+            # QLabel/QWidget pode devolver pixels físicos em HiDPI.
+            # As coordenadas do MakeHuman são as dimensões lógicas do canvas.
+            if (imagem.width(), imagem.height()) != (self.width(), self.height()):
+                imagem = imagem.scaled(self.width(), self.height())
+            largura, altura = imagem.width(), imagem.height()
+            stride = imagem.bytesPerLine()
+            bruto = imagem.bits().asstring(imagem.byteCount())
+            pixels = np.frombuffer(bruto, dtype=np.uint8).reshape(altura, stride)
+            pixels = pixels[:, :largura * 3].reshape(altura, largura, 3)
+            recorte = recortar_captura_rgb(pixels, x, y, width, height)
+            resultado = Image(data=recorte)
+            if filename is not None:
+                resultado.save(filename)
+            return resultado
 
         def invalidar_texturas(self, caminho=None):
             """Expõe a recarga de texturas à API original do MakeHuman."""
