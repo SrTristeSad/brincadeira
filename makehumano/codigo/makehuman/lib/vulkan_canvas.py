@@ -127,6 +127,45 @@ def criar_canvas_vulkan(canvas_original):
                 resultado.save(filename)
             return resultado
 
+        def _garantir_cena(self):
+            """Inicializa uma única instância GPU para viewport e offscreen."""
+            if self._cena is None:
+                self._cena = CenaVulkan(self)
+                self.app.logger_redraw.info(
+                    "Canvas Vulkan ORIGINAL: %s", self._cena.adapter.info,
+                )
+            return self._cena
+
+        def renderToBuffer(self, width, height, productionRender=True):
+            """Substitui mh.renderToBuffer por renderização real no Vulkan."""
+            from image import Image
+            width, height = int(width), int(height)
+            if width <= 0 or height <= 0:
+                raise RuntimeError("Resolução de produção inválida")
+            cena = self._garantir_cena()
+            pixels = cena.capturar_framebuffer(
+                G.world, G.cameras, width, height,
+                productionRender=productionRender,
+                cor_fundo=(0.5, 0.5, 0.5, 1.0),
+            )
+            return Image(data=pixels)
+
+        def renderAlphaMask(self, width, height, productionRender=True):
+            """Máscara em escala de cinza obtida do alfa real da GPU."""
+            from image import Image
+            from vulkan_offscreen import mascarar_alfa_rgba
+            width, height = int(width), int(height)
+            if width <= 0 or height <= 0:
+                raise RuntimeError("Resolução da máscara inválida")
+            cena = self._garantir_cena()
+            pixels = cena.capturar_framebuffer(
+                G.world, G.cameras, width, height,
+                incluir_alfa=True,
+                productionRender=productionRender,
+                cor_fundo=(0.5, 0.5, 0.5, 0.0),
+            )
+            return Image(data=mascarar_alfa_rgba(pixels))
+
         def invalidar_texturas(self, caminho=None):
             """Expõe a recarga de texturas à API original do MakeHuman."""
             if self._cena is not None:
@@ -157,11 +196,7 @@ def criar_canvas_vulkan(canvas_original):
                 return
             if self._cena is None:
                 print("MAKEHUMANO_VULKAN: inicializando GPU", flush=True)
-                self._cena = CenaVulkan(self)
-                self.app.logger_redraw.info(
-                    "Canvas Vulkan PILOTO na interface original: %s",
-                    self._cena.adapter.info,
-                )
+            self._garantir_cena()
             try:
                 self._cena.desenhar(
                     G.world, G.cameras, cor_fundo=G.clearColor,
