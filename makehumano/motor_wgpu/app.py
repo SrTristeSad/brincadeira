@@ -1080,11 +1080,11 @@ def iniciar():
                 imagem.fill(QtGui.QColor(60, 130, 195, 255))
                 assert imagem.save(str(pasta / "pano.png"), "PNG")
                 (pasta / "pano.mhmat").write_text(
-                    "name PanoTeste\\n"
-                    "diffuseColor 0.3 0.5 0.8\\n"
-                    "diffuseTexture pano.png\\n"
-                    "shininess 0.8\\n"
-                    "shaderParam EffectNaoSuportado 1.0\\n",
+                    "name PanoTeste\n"
+                    "diffuseColor 0.3 0.5 0.8\n"
+                    "diffuseTexture pano.png\n"
+                    "shininess 0.8\n"
+                    "shaderParam EffectNaoSuportado 1.0\n",
                     encoding="utf-8",
                 )
                 vertice = int(malha.origens[malha.indices[0]])
