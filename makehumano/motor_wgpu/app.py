@@ -108,8 +108,21 @@ def iniciar():
              lambda valor: motor.ajustar_camera(elevacao=valor * 3.14159265 / 180))
     controle("Distância", 15, 50, 28,
              lambda valor: motor.ajustar_camera(distancia=valor))
-    controle("Rugosidade da pele", 5, 100, 65,
-             lambda valor: motor.ajustar_pele(rugosidade=valor / 100))
+    slider_rugosidade = controle(
+        "Rugosidade da pele", 5, 100, 65,
+        lambda valor: motor.ajustar_pele(rugosidade=valor / 100),
+    )
+    slider_dispersao = controle(
+        "Dispersão da pele (aproximada)", 0, 100,
+        round(motor.pele.dispersao * 100),
+        lambda valor: motor.ajustar_pele(dispersao=valor / 100),
+    )
+    explicacao_dispersao = QtWidgets.QLabel(
+        "Iluminação difusa suavizada nas bordas. Não simula "
+        "translucência física nem espessura da pele."
+    )
+    explicacao_dispersao.setWordWrap(True)
+    coluna.addWidget(explicacao_dispersao)
 
     coluna.addWidget(QtWidgets.QLabel("Tonalidade da pele"))
     cores = {
@@ -308,7 +321,15 @@ def iniciar():
         motor.ajustar_pele(
             cor=documento["pele"]["cor"],
             rugosidade=documento["pele"]["rugosidade"],
+            dispersao=documento["pele"]["dispersao"],
         )
+        for slider, valor in (
+            (slider_rugosidade, documento["pele"]["rugosidade"]),
+            (slider_dispersao, documento["pele"]["dispersao"]),
+        ):
+            slider.blockSignals(True)
+            slider.setValue(round(valor * 100))
+            slider.blockSignals(False)
         motor.atualizar_vertices(deformador.vertices)
 
     def salvar_projeto():
@@ -506,7 +527,8 @@ def iniciar():
             esperados = {"textura", "modificador_positivo", "modificador_negativo",
                          "macros", "restauracao", "etnias", "restauracao_total",
                          "salvar_abrir", "exportar_obj", "material_textura",
-                         "mapas_detalhe", "mapas_restaurados"}
+                         "mapas_detalhe", "mapas_restaurados",
+                         "dispersao"}
             ok = eventos_smoke == esperados and motor.frames >= 6
             print(f"Smoke: eventos {sorted(eventos_smoke)}, aprovado={ok}", flush=True)
             aplicacao.exit(0 if ok else 2)
@@ -581,6 +603,10 @@ def iniciar():
                 controles_macros["muscle"].setValue(75)
                 controles_etnias["asian"].setValue(600)
                 controles_morph["nose/nose-scale-horiz-decr|incr"].setValue(40)
+                slider_dispersao.setValue(72)
+                assert abs(motor.pele.dispersao - 0.72) < 1e-6
+                eventos_smoke.add("dispersao")
+                print("Dispersão aproximada da pele atualizada no Vulkan", flush=True)
                 estado_anterior = deformador.vertices.copy()
                 documento = montar_documento(
                     macros.perfil, valores_morph, motor.pele, catalogo
@@ -588,7 +614,10 @@ def iniciar():
                 salvar_documento(destino, documento, catalogo)
                 controles_macros["muscle"].setValue(20)
                 controles_morph["nose/nose-scale-horiz-decr|incr"].setValue(-40)
+                slider_dispersao.setValue(0)
                 aplicar_documento(carregar_documento(destino, catalogo))
+                assert abs(motor.pele.dispersao - 0.72) < 1e-6
+                assert slider_dispersao.value() == 72
                 import numpy as np
                 np.testing.assert_allclose(
                     deformador.vertices, estado_anterior, rtol=2e-5, atol=2e-5,
