@@ -109,8 +109,10 @@ def Render(settings):
             renderprog(0.4, 0.99, "AntiAliasing")
             # Resize to 50% using bi-linear filtering
             img = img.resized(width/2, height/2, filter=image.FILTER_BILINEAR)
-            # TODO still haven't figured out where components get swapped, but this hack appears to be necessary
-            img.data[:,:,:] = img.data[:,:,(2,1,0,3)]
+            # O caminho Vulkan já devolve RGB na ordem correta. O swap
+            # histórico só é necessário para o framebuffer OpenGL legado.
+            if not callable(getattr(G.canvas, "renderToBuffer", None)):
+                img.data[:,:,:] = img.data[:,:,(2,1,0,3)]
         renderprog.finish()
 
     if settings['lightmapSSS']:
