@@ -23,11 +23,13 @@ python -m motor_wgpu.app --backend vulkan
 
 Sem o argumento, wgpu seleciona automaticamente um backend disponível (Vulkan, Metal ou D3D12, conforme o sistema). Se a GPU/driver não suportar o backend escolhido, o programa pode falhar; nesse caso, execute novamente sem `--backend`. Na janela, escolha uma textura por `Carregar textura da pele…`. Use uma textura UV no layout do `base.obj` original para que corresponda ao modelo. A coluna de controles contém oito parâmetros gerais, três controles de mistura étnica interdependentes e um seletor de região (cabeça, nariz, braços e pernas etc.). Sliders bidirecionais funcionam de -100 a +100; unidirecionais, de 0 a +100. Ao trocar de grupo, os pesos permanecem ativos. **Restaurar todas as deformações** repõe as macrovariáveis iniciais do MakeHuman e zera os sliders anatômicos. O modelo inicial já recebe os macros padrão, não é a malha `.obj` absolutamente neutra.
 
-### Primeiro acessório adaptável: olhos low-poly
+### Olhos low-poly e high-poly com proxies oficiais
 
-O visualizador passou a renderizar também os **olhos de baixa resolução originais do MakeHuman**, em uma segunda malha GPU independente do corpo, com coordenadas UV e imagem `brown_eye.png` próprias. A posição dos 96 vértices canônicos dos olhos é recalculada a partir do arquivo oficial `low-poly.mhclo` (referências diretas) e das coordenadas deformadas do corpo. Assim, os olhos acompanham os morph targets sem modificar sua textura ou suas UVs. Há uma caixa **Mostrar olhos originais (low-poly)** para ligar/desligar a renderização.
+O visualizador Vulkan possui **dois modelos de olhos** com malha, UV e textura próprias: **low-poly (96 vértices canônicos)** e **high-poly (1.064 vértices canônicos)**. A caixa *Mostrar olhos originais* controla a visibilidade, e a lista permite escolher a resolução. Apenas o modelo selecionado é desenhado; os dois compartilham o depth buffer com o corpo.
 
-**Limitação do primeiro passo:** somente esse tipo simples de vínculo `mhclo` foi implementado. O MakeHuman suporta proxies mais complexos com três vértices de referência, pesos baricêntricos, deslocamentos e transformação; esses arquivos **ainda não são aceitos**. A pasta de roupas da aplicação original não está presente nesta cópia do repositório, e o protótipo não renderiza nem importa roupas, cabelo ou esqueletos. A segunda malha utiliza o mesmo shader básico e depth buffer, mas **ainda não tem transparência, oclusão por máscaras de roupas ou o rig de animação**. Os testes de CI são feitos com Vulkan por software, sem validação visual humana.
+O arquivo original `low-poly.mhclo` utiliza **referência direta** de cada vértice ao corpo. O `high-poly.mhclo` utiliza **três vértices de referência, três pesos e um deslocamento tridimensional** para cada vértice. Seu deslocamento é ajustado por uma matriz diagonal calculada das distâncias do corpo deformado nos eixos x/y/z, segundo `TMatrix.getMatrix()` do MakeHuman. O código compara os resultados com **`Proxy.getCoords()` e `TMatrix.getMatrix()` originais**, inclusive após deformações. Em cada atualização, as normais são recalculadas e as UVs preservadas.
+
+**Ainda não é um sistema completo de roupas:** a cópia do repositório não inclui arquivos de peças de roupa, e o suporte a `.mhclo` é limitado a referências diretas e referências ponderadas com escala diagonal. Shear/transformações mais complexas, máscaras de ocultação do corpo, rigs, poses, materiais/transparência avançados e carregamento arbitrário de roupas não estão implementados. A resolução selecionada dos olhos também ainda não é persistida no JSON experimental. A verificação de CI usa Vulkan por software; não substitui uma inspeção visual em GPU física.
 
 ### Mapas de normal e rugosidade
 
@@ -109,14 +111,14 @@ O GitHub Actions executa esses testes em `.github/workflows/testar-wgpu.yml`.
 - `macro.py`: interpolação de oito macrovariáveis e normalização dos três controles étnicos seguindo as fórmulas originais, combinando os 564 `.target`
 - `shaders/pele.wgsl`: material difuso + GGX simplificado
 - `gpu.py`: device, pipeline, texturas, uniforms, depth, vertex buffer mutável e draw
-- `acessorios.py`: vínculo `.mhclo` de referência direta dos olhos low-poly, com atualizações após os morphs
+- `acessorios.py`: vínculos `.mhclo` diretos e ponderados com escala x/y/z (olhos low/high-poly), atualizados após morphs
 - `app.py`: widget Qt e controles de demonstração
 
 ## Próximos marcos (não implementados)
 
 1. Ampliar a importação `.mhm` com ensaios sobre arquivos reais históricos e avançar da comparação CPU para poses, eventos e dependências da GUI original; ainda não há teste de equivalência visual entre as interfaces.
 2. Evoluir da dispersão visual aproximada para SSS fisicamente mais fiel (espessura e difusão), depois avaliar exportação PBR como glTF.
-3. Ampliar proxies `.mhclo` para pesos baricêntricos e offsets, depois importar roupas de forma correta (quando disponíveis).
+3. Ampliar proxies `.mhclo` para shear, máscaras e acessórios/roupas reais quando os assets estiverem disponíveis; o suporte atual já contempla pesos e offsets com escala diagonal.
 4. Implementar câmera e picking equivalentes à viewport antiga.
 5. Testar shaders com várias GPUs/drivers e qualidade visual.
 6. Migrar o canvas oficial quando houver paridade de recursos.
