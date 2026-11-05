@@ -111,6 +111,27 @@ def matriz_wgpu(camera, obj):
     return np.ascontiguousarray(conversao_z @ proj @ view @ model)
 
 
+def parametros_material_vulkan(obj):
+    """Lê as opções do material já utilizadas pelo Object3D original.
+
+    Vetor de controle WGSL: x=sem iluminação, y=usar textura difusa.
+    Mantém a cor difusa original e não instancia shaders OpenGL.
+    """
+    material = getattr(obj, "material", None)
+    difusa = getattr(getattr(material, "diffuseColor", None), "values",
+                     (1.0, 1.0, 1.0))
+    rgb = np.asarray(difusa, dtype=np.float32)
+    if rgb.shape != (3,) or not np.isfinite(rgb).all():
+        raise ValueError("Material original: cor difusa RGB inválida")
+    cor = np.array([*rgb, 1.0], dtype=np.float32)
+    sem_luz = bool(getattr(obj, "shadeless",
+                           getattr(material, "shadeless", False)))
+    usar_textura = bool(getattr(obj, "isTextured", True))
+    flags = np.array([float(sem_luz), float(usar_textura), 0.0, 0.0],
+                     dtype=np.float32)
+    return cor, flags
+
+
 class CenaVulkan:
     """Renderização piloto de objetos G.world na própria janela MakeHuman."""
 
@@ -136,7 +157,7 @@ class CenaVulkan:
         self.formato = self.contexto.get_preferred_format(self.adapter)
         self.contexto.configure(device=self.device, format=self.formato)
         codigo = """
-struct Globals { mvp: mat4x4<f32>, cor: vec4<f32> };
+struct Globals { mvp: mat4x4<f32>, cor: vec4<f32>, flags: vec4<f32> };
 @group(0) @binding(0) var<uniform> dados: Globals;
 @group(0) @binding(1) var mapa: texture_2d<f32>;
 @group(0) @binding(2) var amostra: sampler;
@@ -162,11 +183,15 @@ struct Fragmento {
 }
 @fragment fn fs_main(i: Fragmento) -> @location(0) vec4<f32> {
     let tex = textureSample(mapa, amostra, vec2<f32>(i.uv.x, 1.0-i.uv.y));
-    let luz = 0.30 + 0.70 * max(
+    let usar_textura = dados.flags.y > 0.5;
+    let rgb = select(vec3<f32>(1.0), tex.rgb, usar_textura);
+    let alfa = select(1.0, tex.a, usar_textura);
+    let iluminacao = 0.30 + 0.70 * max(
         dot(normalize(i.normal), normalize(vec3<f32>(0.4, 0.8, 0.5))), 0.0
     );
-    return vec4<f32>(tex.rgb * i.cor.rgb * dados.cor.rgb * luz,
-                     tex.a * i.cor.a * dados.cor.a);
+    let luz = select(iluminacao, 1.0, dados.flags.x > 0.5);
+    return vec4<f32>(rgb * i.cor.rgb * dados.cor.rgb * luz,
+                     alfa * i.cor.a * dados.cor.a);
 }
 """
         shader = self.device.create_shader_module(code=codigo)
@@ -358,17 +383,9 @@ struct Fragmento {
                 passagem.set_pipeline(pipeline)
                 cam = cameras[obj.cameraMode]
                 mvp = matriz_wgpu(cam, obj)
-                material = getattr(obj, "material", None)
-                diffuse = getattr(
-                    getattr(material, "diffuseColor", None), "values",
-                    (1.0, 1.0, 1.0)
-                )
-                cor = np.array(
-                    [*np.asarray(diffuse, dtype=np.float32)[:3], 1.0],
-                    dtype=np.float32,
-                )
+                cor, flags = parametros_material_vulkan(obj)
                 uniforms = np.concatenate(
-                    (mvp.T.reshape(-1), cor)
+                    (mvp.T.reshape(-1), cor, flags)
                 ).astype(np.float32)
                 buf_u = self.device.create_buffer_with_data(
                     data=uniforms, usage=wgpu.BufferUsage.UNIFORM
