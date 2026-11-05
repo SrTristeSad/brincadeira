@@ -251,6 +251,13 @@ struct Fragmento {
         self.linhas_desenhadas = 0
         self._primitivas_pendentes = set()
 
+    def invalidar_texturas(self, caminho=None):
+        """Invalida texturas da cena; a próxima renderização recarrega na GPU."""
+        if caminho is None:
+            self._texturas.clear()
+        else:
+            self._texturas.pop(str(caminho), None)
+
     def _textura(self, caminho):
         chave = str(caminho or "")
         assinatura = assinatura_textura(chave)
