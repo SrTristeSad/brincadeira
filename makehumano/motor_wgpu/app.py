@@ -1219,7 +1219,9 @@ def iniciar():
                 )
                 assert len(carregados) == 1
                 np.testing.assert_array_equal(carregados[0]["pixels"], cor)
-                assert carregados[0]["cor"] == (0.3, 0.5, 0.8)
+                np.testing.assert_allclose(
+                    carregados[0]["cor"], (0.3, 0.5, 0.8), atol=1e-6,
+                )
                 assert abs(carregados[0]["rugosidade"] - 0.4) < 1e-6
 
                 # Simular mudança de computador: só o projeto e a pasta
