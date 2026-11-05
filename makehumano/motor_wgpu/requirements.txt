@@ -1,0 +1,5 @@
+# Dependências adicionais somente para o visualizador wgpu experimental.
+# A GUI OpenGL original continua usando codigo/requirements.txt.
+-r ../codigo/requirements.txt
+wgpu>=0.32,<0.33
+rendercanvas>=2.7,<3
