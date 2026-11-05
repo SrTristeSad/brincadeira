@@ -233,8 +233,14 @@ def carregar_texturas_projeto(caminho: str | Path, documento: dict, leitor):
         if re.fullmatch(rf"{tipo}-[0-9a-f]{{20}}\.png", nome) is None:
             raise ValueError(f"Caminho da textura não permitido: {tipo}")
         arquivo = pasta / nome
-        # Arquivos menores que 512 MB; dimensões de pixels também limitadas.
-        if arquivo.stat().st_size > 512 * 1024 * 1024:
+        if pasta.is_symlink() or arquivo.is_symlink():
+            raise ValueError("Texturas não podem ser links simbólicos")
+        if arquivo.stat().st_size > 128 * 1024 * 1024:
             raise ValueError("Arquivo de textura muito grande")
-        resultado[tipo] = _validar_imagem(leitor(arquivo), tipo)
+        imagem = _validar_imagem(leitor(arquivo), tipo)
+        assinatura = struct.pack(">II", imagem.shape[1], imagem.shape[0])
+        digest = hashlib.sha256(assinatura + imagem.tobytes()).hexdigest()[:20]
+        if nome != f"{tipo}-{digest}.png":
+            raise ValueError(f"Textura {tipo} modificada ou corrompida")
+        resultado[tipo] = imagem
     return resultado
