@@ -11,7 +11,8 @@ import numpy as np
 import wgpu
 
 from .malha import Malha
-from .materiais import Pele, textura_neutra, validar_rgba
+from .materiais import (Pele, textura_neutra, validar_rgba,
+                        mapa_normal_neutro, mapa_rugosidade_neutro)
 
 
 def perspectiva(fov, aspecto, perto=0.1, longe=200.0):
@@ -107,13 +108,18 @@ class MotorWgpu:
         )
         self._depth_size = None
         self._depth_view = None
-        self._texture = None
+        self._texturas_gpu = {}
         self._bind_group = None
-        self.atualizar_textura(textura_neutra(), solicitar_redesenho=False)
+        self.normal_ativo = False
+        self.rugosidade_ativa = False
+        self._enviar_textura("cor", textura_neutra())
+        self._enviar_textura("normal", mapa_normal_neutro())
+        self._enviar_textura("rugosidade", mapa_rugosidade_neutro())
+        self._criar_bind_group()
         self.canvas.request_draw(self.desenhar)
 
-    def atualizar_textura(self, pixels, *, solicitar_redesenho=True):
-        """Envia bytes RGBA para GPU, inclusive texturas carregadas durante execução."""
+    def _enviar_textura(self, tipo: str, pixels):
+        """Upload RGBA8 em textura filtrável; guarda os mesmos pixels na CPU."""
         pixels = validar_rgba(pixels)
         h, w = pixels.shape[:2]
         textura = self.device.create_texture(
@@ -130,20 +136,59 @@ class MotorWgpu:
             wgpu.TexelCopyBufferLayout(offset=0, bytes_per_row=w * 4, rows_per_image=h),
             (w, h, 1),
         )
-        self._texture = textura
+        self._texturas_gpu[tipo] = textura
+        setattr(self, {
+            "cor": "textura_cpu",
+            "normal": "textura_normal_cpu",
+            "rugosidade": "textura_rugosidade_cpu",
+        }[tipo], pixels.copy())
+
+    def _criar_bind_group(self):
         self._bind_group = self.device.create_bind_group(
             layout=self.pipeline.get_bind_group_layout(0),
             entries=[
-                wgpu.BindGroupEntry(binding=0, resource=wgpu.BufferBinding(buffer=self.uniform_buffer)),
-                wgpu.BindGroupEntry(binding=1, resource=textura.create_view()),
+                wgpu.BindGroupEntry(
+                    binding=0, resource=wgpu.BufferBinding(buffer=self.uniform_buffer)
+                ),
+                wgpu.BindGroupEntry(
+                    binding=1, resource=self._texturas_gpu["cor"].create_view()
+                ),
                 wgpu.BindGroupEntry(binding=2, resource=self.sampler),
+                wgpu.BindGroupEntry(
+                    binding=3, resource=self._texturas_gpu["normal"].create_view()
+                ),
+                wgpu.BindGroupEntry(
+                    binding=4, resource=self._texturas_gpu["rugosidade"].create_view()
+                ),
             ],
         )
-        # Preservar cópia dos pixels realmente enviados à GPU para exportar
-        # a mesma textura, sem depender do arquivo de origem ainda existir.
-        self.textura_cpu = pixels.copy()
+
+    def atualizar_textura(self, pixels, *, solicitar_redesenho=True):
+        """Substitui a textura base de pele em tempo real."""
+        self._enviar_textura("cor", pixels)
+        self._criar_bind_group()
         if solicitar_redesenho:
             self.canvas.request_draw()
+
+    def atualizar_mapa_normal(self, pixels=None):
+        """RGB tangente OpenGL (+Y); None restaura a normal geométrica."""
+        ativo = pixels is not None
+        self._enviar_textura(
+            "normal", pixels if ativo else mapa_normal_neutro()
+        )
+        self.normal_ativo = ativo
+        self._criar_bind_group()
+        self.canvas.request_draw()
+
+    def atualizar_mapa_rugosidade(self, pixels=None):
+        """Canal R multiplica rugosidade base; None restaura valor do slider."""
+        ativo = pixels is not None
+        self._enviar_textura(
+            "rugosidade", pixels if ativo else mapa_rugosidade_neutro()
+        )
+        self.rugosidade_ativa = ativo
+        self._criar_bind_group()
+        self.canvas.request_draw()
 
     def atualizar_vertices(self, vertices: np.ndarray):
         """Transfere a geometria deformada para o vertex buffer já existente.
@@ -194,7 +239,8 @@ class MotorWgpu:
             mvp.T.copy().tobytes(),
             model.T.copy().tobytes(),
             np.array([*self.pele.cor, 1.0], dtype=np.float32).tobytes(),
-            np.array([self.pele.rugosidade, 0, 0, 0], dtype=np.float32).tobytes(),
+            np.array([self.pele.rugosidade, float(self.normal_ativo), 0, 0],
+                     dtype=np.float32).tobytes(),
             np.array([*olho, 1.0], dtype=np.float32).tobytes(),
         ])
         self.device.queue.write_buffer(self.uniform_buffer, 0, payload)
