@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT))
 from motor_wgpu.malha import carregar_obj, caminho_base_obj
 from motor_wgpu.morphs import Alvo, Deformador
 from motor_wgpu.roupas import carregar_peca_externa, tipo_referencia_mhclo
+from motor_wgpu.acessorios import caminho_olhos_lowpoly, caminho_olhos_highpoly
 from motor_wgpu.mascaras import indices_corpo_visiveis
 
 
@@ -55,6 +56,18 @@ class TestarImportacaoExterna(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.corpo = carregar_obj(caminho_base_obj())
+
+    def test_proxy_oficial_pode_ser_selecionado_pelo_carregador_externo(self):
+        for caminho, esperado in (
+            (caminho_olhos_lowpoly(), "direto"),
+            (caminho_olhos_highpoly(), "ponderado"),
+        ):
+            with self.subTest(caminho=caminho.name):
+                peca = carregar_peca_externa(caminho, self.corpo)
+                self.assertEqual(peca.tipo, esperado)
+                self.assertTrue(np.isfinite(
+                    peca.atualizar(self.corpo.posicoes_base)
+                ).all())
 
     def test_proxy_direto_externo_mantem_geometria(self):
         with tempfile.TemporaryDirectory() as pasta:
@@ -126,6 +139,17 @@ class TestarImportacaoExterna(unittest.TestCase):
             )
             with self.assertRaisesRegex(ValueError, "não suportada"):
                 carregar_peca_externa(arquivo, self.corpo)
+            direto = criar_proxy_externo(
+                pasta, self.corpo, ponderado=False, nome="direto"
+            )
+            direto.write_text(
+                direto.read_text(encoding="utf-8").replace(
+                    "verts 0", "unknown_key 1\\nverts 0"
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "não suportada"):
+                carregar_peca_externa(direto, self.corpo)
 
 
 if __name__ == "__main__":
