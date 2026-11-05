@@ -3,8 +3,8 @@
 Não utiliza o formato .mhm do MakeHuman original: ele contém regras,
 plugins e referências que esta prévia ainda não reproduz integralmente.
 O documento JSON registra apenas parâmetros controlados nesta janela.
-Versão 2 adicionou dispersão da pele. Versão 3 armazena referências locais
-a três texturas PNG em pasta auxiliar, sem caminhos arbitrários.
+Versão 2 adicionou dispersão. Versão 3 passou a guardar texturas locais.
+Versão 4 armazena cópias portáteis de acessórios externos e seus materiais.
 """
 
 import json
@@ -22,7 +22,7 @@ from .materiais_obj import escrever_png_rgba
 
 
 FORMATO = "makehumano-wgpu"
-VERSAO = 3
+VERSAO = 4
 TIPOS_TEXTURAS = ("cor", "normal", "rugosidade")
 MAX_DIMENSAO = 4096
 
@@ -41,7 +41,7 @@ def validar_documento(documento: dict, catalogo) -> dict:
     if not isinstance(documento, dict):
         raise ValueError("O projeto precisa ser um objeto JSON")
     versao_origem = documento.get("versao")
-    if documento.get("formato") != FORMATO or versao_origem not in (1, 2, VERSAO):
+    if documento.get("formato") != FORMATO or versao_origem not in (1, 2, 3, VERSAO):
         raise ValueError("Formato ou versão de projeto desconhecidos")
 
     macros = documento.get("macros")
@@ -89,7 +89,7 @@ def validar_documento(documento: dict, catalogo) -> dict:
                  _numero(pele["dispersao"], 0, 1, "dispersão"))
 
     # Versões anteriores não possuíam imagens associadas ao projeto.
-    imagens = (documento.get("texturas") if versao_origem == VERSAO
+    imagens = (documento.get("texturas") if versao_origem >= 3
                else {tipo: None for tipo in TIPOS_TEXTURAS})
     if not isinstance(imagens, dict) or set(imagens) != set(TIPOS_TEXTURAS):
         raise ValueError("Referências das texturas incompletas")
@@ -103,6 +103,32 @@ def validar_documento(documento: dict, catalogo) -> dict:
             raise ValueError(f"Arquivo de textura inválido: {tipo}")
         texturas[tipo] = nome
 
+    acessorios_originais = documento.get("acessorios", []) if versao_origem == VERSAO else []
+    if not isinstance(acessorios_originais, list) or len(acessorios_originais) > 24:
+        raise ValueError("Lista de acessórios inválida ou maior que 24")
+    acessorios = []
+    for item in acessorios_originais:
+        if not isinstance(item, dict) or set(item) != {
+            "id", "visivel", "cor", "rugosidade",
+        }:
+            raise ValueError("Acessório de projeto incompleto")
+        if (not isinstance(item["id"], str)
+                or re.fullmatch(r"[0-9a-f]{24}", item["id"]) is None):
+            raise ValueError("Identificador de acessório inválido")
+        if not isinstance(item["visivel"], bool):
+            raise ValueError("Visibilidade do acessório inválida")
+        cor_acessorio = item["cor"]
+        if not isinstance(cor_acessorio, (tuple, list)) or len(cor_acessorio) != 3:
+            raise ValueError("Cor do acessório inválida")
+        acessorios.append({
+            "id": item["id"],
+            "visivel": item["visivel"],
+            "cor": [_numero(v, 0, 1, "cor do acessório") for v in cor_acessorio],
+            "rugosidade": _numero(
+                item["rugosidade"], 0.05, 1, "rugosidade do acessório"
+            ),
+        })
+
     return {
         "formato": FORMATO,
         "versao": VERSAO,
@@ -112,6 +138,7 @@ def validar_documento(documento: dict, catalogo) -> dict:
         "pele": {"cor": rgb, "rugosidade": rugosidade,
                  "dispersao": dispersao},
         "texturas": texturas,
+        "acessorios": acessorios,
     }
 
 
@@ -126,6 +153,7 @@ def montar_documento(perfil, modificadores: dict, pele, catalogo) -> dict:
         "pele": {"cor": list(pele.cor), "rugosidade": pele.rugosidade,
                  "dispersao": pele.dispersao},
         "texturas": {tipo: None for tipo in TIPOS_TEXTURAS},
+        "acessorios": [],
     }, catalogo)
 
 
@@ -172,6 +200,7 @@ def _validar_imagem(pixels, tipo):
 
 def salvar_projeto_com_texturas(
     caminho: str | Path, documento: dict, catalogo, imagens: dict,
+    *, acessorios=(),
 ) -> Path:
     """Salva imagens por conteúdo, e publica o JSON somente depois dos PNGs.
 
@@ -214,6 +243,9 @@ def salvar_projeto_com_texturas(
                 temporario.unlink(missing_ok=True)
 
     doc["texturas"] = {tipo: preparados[tipo][0] for tipo in TIPOS_TEXTURAS}
+    # Carregar este módulo localmente evita importação circular.
+    from .projetos_acessorios import salvar_acessorios_projeto
+    doc["acessorios"] = salvar_acessorios_projeto(destino, acessorios)
     return salvar_documento(destino, doc, catalogo)
 
 
