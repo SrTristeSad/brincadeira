@@ -25,7 +25,7 @@
 
 ## Arquitetura
 
-- `qtui.py` conserva os eventos da interface original e cria `CanvasVulkan` no modo de migração.
+- `qtui.py` conserva os eventos da interface original e cria sempre `CanvasVulkan` como único canvas da GUI.
 - `mh.py` preserva os nomes de API utilizados pelos plugins existentes, mas encaminha os serviços Vulkan ao canvas.
 - `vulkan_scene.py` compartilha o adaptador e dispositivo GPU entre viewport, render offscreen e baking UV.
 - `vulkan_offscreen.py` executa a conversão dos pixels BGRA/RGBA e o alinhamento WebGPU de 256 bytes.
@@ -44,7 +44,7 @@ O workflow `.github/workflows/testar-wgpu.yml` cobre:
 Para testar localmente, com Qt, Vulkan e bibliotecas do MakeHuman instaladas:
 
 ```bash
-MAKEHUMANO_VULKAN_PILOT=1 WGPU_BACKEND_TYPE=Vulkan python makehumano/executar.py
+python makehumano/executar.py
 ```
 
 Para testes de CPU:
@@ -58,9 +58,9 @@ python -m unittest discover -s makehumano/testes -p 'test_*wgpu.py' -v
 - Converter shaders GLSL personalizados e seus uniforms/atributos para WGSL.
 - Reproduzir transparência, culling, ordenação e iluminação conforme os materiais e configurações originais.
 - Completar paridade de `renderSkin` para formatos de imagem, texturas dinâmicas e render pass acumulativo.
-- Remover imports e bibliotecas OpenGL remanescentes da aplicação inteira.
+- A inicialização e o smoke da GUI já não precisam de PyOpenGL; investigar e retirar módulos legados remanescentes no repositório.
 - Validar interações, rendering de produção, plugins, arquivos e exportações em cenários reais.
-- Consolidar o backend Vulkan como único motor e remover a chave de piloto.
+- O backend Vulkan já é o padrão sem chave de piloto; concluir paridade e retirar os arquivos OpenGL obsoletos.
 - Validar imagens comparativamente (CPU/smoke não verificam aparência pixel a pixel).
 
 **Nenhum destes itens deve ser mascarado por um retorno fictício ou fallback silencioso.**
