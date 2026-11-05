@@ -338,10 +338,11 @@ def buildDeb(dest = None):
         except:
           print("Failed to chmod 755 folder %s" % dpath)
     subprocess.check_call(["chmod", "755", target])
-  except:
-    subprocess.check_call(["chmod", "755", target])
-  except:
-    print("Failed to chmod.")
+  except (OSError, subprocess.CalledProcessError):
+    try:
+      subprocess.check_call(["chmod", "755", target])
+    except (OSError, subprocess.CalledProcessError):
+      print("Failed to chmod.")
 
   for x in files_to_chmod_executable:
     if os.path.exists(x):
