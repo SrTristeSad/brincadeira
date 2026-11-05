@@ -17,6 +17,7 @@ sys.path.insert(0, str(RAIZ / "codigo" / "makehuman" / "lib"))
 
 from vulkan_scene import (
     CenaVulkan, preparar_malha_original, matriz_wgpu, assinatura_textura,
+    parametros_material_vulkan,
 )
 
 
@@ -187,6 +188,41 @@ class TestarInvalidacaoTexturasVulkan(unittest.TestCase):
     def test_textura_nao_carregada_nao_provoca_erro(self):
         self.cena.invalidar_texturas("inexistente.png")
         self.assertEqual(len(self.cena._texturas), 2)
+
+
+class TestarMaterialOriginalNoShaderVulkan(unittest.TestCase):
+    def _obj(self, *, shadeless=False, diffuse=True, rgb=(0.2, 0.4, 0.8)):
+        return SimpleNamespace(
+            material=SimpleNamespace(
+                diffuseColor=SimpleNamespace(values=rgb),
+                shadeless=shadeless,
+            ),
+            shadeless=shadeless,
+            isTextured=diffuse,
+        )
+
+    def test_material_padrao_mantem_luz_e_textura(self):
+        cor, flags = parametros_material_vulkan(self._obj())
+        np.testing.assert_allclose(cor, [0.2, 0.4, 0.8, 1.0])
+        np.testing.assert_array_equal(flags, [0.0, 1.0, 0.0, 0.0])
+
+    def test_shadeless_desliga_luz_sem_perder_a_textura(self):
+        _, flags = parametros_material_vulkan(self._obj(shadeless=True))
+        np.testing.assert_array_equal(flags[:2], [1.0, 1.0])
+
+    def test_diffuse_desativada_ignora_amostragem_de_textura(self):
+        _, flags = parametros_material_vulkan(self._obj(diffuse=False))
+        np.testing.assert_array_equal(flags[:2], [0.0, 0.0])
+
+    def test_rejeita_cor_difusa_nao_finita(self):
+        with self.assertRaises(ValueError):
+            parametros_material_vulkan(self._obj(rgb=(0.1, float("nan"), 1.0)))
+
+    def test_material_nao_definido_usa_cor_branca(self):
+        obj = SimpleNamespace()
+        cor, flags = parametros_material_vulkan(obj)
+        np.testing.assert_array_equal(cor, [1, 1, 1, 1])
+        np.testing.assert_array_equal(flags[:2], [0, 1])
 
 
 if __name__ == "__main__":
