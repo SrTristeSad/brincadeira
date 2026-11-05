@@ -40,8 +40,17 @@ from core import G
 from getpath import getPath, getDataPath, getSysDataPath, getSysPath, getRelativePath
 from makehuman import getVersion, getVersionStr, getBasemeshVersion, getShortVersion, isRelease, isBuild, getVersionDigitsStr, getCopyrightMessage, getAssetLicense, getThirdPartyLicenses, getSoftwareLicense, getCredits
 
-from glmodule import grabScreen, hasRenderSkin, renderSkin, hasRenderToRenderbuffer, renderToBuffer, renderAlphaMask
+from glmodule import grabScreen as _grabScreenOpenGL, hasRenderSkin, renderSkin, hasRenderToRenderbuffer, renderToBuffer, renderAlphaMask
 from glmodule import getPickedColor as _getPickedColorOpenGL
+
+
+def grabScreen(x, y, width, height, filename=None, productionRender=False):
+    """Captura a viewport Vulkan ativa ou mantém o caminho legado OpenGL."""
+    canvas = getattr(G, "canvas", None)
+    captura = getattr(canvas, "grabScreen", None)
+    if callable(captura):
+        return captura(x, y, width, height, filename, productionRender)
+    return _grabScreenOpenGL(x, y, width, height, filename, productionRender)
 
 
 def getPickedColor(x=None, y=None):
