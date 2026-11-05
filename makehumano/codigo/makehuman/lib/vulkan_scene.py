@@ -213,6 +213,16 @@ struct Fragmento {
 }
 """
         shader = self.device.create_shader_module(code=codigo)
+        # Preserva a cobertura alpha dos materiais (inclusive textura alpha)
+        # para que a máscara de produção venha da GPU, não da captura Qt.
+        blend = wgpu.BlendState(
+            color=wgpu.BlendComponent(
+                src_factor="src-alpha", dst_factor="one-minus-src-alpha",
+            ),
+            alpha=wgpu.BlendComponent(
+                src_factor="one", dst_factor="one-minus-src-alpha",
+            ),
+        )
         self.pipeline = self.device.create_render_pipeline(
             layout=wgpu.AutoLayoutMode.auto,
             vertex=wgpu.VertexState(
@@ -244,7 +254,7 @@ struct Fragmento {
             ),
             fragment=wgpu.FragmentState(
                 module=shader, entry_point="fs_main",
-                targets=[wgpu.ColorTargetState(format=self.formato)],
+                targets=[wgpu.ColorTargetState(format=self.formato, blend=blend)],
             ),
         )
         # A grade de referência original (back_grid) usa GL_LINES.
@@ -280,7 +290,7 @@ struct Fragmento {
             ),
             fragment=wgpu.FragmentState(
                 module=shader, entry_point="fs_main",
-                targets=[wgpu.ColorTargetState(format=self.formato)],
+                targets=[wgpu.ColorTargetState(format=self.formato, blend=blend)],
             ),
         )
         self.amostra = self.device.create_sampler(
@@ -358,10 +368,10 @@ struct Fragmento {
                   | self.wgpu.TextureUsage.COPY_SRC,
         )
 
-    def ler_framebuffer_rgb(self, alvo):
-        """Copia a textura Vulkan para buffer CPU respeitando stride de 256."""
+    def ler_framebuffer_rgba(self, alvo):
+        """Copia RGBA da GPU para memória CPU, preservando a transparência."""
         from vulkan_offscreen import (
-            bytes_por_linha_alinhados, decodificar_buffer_rgb,
+            bytes_por_linha_alinhados, decodificar_buffer_rgba,
         )
         largura, altura = alvo.size[:2]
         stride = bytes_por_linha_alinhados(largura)
@@ -389,21 +399,34 @@ struct Fragmento {
             dados = buffer.read_mapped(copy=True)
         finally:
             buffer.unmap()
-        return decodificar_buffer_rgb(dados, largura, altura, self.formato)
+        return decodificar_buffer_rgba(dados, largura, altura, self.formato)
 
-    def capturar_framebuffer(self, mundo, cameras, largura=None, altura=None):
-        """Captura a cena GPU em tamanho solicitado, sem alterar a viewport."""
+    def ler_framebuffer_rgb(self, alvo):
+        """Lê RGB do framebuffer Vulkan, mantendo o contrato original."""
+        return np.ascontiguousarray(self.ler_framebuffer_rgba(alvo)[:, :, :3])
+
+    def capturar_framebuffer(self, mundo, cameras, largura=None, altura=None,
+                             *, incluir_alfa=False, productionRender=False,
+                             cor_fundo=None):
+        """Render offscreen em tamanho independente e com opção de RGBA."""
         fisica_w, fisica_h = self.canvas.get_physical_size()
         if largura is None:
             largura = fisica_w
         if altura is None:
             altura = fisica_h
+        if cor_fundo is None:
+            cor_fundo = (0.5, 0.5, 0.5, 0.0 if incluir_alfa else 1.0)
         alvo = self.framebuffer_offscreen(largura, altura)
-        self.desenhar(mundo, cameras, alvo=alvo)
+        self.desenhar(
+            mundo, cameras, alvo=alvo, cor_fundo=cor_fundo,
+            productionRender=productionRender,
+        )
+        if incluir_alfa:
+            return self.ler_framebuffer_rgba(alvo)
         return self.ler_framebuffer_rgb(alvo)
 
     def desenhar(self, mundo, cameras, *, cor_fundo=(0.2, 0.2, 0.2, 1),
-                alvo=None):
+                alvo=None, productionRender=False):
         """Desenha na janela ou num alvo offscreen de resolução independente.
 
         A viewport e os parâmetros originais da câmera não são alterados.
@@ -455,6 +478,8 @@ struct Fragmento {
         if mundo is not None:
             for obj in sorted(mundo, key=lambda item: item.priority):
                 if not obj.visibility:
+                    continue
+                if productionRender and getattr(obj, "excludeFromProduction", False):
                     continue
                 try:
                     vertices, indices = preparar_malha_original(obj)
