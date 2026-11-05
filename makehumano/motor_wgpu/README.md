@@ -38,11 +38,25 @@ O slider **Dispersão da pele (aproximada)** vai de 0 a 100%. Em 0%, a iluminaç
 
 Este efeito é **artístico**, não um cálculo físico de `subsurface scattering`: não calcula espessura, iluminação transmitida, distância percorrida sob a superfície, dispersão espacial ou sombras translúcidas. Não espere comportamento realista de orelhas retroiluminadas. Ele serve para avaliar a direção visual com baixo custo antes de implementar um SSS mais completo.
 
-### Salvar e reabrir um personagem
+### Salvar e reabrir um personagem (versão 3)
 
-Use **Salvar personagem…** e **Abrir personagem…** na coluna de controles. A prévia usa arquivos **`.makehumano.json`** legíveis e editáveis. A **versão 2** guarda os onze parâmetros gerais, os modificadores anatômicos alterados e a cor, rugosidade e dispersão da pele. Arquivos **versão 1** abrem normalmente, recebendo dispersão **0%** para preservar a aparência anterior; ao salvar novamente, são convertidos à versão 2. A aplicação valida os valores antes de reconstituir a malha e reenviar os vértices à GPU.
+Use **Salvar personagem…** e **Abrir personagem…** na coluna de controles. O projeto experimental `.makehumano.json` versão **3** salva os parâmetros anatômicos, a cor, rugosidade e dispersão da pele e agora também **guarda os pixels das três texturas** em PNGs locais.
 
-**Importante:** não é o formato `.mhm` do MakeHuman original. Texturas externas carregadas por arquivo, roupas, poses, animações, plugins e câmera não são armazenados nesse JSON. A textura UV pode ser selecionada novamente ao abrir o projeto.
+Exemplo de arquivos salvos:
+
+```text
+personagem.makehumano.json
+personagem.makehumano.json.assets/
+  cor-<hash>.png
+  normal-<hash>.png
+  rugosidade-<hash>.png
+```
+
+Os nomes são gerados a partir do conteúdo, não de caminhos fornecidos pelo usuário. Apenas os mapas ativos recebem PNGs; a textura difusa é sempre salva. Ao abrir, os PNGs são decodificados, validados e comparados com o hash de cada arquivo **antes** de atualizar os materiais da GPU. Mapas ausentes no projeto voltam ao padrão neutro. Se a pasta de imagens estiver faltando ou algum PNG estiver corrompido, o projeto não será aplicado.
+
+**Compatibilidade:** os JSONs de versão **1 e 2** continuam sendo aceitos e atualizados para versão 3 em memória; eles não contêm imagens salvas, portanto usam texturas neutras. A versão 1 também mantém a dispersão desativada (0%) para preservar a aparência antiga. Para mover ou fazer backup de um projeto versão 3, copie **o JSON e a pasta `.assets` juntos**. PNGs de versões anteriores não são apagados automaticamente; isso evita invalidar backups.
+
+O formato ainda **não é o `.mhm`** do MakeHuman e não preserva roupas, poses, plugins ou câmera.
 
 ### Exportação OBJ com mapas de pele
 
@@ -56,7 +70,7 @@ O botão **Exportar OBJ com mapas de pele…** cria **cinco arquivos** com o mes
 
 **O MTL clássico só referencia a textura difusa e não armazena o efeito aproximado de dispersão.** Os dois últimos PNGs são arquivos auxiliares não conectados automaticamente. Para obter o efeito em Blender e outros editores, é necessário atribuir manualmente o normal map como **Non-Color**, usar um nó **Normal Map** e conectar o canal de rugosidade ao material apropriado. Os PNGs preservam os dados RGBA sem conversão de gama.
 
-A exportação cobre apenas o corpo, sem roupas, rig, poses e animações. Os quads originais são triangulados. Os arquivos são substituídos individualmente, não numa transação atômica conjunta; a interface pede confirmação antes de sobrescrever. Para preservar os sliders, salve também o projeto `.makehumano.json`. Os mapas externos ainda não são armazenados nesse projeto JSON.
+A exportação cobre apenas o corpo, sem roupas, rig, poses e animações. Os quads originais são triangulados. Os arquivos são substituídos individualmente, não numa transação atômica conjunta; a interface pede confirmação antes de sobrescrever. Para preservar sliders e texturas em formato editável, salve também o projeto `.makehumano.json` versão 3 e sua pasta `.assets`.
 
 O arquivo de requisitos do novo motor é separado dos requisitos do editor antigo. **Não misture** as duas viewports na mesma janela por enquanto.
 
@@ -74,7 +88,7 @@ O GitHub Actions executa esses testes em `.github/workflows/testar-wgpu.yml`.
 - `materiais.py`: parâmetros da pele e validação de pixels
 - `morphs.py`: leitura dos arquivos `.target`, combinação atômica de pesos e recomputação de normais
 - `modificadores.py`: catálogo de sliders a partir dos JSON oficiais do MakeHuman
-- `projetos.py`: serialização JSON versionada e validação antes de restaurar parâmetros
+- `projetos.py`: serialização JSON versionada, migração v1/v2 e persistência local de texturas PNG com verificação de integridade
 - `exportar.py`: gravação OBJ e vínculo opcional com MTL/PNG, preservando posições canônicas e UVs
 - `materiais_obj.py`: geração de MTL e PNGs RGBA8 (difuso, normal e rugosidade), sem depender de Qt para exportar
 - `macro.py`: interpolação de oito macrovariáveis e normalização dos três controles étnicos seguindo as fórmulas originais, combinando os 564 `.target`
