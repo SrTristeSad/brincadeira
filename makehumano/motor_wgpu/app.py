@@ -448,12 +448,14 @@ def iniciar():
                 destino = Path(pasta) / "teste.makehumano.json"
                 controles_macros["muscle"].setValue(75)
                 controles_etnias["asian"].setValue(600)
+                controles_morph["nose/nose-scale-horiz-decr|incr"].setValue(40)
                 estado_anterior = deformador.vertices.copy()
                 documento = montar_documento(
                     macros.perfil, valores_morph, motor.pele, catalogo
                 )
                 salvar_documento(destino, documento, catalogo)
                 controles_macros["muscle"].setValue(20)
+                controles_morph["nose/nose-scale-horiz-decr|incr"].setValue(-40)
                 aplicar_documento(carregar_documento(destino, catalogo))
                 import numpy as np
                 np.testing.assert_allclose(
