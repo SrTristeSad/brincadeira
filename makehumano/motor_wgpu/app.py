@@ -58,6 +58,7 @@ def iniciar():
         carregar_proxy_ponderado, caminho_olhos_highpoly,
     )
     from .roupas import carregar_peca_externa
+    from .projetos_acessorios import carregar_acessorios_projeto
     from .macro import (
         ControladorMacros, VALORES_PADRAO, ROTULOS, ETNIAS,
         ETNIAS_PADRAO, ROTULOS_ETNIAS,
@@ -192,9 +193,12 @@ def iniciar():
     lista_roupas = QtWidgets.QVBoxLayout()
     coluna.addLayout(lista_roupas)
 
-    def adicionar_peca_externa(caminho, textura=None):
-        """Registra a peça somente depois de ler e validar o proxy/OBJ."""
-        peca = carregar_peca_externa(caminho, malha)
+    def adicionar_peca_externa(
+        caminho, textura=None, *, preparado=None, cor=None,
+        rugosidade=None, visivel_inicial=True,
+    ):
+        """Registra peça validada e o material efetivamente usado na GPU."""
+        peca = preparado if preparado is not None else carregar_peca_externa(caminho, malha)
         from .materiais import textura_neutra
         material = peca.material
         if textura is not None:
@@ -209,8 +213,12 @@ def iniciar():
         motor.adicionar_acessorio(
             chave, peca.modelo.malha, novos_vertices, pixels,
             deletar_vertices=peca.deletar_vertices,
-            cor=material.cor if material is not None else (1.0, 1.0, 1.0),
-            rugosidade=material.rugosidade if material is not None else 0.28,
+            cor=(cor if cor is not None else (
+                material.cor if material is not None else (1.0, 1.0, 1.0)
+            )),
+            rugosidade=(rugosidade if rugosidade is not None else (
+                material.rugosidade if material is not None else 0.28
+            )),
         )
         linha = QtWidgets.QWidget()
         botoes = QtWidgets.QHBoxLayout(linha)
@@ -245,6 +253,8 @@ def iniciar():
 
         visivel.toggled.connect(mudar_visibilidade)
         remover.clicked.connect(remover_peca)
+        if not visivel_inicial:
+            visivel.setChecked(False)
         print(
             f"Acessório externo {chave}: {Path(caminho).name}, "
             f"proxy {peca.tipo}, "
@@ -253,6 +263,25 @@ def iniciar():
             flush=True,
         )
         return chave
+
+    def listar_acessorios_para_salvar():
+        """Cópia dos pixels e materiais em uso, não caminhos de texturas antigas."""
+        return [
+            {
+                "peca": peca,
+                "pixels": motor.acessorios[nome]["textura_cpu"],
+                "visivel": caixa.isChecked(),
+                "cor": motor.acessorios[nome]["cor"],
+                "rugosidade": motor.acessorios[nome]["rugosidade"],
+            }
+            for nome, (peca, caixa, _) in pecas_externas.items()
+        ]
+
+    def limpar_acessorios_externos():
+        for _, (_, _, linha) in list(pecas_externas.items()):
+            botoes = linha.findChildren(QtWidgets.QPushButton)
+            assert len(botoes) == 1
+            botoes[0].click()
 
     def escolher_peca_externa():
         caminho, _ = QtWidgets.QFileDialog.getOpenFileName(
@@ -471,13 +500,15 @@ def iniciar():
 
     coluna.addWidget(QtWidgets.QLabel("<b>Projeto experimental</b>"))
 
-    def aplicar_documento(documento, imagens=None):
+    def aplicar_documento(documento, imagens=None, acessorios=None):
         """Restaura sliders, material e imagens já validadas do projeto.
 
         O chamador carrega os PNGs antes de alterar qualquer estado da GPU.
         """
         if imagens is None:
             imagens = {"cor": None, "normal": None, "rugosidade": None}
+        if acessorios is None:
+            acessorios = []
         alteracoes = {}
         for modificador in catalogo:
             valor = documento["modificadores"].get(modificador.identificador, 0)
@@ -489,6 +520,9 @@ def iniciar():
                     alvos_cache[nome] = ler_target(caminho, len(malha.posicoes_base))
                 alteracoes[nome] = (alvos_cache[nome], peso)
 
+        # Remover peças anteriores antes de aplicar outra anatomia.
+        # O carregador já validou todos os PNGs/proxies/OBJs do novo projeto.
+        limpar_acessorios_externos()
         deformador.restaurar()
         macros.perfil.valores = documento["macros"].copy()
         macros.perfil.etnias = documento["etnias"].copy()
@@ -532,6 +566,14 @@ def iniciar():
                                  if imagens["rugosidade"] is not None
                                  else "Rugosidade: não carregado")
         atualizar_corpo(deformador.vertices)
+        for item in acessorios:
+            adicionar_peca_externa(
+                item["peca"].origem, item["pixels"],
+                preparado=item["peca"],
+                cor=item["cor"],
+                rugosidade=item["rugosidade"],
+                visivel_inicial=item["visivel"],
+            )
 
     def salvar_projeto():
         destino, _ = QtWidgets.QFileDialog.getSaveFileName(
@@ -553,6 +595,7 @@ def iniciar():
                     "rugosidade": (motor.textura_rugosidade_cpu
                                    if motor.rugosidade_ativa else None),
                 },
+                acessorios=listar_acessorios_para_salvar(),
             )
         except (ValueError, OSError) as erro:
             QtWidgets.QMessageBox.warning(janela, "Falha ao salvar", str(erro))
@@ -569,7 +612,10 @@ def iniciar():
         try:
             documento = carregar_documento(origem, catalogo)
             imagens = carregar_texturas_projeto(origem, documento, ler_imagem_qt)
-            aplicar_documento(documento, imagens)
+            acessorios = carregar_acessorios_projeto(
+                origem, documento, malha, ler_imagem_qt
+            )
+            aplicar_documento(documento, imagens, acessorios)
         except (ValueError, OSError, RuntimeError) as erro:
             QtWidgets.QMessageBox.warning(janela, "Falha ao abrir", str(erro))
         else:
