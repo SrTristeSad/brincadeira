@@ -3,6 +3,14 @@ return {
   totalAvatares = 2,           -- 1 ou 2
   comunicacao = true,         -- só funciona com 2 avatares
   velocidadeTempo = 1.0,
+  -- Animações adultas são opcionais e nunca são executadas automaticamente.
+  -- Use somente personagens adultos, animações consensuais e arquivos autorizados.
+  animacoesAdultas = true,
+  -- Opcional: declare ações mesmo antes de importar os arquivos .glb.
+  animacoesExtra = {
+    {id='adult_cena_01', rotulo='Cena adulta 01', adulto=true, duracao=12},
+    {id='dupla_adult_01', rotulo='Cena em dupla 01', adulto=true, dupla=true, duracao=15}
+  },
   avatares = {
     {
       nome = 'Avatar 1',

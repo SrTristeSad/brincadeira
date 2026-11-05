@@ -49,6 +49,9 @@ function Agent.new(id, info)
   self.modeloEscala = 1
   self.modeloMinY = 0
   self.animacoes = {}
+  self.pacotes = {}
+  self.ultimaEscolha = {}
+  self.relogio = 0
   return self
 end
 
@@ -70,6 +73,9 @@ function Agent:iniciar(nome, destino, duracao)
   if nome == 'sleep' then self.tempo = duracao or random(10, 15) end
   self.animTime = 0
   self.path, self.pathStep = Nav.findPath(self.x, self.z, tx, tz), 1
+  -- Se o destino não existe, o agente permanece no ponto seguro atual.
+  if not self.path then self.path = {} end
+  self.ultimaEscolha[nome] = self.relogio
   if #self.path == 0 then
     self.estado = 'agir'
   else
@@ -78,22 +84,48 @@ function Agent:iniciar(nome, destino, duracao)
 end
 
 function Agent:escolher()
+  -- Necessidades + traços de personalidade inspirados em jogos de colônia;
+  -- o agente não segue mais uma sequência puramente aleatória.
   if self.energia < 28 then return 'sleep' end
   if self.fome < 32 then return 'eat' end
-  local lista = {'idle', 'explore', 'read', 'cook', 'eat', 'work', 'stretch',
-                 'exercise', 'think', 'observe', 'clean', 'dance', 'wave',
-                 'sit', 'relax', 'laugh', 'run'}
-  if self.info.personalidade == 'sociavel' then
-    lista[#lista + 1] = 'dance'
-    lista[#lista + 1] = 'wave'
-    lista[#lista + 1] = 'laugh'
-  else
-    lista[#lista + 1] = 'read'
-    lista[#lista + 1] = 'observe'
+  local necessidades = {
+    sleep = (100-self.energia)*.87,
+    eat = (100-self.fome)*.87,
+    relax = (100-self.energia)*.48 + 7,
+    dance = (100-self.diversao)*.68,
+    read = (100-self.diversao)*.49,
+    exercise = self.energia*.25,
+    cook = (100-self.fome)*.38,
+    explore = 18,
+    observe = 16,
+    think = 14,
+    work = 16,
+    clean = 12,
+    stretch = 12,
+    sit = 14,
+    laugh = (100-self.diversao)*.43,
+    wave = (100-self.social)*.25,
+    run = 10,
+    idle = 9
+  }
+  if self.info.personalidade == 'curioso' then
+    necessidades.explore = necessidades.explore + 17
+    necessidades.read = necessidades.read + 9
+    necessidades.observe = necessidades.observe + 10
+  elseif self.info.personalidade == 'sociavel' then
+    necessidades.dance = necessidades.dance + 12
+    necessidades.wave = necessidades.wave + 14
+    necessidades.laugh = necessidades.laugh + 8
   end
-  local nome = lista[math.random(#lista)]
-  if nome == self.acao then nome = 'explore' end
-  return nome
+  local melhor, valor = 'idle', -math.huge
+  for nome,base in pairs(necessidades) do
+    local intervalo = self.relogio - (self.ultimaEscolha[nome] or -1000)
+    local penalidade = intervalo < 24 and (24-intervalo)*1.5 or 0
+    local pontos = base + math.random()*12 - penalidade
+    if nome == self.acao then pontos = pontos - 32 end
+    if pontos > valor then melhor,valor = nome,pontos end
+  end
+  return melhor
 end
 
 function Agent:irAte(dt)
@@ -117,6 +149,7 @@ function Agent:irAte(dt)
 end
 
 function Agent:update(dt)
+  self.relogio = self.relogio + dt
   self.animTime = self.animTime + dt
   if self.balaoTempo > 0 then self.balaoTempo = math.max(0, self.balaoTempo - dt) end
   self.fome = clamp(self.fome - dt * .14, 0, 100)

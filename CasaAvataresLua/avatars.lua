@@ -1,4 +1,6 @@
 local Avatars = {}
+local Catalog = require('animation_library')
+Avatars.extraAliases = {}
 
 -- Cada ação tem aliases para mapear clipes com nomes de Mixamo/GLB.
 local aliases = {
@@ -134,25 +136,53 @@ local function procedural(p, agent, act)
   p:pop()
 end
 
-function Avatars.carregar(agent)
-  if not lovr.filesystem.isFile(agent.info.arquivo) then return end
-  local ok, model = pcall(lovr.graphics.newModel, agent.info.arquivo)
-  if not ok then agent.modeloErro = tostring(model); return end
-  agent.modelo = model
-  local _, _, miny, maxy = model:getBoundingBox()
-  local height = maxy-miny
-  agent.modeloEscala = height > .01 and agent.info.altura / height or 1
-  agent.modeloMinY = miny
-  local count = model:getAnimationCount()
-  for i=1,count do
-    local name = model:getAnimationName(i)
-    if name then agent.animacoes[i] = name:lower() end
+local function lerModelo(path,altura)
+  if not lovr.filesystem.isFile(path) then return nil,'arquivo não encontrado' end
+  local ok,model=pcall(lovr.graphics.newModel,path)
+  if not ok then return nil,tostring(model) end
+  local _,_,miny,maxy=model:getBoundingBox()
+  miny,maxy=miny or 0,maxy or 1.72
+  local h=maxy-miny
+  return {modelo=model,escala=h>.01 and altura/h or 1,minY=miny}
+end
+
+function Avatars.carregar(agent,catalog)
+  agent.modelo,agent.modeloErro=nil,nil
+  agent.animacoes,agent.pacotes={},{}
+  local base,err=lerModelo(agent.info.arquivo,agent.info.altura)
+  if base then
+    agent.modelo,agent.modeloEscala,agent.modeloMinY=base.modelo,base.escala,base.minY
+    for i=1,agent.modelo:getAnimationCount() do
+      local name=agent.modelo:getAnimationName(i)
+      if name then agent.animacoes[i]=name:lower() end
+    end
+    print(agent.nome..': modelo principal carregado, clipes: '..agent.modelo:getAnimationCount())
+  else
+    agent.modeloErro=err
+    print(agent.nome..': usando avatar de demonstração ('..err..')')
   end
-  print(agent.nome..' carregado: '..agent.info.arquivo..' ('..count..' clips)')
+  for _,item in ipairs(catalog or {}) do
+    if item.aliases then Avatars.extraAliases[item.id]=item.aliases end
+    local path=Catalog.caminho(agent.id,item.id)
+    if path and lovr.filesystem.isFile(path) then
+      local pack,erro=lerModelo(path,agent.info.altura)
+      if pack and pack.modelo:getAnimationCount()>0 then
+        pack.clip=1
+        for i=1,pack.modelo:getAnimationCount() do
+          local name=(pack.modelo:getAnimationName(i) or ''):lower()
+          if name==item.id:lower() then pack.clip=i;break end
+        end
+        agent.pacotes[item.id]=pack
+        print(agent.nome..': animação importada '..item.id..' ('..path..')')
+      else
+        print('AVISO: '..path..' precisa conter avatar completo e clipe animado: '..tostring(erro))
+      end
+    end
+  end
 end
 
 function Avatars.encontrar(agent, acao)
-  local names = aliases[acao] or {acao}
+  local names = Avatars.extraAliases[acao] or aliases[acao] or {acao}
   for _, alias in ipairs(names) do
     for i, name in pairs(agent.animacoes) do
       if name:find(alias,1,true) then return i end
@@ -167,32 +197,43 @@ function Avatars.encontrar(agent, acao)
   end
 end
 
+function Avatars.temAnimacao(agent,acao)
+  if agent.pacotes and agent.pacotes[acao] then return 'GLB avulso' end
+  if agent.modelo and Avatars.encontrar(agent,acao) then return 'clipe no avatar' end
+  if agent.modelo then return 'sem clipe' end
+  for _,id in ipairs(require('agent').acoes) do if id==acao then return 'boneco provisório' end end
+  return 'GLB ausente'
+end
+
 function Avatars.draw(p,agent)
-  local act = agent:animacaoAtual()
-  if not agent.modelo then
+  local act=agent:animacaoAtual()
+  local pack=agent.pacotes and agent.pacotes[act]
+  local model=pack and pack.modelo or agent.modelo
+  if not model then
     procedural(p,agent,act)
     return
   end
-  local clip = Avatars.encontrar(agent,act)
+  local clip=pack and pack.clip or Avatars.encontrar(agent,act)
   if clip then
-    agent.modelo:resetNodeTransforms()
-    agent.modelo:animate(clip, agent.animTime)
+    model:resetNodeTransforms()
+    local duration=model.getAnimationDuration and model:getAnimationDuration(clip) or nil
+    local t=duration and duration>.001 and agent.animTime%duration or agent.animTime
+    model:animate(clip,t)
   end
   p:push()
-  local visualX, visualZ = visualPosition(agent, act)
+  local visualX,visualZ=visualPosition(agent,act)
   p:translate(visualX,0,visualZ)
-  p:rotate(agent.angulo + agent.info.rotacao,0,1,0)
-  if act == 'sleep' then
+  p:rotate(agent.angulo+agent.info.rotacao,0,1,0)
+  if act=='sleep' then
     p:translate(0,.77,-.6)
     if not clip then p:rotate(math.pi/2,1,0,0) end
-  elseif act == 'sit' or act == 'relax' then
+  elseif act=='sit' or act=='relax' then
     if not clip then p:translate(0,-.31,0) end
   end
-  -- Compensa o ponto de origem do arquivo para assentar o personagem no piso.
-  p:scale(agent.modeloEscala)
-  p:translate(0,-agent.modeloMinY,0)
+  p:scale(pack and pack.escala or agent.modeloEscala)
+  p:translate(0,-(pack and pack.minY or agent.modeloMinY),0)
   p:setColor(1,1,1)
-  p:draw(agent.modelo,0,0,0)
+  p:draw(model,0,0,0)
   p:pop()
 end
 

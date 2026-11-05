@@ -27,6 +27,7 @@ function Sim.new(settings)
   self.encontro = nil
   self.respostas = {}
   self.historico = {}
+  self.dupla = nil
   return self
 end
 
@@ -40,24 +41,35 @@ end
 function Sim:setTotal(n)
   self.total = math.max(1,math.min(2,n))
   if self.total == 1 then
-    self.encontro, self.respostas = nil, {}
+    self.encontro, self.respostas, self.dupla = nil, {}, nil
   end
 end
 
 function Sim:setComunicacao(ativar)
   self.comunicacao = not not ativar
   if not self.comunicacao then
-    self.encontro, self.respostas = nil, {}
+    self.encontro, self.respostas, self.dupla = nil, {}, nil
   else
     self.proximoEncontro = self.tempo + 4
   end
 end
 
-function Sim:ativarAnimacao(id, acao)
+function Sim:ativarDupla(item)
+  if self.total ~= 2 then return false, 'A cena precisa de dois avatares.' end
+  if not item or not item.dupla then return false, 'Ação não é uma cena em dupla.' end
+  self.encontro,self.respostas = nil,{}
+  self.agentes[1]:iniciar(item.id,{x=-.60,z=.87},item.duracao)
+  self.agentes[2]:iniciar(item.id,{x=.60,z=.87},item.duracao)
+  self.dupla={id=item.id, duracao=item.duracao, pendente=true}
+  return true
+end
+
+function Sim:ativarAnimacao(id, acao, duracao)
   if not self.agentes[id] or id > self.total then return end
   local a = self.agentes[id]
   -- Para pré-visualizar uma animação sem navegar pela casa.
-  a:iniciar(acao,{x=a.x,z=a.z}, 7)
+  self.dupla = nil
+  a:iniciar(acao,{x=a.x,z=a.z}, duracao or 9)
 end
 
 function Sim:prepararEncontro()
@@ -73,6 +85,21 @@ function Sim:update(dt)
   dt = math.min(.12, dt)
   self.tempo = self.tempo + dt
   for i=1,self.total do self.agentes[i]:update(dt) end
+  if self.dupla then
+    local d=self.dupla
+    if self.total<2 then self.dupla=nil
+    elseif d.pendente then
+      local a,b=self.agentes[1],self.agentes[2]
+      if a.estado=='agir' and b.estado=='agir' then
+        a.animTime,b.animTime=0,0
+        a.tempo,b.tempo=d.duracao,d.duracao
+        d.pendente=false
+      end
+    elseif self.agentes[1].acao~=d.id or self.agentes[2].acao~=d.id then
+      self.dupla=nil
+    end
+    return -- durante a cena não dispara diálogos aleatórios
+  end
   if self.total ~= 2 or not self.comunicacao then return end
 
   for i=#self.respostas,1,-1 do

@@ -1,126 +1,97 @@
-# CASA VIVA — Casa 3D com 1 ou 2 agentes em Lua
+# Casa Viva — simulador de vida 3D com Lua
 
-Um protótipo **editável** que usa [LÖVR](https://lovr.org/), um motor 3D gratuito baseado em Lua.
-Ele abre uma casa mobiliada e põe nela **um ou dois personagens que agem automaticamente**.
-Não precisa de Blender nem de arquivos de avatar para testar o cenário.
+Casa virtual mobiliada com **um ou dois agentes autônomos** no [LÖVR](https://lovr.org/). A casa, a navegação, os comportamentos e o catálogo de animações são editáveis em Lua. Usa bonecos 3D provisórios se você ainda não tiver avatares do MakeHuman.
 
-## Como executar no Windows
+## Executar
 
-1. Baixe e extraia o LÖVR em https://lovr.org/ (versão atual 0.19+ recomendada).
-2. Extraia o arquivo `CasaAvataresLua.zip`.
-3. **Arraste a pasta `CasaAvataresLua` para cima do arquivo `lovr.exe`**. Alternativamente, use o terminal:
+1. Baixe o LÖVR para seu sistema (desktop; LÖVR 0.19+): https://lovr.org/downloads
+2. Baixe a pasta `CasaAvataresLua` do GitHub ou extraia o ZIP.
+3. Windows: arraste a **pasta** para cima do `lovr.exe`, ou rode `lovr.exe "C:\caminho\CasaAvataresLua"`.
+4. Aperte **F1** para ver a casa toda, **F2** sala, **F3** cozinha ou **F4** quarto.
 
-   ```bat
-   lovr.exe "C:\CAMINHO\CasaAvataresLua"
-   ```
+Não execute `main.lua` diretamente: o programa precisa do motor LÖVR.
 
-No Linux e macOS, passe o caminho da pasta como argumento para o executável LÖVR.
-**Não tente abrir `main.lua` sozinho**: é preciso abrir o projeto com LÖVR.
+## Controles simples
 
-## Teclas
+| Controle | Função |
+|---|---|
+| **Arrastar mouse esquerdo** | Girar câmera |
+| **Arrastar mouse direito** | Deslocar foco da câmera |
+| **Roda do mouse**, Q/E | Aproximar / afastar |
+| **F1 / F2 / F3 / F4** | Casa / sala / cozinha / quarto |
+| **F** | Seguir / deixar de seguir avatar |
+| **TAB** | Selecionar avatar |
+| **1 / 2** | Usar um ou dois avatares |
+| **Z / X** | Escolher animação anterior / próxima |
+| **ENTER** | Executar animação escolhida |
+| **L** | Recarregar catálogo e arquivos GLB |
+| **T** | Executar animação e avançar (compatibilidade) |
+| **C** | Ligar / desligar conversa automática |
+| **ESPAÇO** | Pausar / continuar |
+| **M** | Mostrar / ocultar painel |
+| **H** | Ajuda no terminal e lista das animações |
+| **R / ESC** | Reiniciar / sair |
 
-| Tecla | Ação |
-|:---|:---|
-| `1` | Mostrar somente um avatar; não há comunicação |
-| `2` | Mostrar dois avatares |
-| `C` | Ligar/desligar diálogo automático quando há 2 avatares |
-| `TAB` | Escolher avatar 1 ou 2 |
-| `T` | Executar a próxima ação/animação do avatar selecionado (teste de 7 s) |
-| `ESPAÇO` | Pausar/continuar a simulação |
-| `A` e `D`, ou setas esquerda/direita | Girar a câmera |
-| `W` e `S`, ou setas cima/baixo | Inclinar a câmera |
-| `Q` e `E`, ou rodinha do mouse | Afastar/aproximar |
-| `H` | Imprimir controles no terminal |
-| `R` | Reiniciar agentes |
-| `ESC` | Sair |
+As teclas **W/A/S/D** ou setas também giram a câmera.
 
-## Ações e animações
+## Adicionar muitos movimentos e animações adultas (+18)
 
-Há **21 ações reconhecidas**:
+**Método mais fácil do projeto:** importe um arquivo `.glb` por ação, contendo **o corpo inteiro do seu personagem com a animação embutida**. Coloque na pasta correspondente:
 
-`idle`, `walk`, `run`, `sit`, `sleep`, `dance`, `wave`, `talk`, `read`, `cook`,
-`eat`, `work`, `stretch`, `exercise`, `think`, `observe`, `clean`, `laugh`,
-`relax`, `greet` e `explore`.
+```text
+CasaAvataresLua/
+  assets/
+    avatar1.glb                       <- corpo principal opcional
+    avatar2.glb
+    animations/
+      avatar1/
+        extra_dance.glb               <- ação extra de um avatar
+        adult_cena_02.glb             <- ação adulta individual
+        dupla_adult_02.glb            <- ação adulta em dupla
+      avatar2/
+        extra_dance.glb
+        dupla_adult_02.glb            <- mesmo nome para a segunda pessoa
+```
 
-Os **bonecos provisórios** se movimentam por animações geradas por código (poses e
-movimento de braços, pernas e corpo). Algumas ações compartilham variações de pose.
+1. Coloque um ou quantos arquivos `.glb` quiser nessas duas pastas (IDs somente letras, números, `_` e `-`).
+2. Aperte **L** dentro da casa para descobrir as animações. **Z/X** percorrem o catálogo; **ENTER** executa.
+3. O prefixo `adult_` identifica ações +18. O prefixo `dupla_` identifica uma cena sincronizada para dois avatares. `dupla_adult_` combina ambos.
+4. Para cadastrar nomes bonitos, duração e regras, edite **`settings.lua` → `animacoesExtra`**. Para esconder as entradas +18, defina `animacoesAdultas = false`.
 
-Os modelos **GLB próprios não recebem automaticamente 21 animações esqueléticas**.
-O motor utiliza os clipes que JÁ vierem no GLB; encontra nomes aproximados como
-`Walking`, `Run`, `Idle`, `Dance`, etc. Para ações sem clipe compatível, usa
-`Idle`, se existir, ou deixa o personagem na pose original. Assim, por exemplo,
-para um MakeHuman realizar animações de dança com os braços, você precisará
-importar um arquivo GLB *já animado*.
+Para uma cena em dupla, os dois agentes se aproximam e iniciam os clipes sincronizados quando ambos chegam. Os GLBs devem conter movimentos pareados e sincronizáveis; **a sincronização por si só não corrige poses, rigs, alinhamento ou colisão**. A ação é somente manual: os agentes não escolhem espontaneamente cenas adultas.
 
-## Como substituir os bonecos pelos avatares do MakeHuman
+**Limitações reais:** não existe conversão automática de FBX/BVH ou retargeting entre esqueletos; um GLB que contenha apenas os ossos e animação não substitui um personagem completo neste método. A importação direta de um pacote Mixamo feito para outro esqueleto **não é garantida**. Em geral, é preciso exportar cada personagem já animado em GLB a partir de software compatível (por exemplo Blender). Modelos e animações não acompanham o projeto.
 
-1. Prepare/exporte o personagem do MakeHuman com esqueleto (rig).
-2. No Mixamo, Blender ou outra ferramenta, associe animações compatíveis ao
-   esqueleto. Dependendo do arquivo, isso exigirá **retargeting** (transferência
-   de animações entre rigs). Não existe compatibilidade garantida entre todos
-   os rigs ou pacotes.
-3. Exporte o resultado como **GLB (.glb), com as animações incorporadas**.
-   O motor não aceita FBX/BVH diretamente.
-4. Coloque os arquivos nesta pasta:
+Use somente modelos de **personagens adultos**, animações **consensuais** e arquivos para os quais tenha direito de uso. Não coloque assets proprietários no repositório público sem licença de redistribuição.
 
-   ```text
-   CasaAvataresLua/
-     assets/
-       avatar1.glb
-       avatar2.glb
-   ```
+### Se os movimentos já estiverem no avatar principal
 
-5. Abra/reinicie o projeto. Para ajustar nome, personagem, roupa, orientação
-   ou altura, modifique `settings.lua`.
-6. Se o personagem estiver olhando para trás, altere `rotacao = math.pi` em
-   `settings.lua`. A escala é calculada automaticamente para 1,72 m por padrão.
-
-> Atenção: dependendo da origem do GLB e dos movimentos disponíveis, algumas
-> poses de interação com móveis ainda precisarão de ajustes de posicionamento.
-> O projeto não vem com modelos MakeHuman ou bibliotecas comerciais/NSFW.
+`assets/avatar1.glb` e `assets/avatar2.glb` também podem conter vários clipes internos. A Casa Viva procura nomes como `walk`, `idle`, `dance` etc. Para associar nomes diferentes, adicione `aliases = {'Nome do clipe'}` na ação correspondente em `settings.lua`.
 
 ## Como os agentes funcionam
 
-São **agentes locais baseados em regras** (sem LLM, sem acesso à internet):
+- Os NPCs avaliam fome, energia, diversão, personalidade e penalizações para ações repetidas.
+- A navegação usa **A*** em uma grade 2D, desviando dos móveis cadastrados.
+- Cada um pode agir sozinho; se houver dois e a comunicação estiver ligada, eles podem se encontrar e trocar falas predefinidas.
+- Essa é uma **simulação por regras**, não uma LLM nem um clone completo de The Sims.
 
-- Cada agente acompanha energia, fome, socialização e diversão.
-- Escolhe uma ação e caminha até o local adequado; o caminho desvia de móveis
-  cadastrados na grade de navegação.
-- Quando há 2 agentes e a opção de comunicação está ligada, os dois podem se
-  encontrar e trocar falas predefinidas. As falas ficam perto dos personagens;
-  o histórico de até 8 falas é mantido em `sim.historico`.
-- Com um só agente, **não existe diálogo entre agentes**.
-- Sem modelos externos, tudo funciona em modo demonstrativo.
+Inspirado conceitualmente pelos agentes de utilidade e navegação do projeto [VoxelColony-LOVR](https://github.com/FilthyFrost/VoxelColony-LOVR). **O código da Casa Viva foi escrito separadamente**: o código do VoxelColony não foi copiado, pois não localizamos uma licença de reutilização explícita no repositório consultado.
 
-Para integrar uma IA real no futuro, é possível substituir a rotina de decisão
-em `agent.lua` e a comunicação em `simulation.lua` por um serviço externo. Isso
-**não está incluído** nesta versão.
+## Arquivos
 
-## Arquivos do projeto
+- `main.lua`: entrada, câmera, painel e teclado/mouse.
+- `camera.lua`: vistas e acompanhamento do personagem.
+- `navigation.lua`: algoritmo A* e obstáculos.
+- `agent.lua`: regras de decisão e necessidades dos personagens.
+- `simulation.lua`: encontro, comunicação, ações em dupla.
+- `animation_library.lua`: reconhecimento automático e catálogo de GLB.
+- `avatars.lua`: importação, animação e bonecos provisórios.
+- `world.lua`: casa e móveis em formas geométricas.
+- `settings.lua`: nome, quantidade, personagens e cenas adicionais.
+- `tests/*.lua`: testes de lógica independentes de GPU.
 
-| Arquivo | Responsabilidade |
-|:---|:---|
-| `main.lua` | Câmera, controles, inicialização e renderização |
-| `conf.lua` | Janela e configurações do motor 3D |
-| `settings.lua` | Preferências, personagens, quantidade e comunicação inicial |
-| `world.lua` | Desenha a casa e os móveis |
-| `navigation.lua` | Busca de caminhos por grade para evitar móveis |
-| `agent.lua` | Estados, necessidades, objetivos e comportamento |
-| `simulation.lua` | Coordena os agentes e o diálogo entre eles |
-| `avatars.lua` | Bonecos 3D provisórios e reprodução de GLBs animados |
-| `assets/` | Lugar reservado para seus personagens 3D |
-| `tests/` | Verificações de comportamento em Lua |
+## Testes e compatibilidade
 
-## Limitações honestas
+Os testes Lua podem rodar sem LÖVR: `lua tests/test_sim.lua`, `lua tests/test_navigation.lua`, `lua tests/test_pair.lua`, `lua tests/test_library.lua`, `lua tests/test_camera.lua`, `lua tests/test_glb_mock.lua` e `lua tests/test_render_mock.lua`. O último testa uma **interface gráfica simulada**, não uma renderização GPU real.
 
-- Protótipo, não jogo completo: não há colisões físicas entre os dois agentes.
-- Móveis são construídos com primitivas geométricas, não modelos realistas.
-- As conversas são predefinidas e não representam inteligência geral.
-- Não há sincronização automática de animações de dois humanos nem interação
-  física sofisticada entre eles.
-- Os arquivos dos seus personagens 3D precisam ser fornecidos por você.
-- Não há uma validação visual no LÖVR neste ambiente; a lógica Lua tem testes
-  automatizados separados.
-
-**Fontes técnicas:** https://lovr.org/docs/Model ;
-https://lovr.org/docs/Model:animate ; https://lovr.org/docs/lovr.conf
+**Importante:** o projeto não é uma integração direta do jogo VoxelColony. Ele aproveita as ideias de pathfinding A* e prioridades dos NPCs para uma casa com dois avatares. A biblioteca de GLBs serve para *avatares completos já animados*; não converte automaticamente pacotes FBX de terceiros.
