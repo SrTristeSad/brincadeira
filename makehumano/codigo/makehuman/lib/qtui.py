@@ -44,7 +44,10 @@ from core import G
 
 from PyQt5 import QtCore, QtGui, QtOpenGL, QtWidgets
 
-import glmodule as gl
+# O canvas Vulkan original não deve inicializar/importar nenhum serviço GL.
+gl = None
+if os.environ.get("MAKEHUMANO_VULKAN_PILOT") != "1":
+    import glmodule as gl
 import events3d
 import qtgui
 import eventqueue
