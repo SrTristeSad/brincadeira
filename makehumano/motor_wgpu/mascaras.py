@@ -45,3 +45,58 @@ def transferir_mascara_proxy(visivel_corpo, referencias, pesos) -> np.ndarray:
     resultado = np.sum(visibilidade_ref.astype(np.uint8), axis=1) >= 2
     resultado[exatos] = visibilidade_ref[exatos, 0]
     return np.ascontiguousarray(resultado, dtype=bool)
+
+
+class GerenciadorMascaras:
+    """Une delete_verts dos acessórios visíveis sem alterar o OBJ original.
+
+    Cada máscara representa índices CANÔNICOS do corpo; mudar visibilidade
+    não apaga a máscara armazenada. Uma peça oculta deixa de mascarar o corpo,
+    e várias peças visíveis compõem suas máscaras por OU lógico.
+    """
+
+    def __init__(self, quantidade_vertices: int):
+        if not isinstance(quantidade_vertices, int) or quantidade_vertices < 1:
+            raise ValueError("Quantidade de vértices inválida")
+        self.quantidade_vertices = quantidade_vertices
+        self._mascaras = {}
+        self._visibilidade = {}
+
+    def _validar_mascara(self, mascara) -> np.ndarray:
+        if mascara is None:
+            return np.zeros(self.quantidade_vertices, dtype=bool)
+        dados = np.asarray(mascara)
+        if (dados.dtype != np.bool_
+                or dados.shape != (self.quantidade_vertices,)):
+            raise ValueError(
+                "delete_verts deve ser máscara booleana por vértice original"
+            )
+        return np.ascontiguousarray(dados.copy())
+
+    def registrar(self, nome: str, mascara=None, *, visivel=True):
+        if not isinstance(nome, str) or not nome or nome in self._mascaras:
+            raise ValueError("Nome de acessório vazio ou duplicado")
+        validada = self._validar_mascara(mascara)
+        self._mascaras[nome] = validada
+        self._visibilidade[nome] = bool(visivel)
+
+    def definir_mascara(self, nome: str, mascara=None):
+        if nome not in self._mascaras:
+            raise KeyError(nome)
+        self._mascaras[nome] = self._validar_mascara(mascara)
+
+    def definir_visibilidade(self, nome: str, visivel: bool):
+        if nome not in self._mascaras:
+            raise KeyError(nome)
+        self._visibilidade[nome] = bool(visivel)
+
+    def remover(self, nome: str):
+        del self._mascaras[nome]
+        del self._visibilidade[nome]
+
+    def combinada(self) -> np.ndarray:
+        resultado = np.zeros(self.quantidade_vertices, dtype=bool)
+        for nome, mascara in self._mascaras.items():
+            if self._visibilidade[nome]:
+                resultado |= mascara
+        return resultado
