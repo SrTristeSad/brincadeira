@@ -756,7 +756,10 @@ class Application(QtWidgets.QApplication, events3d.EventHandler):
     def redraw(self):
         self.logger_redraw.debug('Application.redraw')
         if self.mainwin and self.mainwin.canvas:
-            self.mainwin.canvas.update()
+            if hasattr(self.mainwin.canvas, "request_redraw"):
+                self.mainwin.canvas.request_redraw()
+            else:
+                self.mainwin.canvas.update()
 
     def addLogMessage(self, text, level = None):
         if self.log_window is not None:
