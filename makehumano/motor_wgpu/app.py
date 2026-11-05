@@ -397,7 +397,8 @@ def iniciar():
             # rapidamente. Verificar eventos completados e múltiplos frames,
             # sem exigir um quadro para cada callback.
             esperados = {"textura", "modificador_positivo", "modificador_negativo",
-                         "macros", "restauracao", "etnias", "restauracao_total"}
+                         "macros", "restauracao", "etnias", "restauracao_total",
+                         "salvar_abrir"}
             ok = eventos_smoke == esperados and motor.frames >= 6
             print(f"Smoke: eventos {sorted(eventos_smoke)}, aprovado={ok}", flush=True)
             aplicacao.exit(0 if ok else 2)
@@ -441,6 +442,28 @@ def iniciar():
             eventos_smoke.add("restauracao_total")
             print("Todos os modificadores e misturas restaurados", flush=True)
 
+        def arquivo_smoke():
+            from tempfile import TemporaryDirectory
+            with TemporaryDirectory(prefix="makehumano-projeto-") as pasta:
+                destino = Path(pasta) / "teste.makehumano.json"
+                controles_macros["muscle"].setValue(75)
+                controles_etnias["asian"].setValue(600)
+                estado_anterior = deformador.vertices.copy()
+                documento = montar_documento(
+                    macros.perfil, valores_morph, motor.pele, catalogo
+                )
+                salvar_documento(destino, documento, catalogo)
+                controles_macros["muscle"].setValue(20)
+                aplicar_documento(carregar_documento(destino, catalogo))
+                import numpy as np
+                np.testing.assert_allclose(
+                    deformador.vertices, estado_anterior, rtol=2e-5, atol=2e-5,
+                )
+                assert macros.perfil.valores["muscle"] == 0.75
+                assert macros.perfil.etnias["asian"] == 0.6
+                eventos_smoke.add("salvar_abrir")
+                print("Projeto salvo e reaberto, malha restaurada no Vulkan", flush=True)
+
         QtCore.QTimer.singleShot(800, atualizar_smoke)
         QtCore.QTimer.singleShot(2000, deformar_smoke)
         QtCore.QTimer.singleShot(4500, deformar_negativo_smoke)
@@ -448,7 +471,8 @@ def iniciar():
         QtCore.QTimer.singleShot(9000, restaurar_smoke)
         QtCore.QTimer.singleShot(10700, etnia_smoke)
         QtCore.QTimer.singleShot(13600, restaurar_tudo_smoke)
-        QtCore.QTimer.singleShot(17600, terminar_smoke)
+        QtCore.QTimer.singleShot(15600, arquivo_smoke)
+        QtCore.QTimer.singleShot(20900, terminar_smoke)
 
     return aplicacao.exec_()
 
