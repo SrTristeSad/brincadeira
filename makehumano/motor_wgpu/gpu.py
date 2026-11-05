@@ -109,6 +109,7 @@ class MotorWgpu:
         self._depth_size = None
         self._depth_view = None
         self._texturas_gpu = {}
+        self.acessorios = {}
         self._bind_group = None
         self.normal_ativo = False
         self.rugosidade_ativa = False
@@ -208,6 +209,92 @@ class MotorWgpu:
         )
         self.canvas.request_draw()
 
+    def adicionar_acessorio(
+        self, nome: str, malha: Malha, vertices: np.ndarray,
+        textura_rgba, *, rugosidade: float = 0.28,
+    ):
+        """Cria uma segunda malha com material e textura próprios.
+
+        Reutiliza pipeline WGSL e o depth buffer do corpo. Ainda não implementa
+        alpha blending, rigging nem malhas com transparência de roupas.
+        """
+        if not nome or nome in self.acessorios:
+            raise ValueError("Nome do acessório vazio ou já utilizado")
+        vertices = np.asarray(vertices, dtype=np.float32)
+        if vertices.shape != malha.vertices.shape or not np.isfinite(vertices).all():
+            raise ValueError("Vértices do acessório inválidos")
+        if not 0.05 <= float(rugosidade) <= 1:
+            raise ValueError("Rugosidade inválida")
+        rgba = validar_rgba(textura_rgba)
+
+        def textura_gpu(pixels):
+            pixels = validar_rgba(pixels)
+            h, w = pixels.shape[:2]
+            t = self.device.create_texture(
+                size=(w, h, 1), dimension="2d", format="rgba8unorm",
+                usage=wgpu.TextureUsage.TEXTURE_BINDING | wgpu.TextureUsage.COPY_DST,
+            )
+            self.device.queue.write_texture(
+                wgpu.TexelCopyTextureInfo(
+                    texture=t, mip_level=0, origin=(0, 0, 0)
+                ),
+                pixels.tobytes(),
+                wgpu.TexelCopyBufferLayout(
+                    offset=0, bytes_per_row=w * 4, rows_per_image=h
+                ),
+                (w, h, 1),
+            )
+            return t
+
+        cor = textura_gpu(rgba)
+        normal = textura_gpu(mapa_normal_neutro())
+        rough = textura_gpu(mapa_rugosidade_neutro())
+        uniform = self.device.create_buffer(
+            size=176, usage=wgpu.BufferUsage.UNIFORM | wgpu.BufferUsage.COPY_DST
+        )
+        bind = self.device.create_bind_group(
+            layout=self.pipeline.get_bind_group_layout(0),
+            entries=[
+                wgpu.BindGroupEntry(
+                    binding=0, resource=wgpu.BufferBinding(buffer=uniform)
+                ),
+                wgpu.BindGroupEntry(binding=1, resource=cor.create_view()),
+                wgpu.BindGroupEntry(binding=2, resource=self.sampler),
+                wgpu.BindGroupEntry(binding=3, resource=normal.create_view()),
+                wgpu.BindGroupEntry(binding=4, resource=rough.create_view()),
+            ],
+        )
+        self.acessorios[nome] = {
+            "malha": malha,
+            "vertices": np.ascontiguousarray(vertices.copy()),
+            "vb": self.device.create_buffer_with_data(
+                data=np.ascontiguousarray(vertices),
+                usage=wgpu.BufferUsage.VERTEX | wgpu.BufferUsage.COPY_DST,
+            ),
+            "ib": self.device.create_buffer_with_data(
+                data=malha.indices, usage=wgpu.BufferUsage.INDEX
+            ),
+            "uniform": uniform,
+            "bind": bind,
+            "texturas": (cor, normal, rough),
+            "rugosidade": float(rugosidade),
+            "visivel": True,
+        }
+        self.canvas.request_draw()
+
+    def atualizar_acessorio(self, nome: str, vertices: np.ndarray):
+        item = self.acessorios[nome]
+        dados = np.asarray(vertices, dtype=np.float32)
+        if dados.shape != item["malha"].vertices.shape or not np.isfinite(dados).all():
+            raise ValueError("Vértices do acessório inválidos")
+        item["vertices"] = np.ascontiguousarray(dados.copy())
+        self.device.queue.write_buffer(item["vb"], 0, item["vertices"])
+        self.canvas.request_draw()
+
+    def mostrar_acessorio(self, nome: str, visivel: bool):
+        self.acessorios[nome]["visivel"] = bool(visivel)
+        self.canvas.request_draw()
+
     def ajustar_pele(self, *, cor=None, rugosidade=None, dispersao=None):
         self.pele.atualizar(cor=cor, rugosidade=rugosidade,
                             dispersao=dispersao)
@@ -246,6 +333,19 @@ class MotorWgpu:
         ])
         self.device.queue.write_buffer(self.uniform_buffer, 0, payload)
 
+        for item in self.acessorios.values():
+            # O acessório tem material separado e não herda mapas de pele.
+            extra = b"".join([
+                mvp.T.copy().tobytes(),
+                model.T.copy().tobytes(),
+                np.array([1, 1, 1, 1], dtype=np.float32).tobytes(),
+                np.array(
+                    [item["rugosidade"], 0, 0, 0], dtype=np.float32
+                ).tobytes(),
+                np.array([*olho, 1.0], dtype=np.float32).tobytes(),
+            ])
+            self.device.queue.write_buffer(item["uniform"], 0, extra)
+
     def desenhar(self):
         largura, altura = self._tamanho_tela()
         if self._depth_size != (largura, altura):
@@ -278,6 +378,13 @@ class MotorWgpu:
         passagem.set_vertex_buffer(0, self.vertex_buffer)
         passagem.set_index_buffer(self.index_buffer, "uint32")
         passagem.draw_indexed(int(self.malha.indices.size))
+        for item in self.acessorios.values():
+            if not item["visivel"]:
+                continue
+            passagem.set_bind_group(0, item["bind"])
+            passagem.set_vertex_buffer(0, item["vb"])
+            passagem.set_index_buffer(item["ib"], "uint32")
+            passagem.draw_indexed(int(item["malha"].indices.size))
         passagem.end()
         self.device.queue.submit([encoder.finish()])
         self.frames += 1
