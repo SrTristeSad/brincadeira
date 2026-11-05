@@ -6,7 +6,21 @@ para GPU. O piloto é incompleto: picking, transparência, render offscreen
 e shaders customizados ainda precisam ser migrados antes de remover OpenGL.
 """
 
+import os
+
 import numpy as np
+
+
+def assinatura_textura(caminho):
+    """Identifica mudanças de arquivo sem depender de OpenGL ou Qt."""
+    if not caminho:
+        return None
+    try:
+        info = os.stat(caminho)
+    except OSError:
+        return None
+    return (info.st_mtime_ns, info.st_size)
+
 
 
 def preparar_malha_original(obj):
@@ -239,8 +253,10 @@ struct Fragmento {
 
     def _textura(self, caminho):
         chave = str(caminho or "")
-        if chave in self._texturas:
-            return self._texturas[chave]
+        assinatura = assinatura_textura(chave)
+        entrada = self._texturas.get(chave)
+        if entrada is not None and entrada[0] == assinatura:
+            return entrada[1]
         if chave:
             imagem = self.QtGui.QImage(chave)
         else:
@@ -271,7 +287,7 @@ struct Fragmento {
             ),
             (w, h, 1),
         )
-        self._texturas[chave] = textura
+        self._texturas[chave] = (assinatura, textura)
         return textura
 
     def desenhar(self, mundo, cameras, *, cor_fundo=(0.2, 0.2, 0.2, 1)):
