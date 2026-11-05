@@ -175,6 +175,35 @@ def parametros_material_vulkan(obj):
     return cor, flags
 
 
+def aparencia_material_vulkan(obj):
+    """Converte especular, emissão e opacidade do Material original.
+
+    Uniforms: specular.xyz = RGB, specular.w = expoente de brilho GL;
+    emissive.xyz = RGB, emissive.w = reservado. Nenhum shader GLSL importado.
+    """
+    material = getattr(obj, "material", None)
+
+    def rgb_atributo(nome, padrao):
+        atributo = getattr(material, nome, None)
+        vetor = np.asarray(getattr(atributo, "values", atributo)
+                           if atributo is not None else padrao, dtype=np.float32)
+        if vetor.shape != (3,) or not np.isfinite(vetor).all():
+            raise ValueError("Material original: " + nome + " inválido")
+        return vetor
+
+    especular = rgb_atributo("specularColor", (0.0, 0.0, 0.0))
+    emissiva = rgb_atributo("emissiveColor", (0.0, 0.0, 0.0))
+    brilho = float(getattr(material, "shininess", 0.2))
+    opacidade = float(getattr(material, "opacity", 1.0))
+    if not np.isfinite(brilho) or not np.isfinite(opacidade):
+        raise ValueError("Material original: brilho/opacidade não finitos")
+    especular_uniform = np.array(
+        [*especular, 128.0 * float(np.clip(brilho, 0.0, 1.0))], np.float32,
+    )
+    emissiva_uniform = np.array([*emissiva, 0.0], np.float32)
+    return especular_uniform, emissiva_uniform, float(np.clip(opacidade, 0.0, 1.0))
+
+
 class CenaVulkan:
     """Renderização piloto de objetos G.world na própria janela MakeHuman."""
 
@@ -206,6 +235,9 @@ struct Globals {
     cor: vec4<f32>,
     flags: vec4<f32>,
     ambiente: vec4<f32>,
+    especular: vec4<f32>,
+    emissiva: vec4<f32>,
+    observador: vec4<f32>,
     luzes_posicao: array<vec4<f32>, 8>,
     luzes_cor: array<vec4<f32>, 8>,
 };
@@ -240,17 +272,29 @@ struct Fragmento {
     let rgb = select(vec3<f32>(1.0), tex.rgb, usar_textura);
     let alfa = select(1.0, tex.a, usar_textura);
     var iluminacao = dados.ambiente.rgb;
+    var reflexo = vec3<f32>(0.0);
+    let normal = normalize(i.normal);
+    let direcao_visao = normalize(dados.observador.xyz - i.mundo);
     for (var j: i32 = 0; j < 8; j = j + 1) {
         if (j >= i32(dados.flags.z)) {
             break;
         }
         let deslocamento = dados.luzes_posicao[j].xyz - i.mundo;
         let direcao = normalize(deslocamento);
-        let difusa = max(dot(normalize(i.normal), direcao), 0.0);
+        let difusa = max(dot(normal, direcao), 0.0);
         iluminacao += dados.luzes_cor[j].rgb * difusa;
+        if (difusa > 0.0 && dados.especular.w > 0.0) {
+            let meio = normalize(direcao + direcao_visao);
+            let intensidade = pow(max(dot(normal, meio), 0.0),
+                                  dados.especular.w);
+            reflexo += dados.luzes_cor[j].rgb * dados.especular.rgb
+                     * intensidade;
+        }
     }
     let luz = select(iluminacao, vec3<f32>(1.0), dados.flags.x > 0.5);
-    return vec4<f32>(rgb * i.cor.rgb * dados.cor.rgb * luz,
+    let brilho = select(reflexo, vec3<f32>(0.0), dados.flags.x > 0.5);
+    return vec4<f32>(rgb * i.cor.rgb * dados.cor.rgb * luz
+                     + brilho + dados.emissiva.rgb,
                      alfa * i.cor.a * dados.cor.a);
 }
 """
@@ -577,14 +621,29 @@ struct Fragmento {
                         tamanho_destino=tamanho,
                     )
                 cor, flags = parametros_material_vulkan(obj)
+                especular, emissiva, opacidade = aparencia_material_vulkan(obj)
+                cor[3] = opacidade
                 flags[2] = float(total_luzes)
                 modelo = np.asarray(cam.getModelMatrix(obj), dtype=np.float32)
                 if modelo.shape != (4, 4) or not np.isfinite(modelo).all():
                     raise ValueError("Modelo da câmera original inválido")
+                # getMatrices fornece a view original; a câmera não é mutada.
+                if not getattr(cam, "updated", True):
+                    cam.updateCamera()
+                    cam.updated = True
+                _, view = cam.getMatrices(0)
+                view = np.asarray(view, dtype=np.float32)
+                if view.shape != (4, 4) or not np.isfinite(view).all():
+                    raise ValueError("View original inválida para iluminação")
+                try:
+                    posicao_camera = np.linalg.inv(view)[:3, 3]
+                except np.linalg.LinAlgError as exc:
+                    raise ValueError("View original não inversível") from exc
+                observador = np.array([*posicao_camera, 1.0], np.float32)
                 uniforms = np.concatenate((
                     mvp.T.reshape(-1), modelo.T.reshape(-1),
-                    cor, flags, ambiente, posicoes.reshape(-1),
-                    cores.reshape(-1),
+                    cor, flags, ambiente, especular, emissiva, observador,
+                    posicoes.reshape(-1), cores.reshape(-1),
                 )).astype(np.float32)
                 buf_u = self.device.create_buffer_with_data(
                     data=uniforms, usage=wgpu.BufferUsage.UNIFORM
