@@ -60,10 +60,16 @@ def iniciar():
     tela = QRenderWidget(raiz, update_mode="ondemand")
     tela.setMinimumSize(360, 400)
     layout.addWidget(tela, 1)
+    # A coluna de opções cresce com os controles de morph: usar rolagem
+    # evita esconder botões em monitores menores.
     painel = QtWidgets.QWidget()
-    painel.setFixedWidth(240)
     coluna = QtWidgets.QVBoxLayout(painel)
-    layout.addWidget(painel)
+    rolagem = QtWidgets.QScrollArea()
+    rolagem.setWidgetResizable(True)
+    rolagem.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+    rolagem.setFixedWidth(260)
+    rolagem.setWidget(painel)
+    layout.addWidget(rolagem)
 
     coluna.addWidget(QtWidgets.QLabel("<b>Visualizador experimental</b>"))
     coluna.addWidget(QtWidgets.QLabel("O MakeHuman original continua intacto."))
@@ -124,10 +130,16 @@ def iniciar():
 
         controles_morph.append(controle(titulo, 0, 100, 0, mudar_morph))
 
+    def restaurar_morphs():
+        # Evitar uma atualização da GPU para cada slider durante o reset.
+        for slider in controles_morph:
+            slider.blockSignals(True)
+            slider.setValue(0)
+            slider.blockSignals(False)
+        motor.atualizar_vertices(deformador.restaurar())
+
     botao_restaurar = QtWidgets.QPushButton("Restaurar deformações")
-    botao_restaurar.clicked.connect(
-        lambda: [slider.setValue(0) for slider in controles_morph]
-    )
+    botao_restaurar.clicked.connect(restaurar_morphs)
     coluna.addWidget(botao_restaurar)
 
     estado = QtWidgets.QLabel("Textura: branca (tonalidade por shader)")
