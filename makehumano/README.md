@@ -46,6 +46,19 @@ python executar.py --noshaders
 
 **Atenção:** o teste gráfico usa `--noshaders` em um servidor X virtual, portanto **não valida** shaders e aparência final. Malhas, rigs, morph targets e outros recursos **presentes no repositório original** já estão versionados nesta cópia. Recursos **externos** disponibilizados separadamente pelo projeto continuam podendo ser necessários para certas funções. Sintaxe válida não comprova compatibilidade completa com Python, Qt, NumPy ou OpenGL.
 
+## Prévia experimental com wgpu-py / Vulkan
+
+Foi acrescentado um **visualizador independente** em [`motor_wgpu/`](motor_wgpu/README.md). Ele carrega a malha original `base.obj`, mantém as coordenadas UV e possui material WGSL com difuso + reflexão GGX simplificada, ajuste de rugosidade/tonalidade e substituição de textura durante a execução.
+
+Execute no diretório `makehumano/`:
+
+```bash
+python -m pip install -r motor_wgpu/requirements.txt
+python -m motor_wgpu.app
+```
+
+O parâmetro `--backend vulkan` obriga o uso de Vulkan. O modo automático tenta escolher a API que funcione na máquina. Os testes em GitHub Actions verificam o processamento da malha e a criação de quadros com Vulkan por software (Mesa/Lavapipe). **Isto ainda não substitui a viewport principal**, nem inclui subsurface scattering, picking, ligação aos morph targets ou revisão visual completa em uma GPU física.
+
 ## Como salvar as atualizações neste repositório
 
 O diretório `codigo/` está versionado no GitHub em `brincadeira/makehumano/codigo/`. Assim, as modificações feitas nos arquivos originais aparecem como diferenças auditáveis. Use commits pequenos e execute os testes antes de alterar a lógica de modelagem.
