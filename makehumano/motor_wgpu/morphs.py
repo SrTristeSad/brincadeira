@@ -64,6 +64,8 @@ class Deformador:
     def __init__(self, malha: Malha):
         self.malha = malha
         self.vertices = malha.vertices.copy()
+        # Inclui pontos do OBJ fora do grupo body (ex.: globos oculares).
+        self.posicoes_atuais = malha.posicoes_base.copy()
         self._alvos: dict[str, tuple[Alvo, float]] = {}
 
     def definir_peso(self, nome: str, alvo: Alvo, peso: float) -> np.ndarray:
@@ -106,6 +108,8 @@ class Deformador:
         posicoes = self.malha.posicoes_base.copy()
         for alvo, peso in self._alvos.values():
             np.add.at(posicoes, alvo.indices, alvo.deslocamentos * peso)
+
+        self.posicoes_atuais = posicoes
 
         # O mesmo índice OBJ pode aparecer em múltiplos vértices de render
         # devido às costuras UV. Ambos recebem exatamente a mesma posição/normal.
