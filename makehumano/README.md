@@ -1,39 +1,56 @@
 # MakeHumano — modernização experimental do MakeHuman
 
-Este diretório é a área de trabalho para atualizar o [MakeHuman](https://github.com/makehumancommunity/makehuman) em **Python**, preservando a lógica e os recursos originais sempre que possível.
+Esta pasta é a área de trabalho para atualizar o [MakeHuman](https://github.com/makehumancommunity/makehuman) em **Python**, preservando a lógica e os recursos originais sempre que possível.
 
-> **Estado atual:** estrutura inicial e ferramentas de importação/diagnóstico. A aplicação **ainda não foi modernizada ou validada** para versões recentes do Python. Os arquivos originais do MakeHuman ainda não foram importados neste repositório.
+> **Estado atual:** estrutura inicial e ferramentas de importação, diagnóstico e execução. A aplicação **ainda não foi modernizada nem testada** em versões recentes do Python. O código-fonte completo do MakeHuman ainda **não está incluído** neste repositório.
 
-## Estrutura
+## O que já existe
 
-- `importar_original.py`: importa uma cópia do código-fonte oficial para `makehumano/codigo/`, sem modificar o repositório original.
-- `diagnostico.py`: verifica a versão do Python, dependências, presença dos arquivos e sintaxe dos módulos importados.
-- `.gitignore`: evita versionar arquivos temporários e ambientes virtuais.
+- `importar_original.py`: obtém uma cópia do código-fonte oficial para `codigo/`, sem modificar o repositório de origem.
+- `diagnostico.py`: identifica versões do Python e das dependências e verifica a sintaxe dos arquivos importados.
+- `executar.py`: executa o MakeHuman importado com o Python atual, sem alterar sua lógica.
+- `.gitignore`: ignora arquivos temporários, mas **não ignora** `codigo/`, para que atualizações possam ser versionadas.
 
-## Como começar
+## Primeiros passos
 
 É necessário ter **Python 3** e **Git** instalados.
 
-A partir da pasta `makehumano/`:
+Abra um terminal dentro de `makehumano/` e execute:
 
 ```bash
 python importar_original.py
 python diagnostico.py
 ```
 
-O importador copia a versão do repositório original fixada por um commit, para que a experiência seja reproduzível. Para importar uma versão mais nova, use `python importar_original.py --atualizar` (a cópia anterior é mantida até a nova estar pronta).
+O importador registra em `codigo/.makehumano-origem.txt` o commit exato que foi copiado. Ao repetir a importação com `python importar_original.py --atualizar`, a versão anterior é preservada em um diretório de backup.
 
-Depois, consulte `codigo/README.md` para as instruções oficiais de instalação, obtenção de assets e execução do MakeHuman. A importação do código-fonte não baixa automaticamente todos os assets externos. Não presuma que o aplicativo funcionará com um Python recente sem correções adicionais.
+Para preparar o ambiente, siga `codigo/README.md`. Por exemplo, as dependências documentadas pelo original podem ser instaladas com:
+
+```bash
+python -m pip install -r codigo/requirements.txt
+```
+
+Depois de baixar os assets conforme as instruções oficiais, tente iniciar com:
+
+```bash
+python executar.py
+```
+
+**Atenção:** a importação do código não baixa automaticamente todos os assets externos. A sintaxe válida não garante compatibilidade com versões recentes do Python, Qt, NumPy ou OpenGL.
+
+## Como salvar as atualizações neste repositório
+
+O diretório `codigo/` foi deixado fora das regras de exclusão do Git para permitir que o código atualizado seja salvo em `brincadeira/makehumano/codigo/`. A importação inicial é uma etapa local; os arquivos só aparecem no GitHub depois de adicionados e registrados em um commit.
 
 ## Objetivo das próximas alterações
 
-1. Identificar incompatibilidades reais sem alterar o comportamento do programa.
-2. Atualizar a infraestrutura de testes e o ambiente Python.
-3. Adaptar dependências e interface gráfica em etapas pequenas.
-4. Modernizar o código preservando o sistema de deformação 3D, arquivos e plugins.
+1. Identificar incompatibilidades reais e documentar o estado inicial.
+2. Atualizar gradualmente o ambiente Python e os testes automatizados.
+3. Adaptar dependências e interface gráfica sem quebrar o sistema de deformação.
+4. Modernizar os módulos mantendo, sempre que possível, os arquivos e os plugins originais.
 
 ## Licenças e créditos
 
-**MakeHuman Community** é o projeto original. Seu código é disponibilizado sob **AGPL-3.0 ou posterior** e os assets incluídos no projeto são disponibilizados sob **CC0 1.0**. Os arquivos e avisos de licença do projeto original devem ser preservados na importação. Ver [licenças originais](https://github.com/makehumancommunity/makehuman/blob/master/LICENSE.md).
+O código-fonte do **MakeHuman Community** é disponibilizado sob **AGPL-3.0 ou posterior**. Os assets incluídos pelo projeto são **CC0 1.0**. Avisos e arquivos de licença originais devem ser preservados ao importar e modificar o projeto. Consulte o [documento de licenças original](https://github.com/makehumancommunity/makehuman/blob/master/LICENSE.md).
 
-Este diretório não representa uma versão oficial do MakeHuman.
+Este trabalho experimental não é uma versão oficial do MakeHuman.
