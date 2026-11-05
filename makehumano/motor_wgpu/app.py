@@ -46,7 +46,8 @@ def iniciar():
     from .morphs import Deformador, ler_target, pasta_targets
     from .modificadores import carregar_catalogo, NOMES_GRUPOS
     from .projetos import montar_documento, salvar_documento, carregar_documento
-    from .exportar import exportar_obj
+    from .exportar import exportar_obj_com_material
+    from .materiais_obj import caminhos_materiais
     from .macro import (
         ControladorMacros, VALORES_PADRAO, ROTULOS, ETNIAS,
         ETNIAS_PADRAO, ROTULOS_ETNIAS,
@@ -361,19 +362,40 @@ def iniciar():
             return
         if Path(destino).suffix.lower() != ".obj":
             destino += ".obj"
+        arquivo_mtl, arquivo_png = caminhos_materiais(destino)
+        existentes = [
+            nome for nome in (Path(destino), arquivo_mtl, arquivo_png)
+            if nome.exists()
+        ]
+        if existentes:
+            resposta = QtWidgets.QMessageBox.question(
+                janela, "Substituir arquivos?",
+                "A exportação substituirá estes arquivos:\n"
+                + "\n".join(str(nome) for nome in existentes),
+                QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+                QtWidgets.QMessageBox.No,
+            )
+            if resposta != QtWidgets.QMessageBox.Yes:
+                return
         try:
-            exportar_obj(destino, malha, deformador.vertices)
+            objeto, material, textura = exportar_obj_com_material(
+                destino, malha, deformador.vertices,
+                motor.pele, motor.textura_cpu,
+            )
         except (OSError, ValueError) as erro:
             QtWidgets.QMessageBox.warning(janela, "Falha ao exportar", str(erro))
         else:
-            print(f"Malha OBJ exportada: {destino}", flush=True)
+            print(
+                f"OBJ, MTL e PNG exportados: {objeto}, {material}, {textura}",
+                flush=True,
+            )
 
-    botao_exportar = QtWidgets.QPushButton("Exportar malha OBJ…")
+    botao_exportar = QtWidgets.QPushButton("Exportar OBJ com pele…")
     botao_exportar.clicked.connect(exportar_personagem)
     coluna.addWidget(botao_exportar)
     aviso_exportar = QtWidgets.QLabel(
-        "Exporta o corpo com deformações, UVs e normais. "
-        "Não inclui roupa, esqueleto, pose nem textura externa."
+        "Cria OBJ + MTL + PNG da textura em uso, com a cor de pele "
+        "e rugosidade aproximada. Sem roupa, esqueleto ou pose."
     )
     aviso_exportar.setWordWrap(True)
     coluna.addWidget(aviso_exportar)
@@ -426,7 +448,7 @@ def iniciar():
             # sem exigir um quadro para cada callback.
             esperados = {"textura", "modificador_positivo", "modificador_negativo",
                          "macros", "restauracao", "etnias", "restauracao_total",
-                         "salvar_abrir", "exportar_obj"}
+                         "salvar_abrir", "exportar_obj", "material_textura"}
             ok = eventos_smoke == esperados and motor.frames >= 6
             print(f"Smoke: eventos {sorted(eventos_smoke)}, aprovado={ok}", flush=True)
             aplicacao.exit(0 if ok else 2)
@@ -495,7 +517,19 @@ def iniciar():
                 print("Projeto salvo e reaberto, malha restaurada no Vulkan", flush=True)
 
                 objeto = Path(pasta) / "corpo-deformado.obj"
-                exportar_obj(objeto, malha, deformador.vertices)
+                _, mtl, png = exportar_obj_com_material(
+                    objeto, malha, deformador.vertices,
+                    motor.pele, motor.textura_cpu,
+                )
+                assert mtl.is_file() and png.is_file()
+                texto_obj = objeto.read_text(encoding="utf-8")
+                texto_mtl = mtl.read_text(encoding="utf-8")
+                assert f"mtllib {mtl.name}" in texto_obj
+                assert "usemtl PeleMakeHumano" in texto_obj
+                assert f"map_Kd {png.name}" in texto_mtl
+                assert png.read_bytes().startswith(b"\\x89PNG\\r\\n\\x1a\\n")
+                eventos_smoke.add("material_textura")
+                print("Material MTL e textura PNG exportados da GPU", flush=True)
                 reimportado = carregar_obj(objeto)
                 np.testing.assert_array_equal(reimportado.origens, malha.origens)
                 np.testing.assert_array_equal(reimportado.indices, malha.indices)
