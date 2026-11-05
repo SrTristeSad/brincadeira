@@ -61,7 +61,8 @@ def load(path):
 
     pixels = im.bits().asstring(h * w * 4)
 
-    pixels = np.fromstring(pixels, dtype=np.uint32).reshape((h, w))
+    # NumPy 2 removeu o modo binário de fromstring; os pixels já são bytes.
+    pixels = np.frombuffer(pixels, dtype=np.uint32).reshape((h, w))
     del im
 
     a = (pixels >> 24).astype(np.uint8)
