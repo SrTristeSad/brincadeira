@@ -196,6 +196,23 @@ def criar_canvas_vulkan(canvas_original):
                         "MAKEHUMANO_VULKAN: picking original RGB="
                         + str(cor), flush=True,
                     )
+                offscreen = os.environ.get("MAKEHUMANO_VULKAN_OFFSCREEN_FILE")
+                if offscreen and not os.path.exists(offscreen):
+                    pixels = self._cena.capturar_framebuffer(G.world, G.cameras)
+                    if (pixels.ndim != 3 or pixels.shape[2] != 3
+                            or pixels.dtype.name != "uint8"
+                            or pixels.shape[0] < 1 or pixels.shape[1] < 1):
+                        raise RuntimeError("Framebuffer Vulkan retornou RGB inválido")
+                    with open(offscreen, "w", encoding="utf-8") as saida:
+                        saida.write(
+                            "vulkan-offscreen:"
+                            + str(pixels.shape[1]) + "x"
+                            + str(pixels.shape[0]) + "\\n"
+                        )
+                    print(
+                        "MAKEHUMANO_VULKAN: framebuffer offscreen RGB="
+                        + str(pixels.shape), flush=True,
+                    )
                 caminho = os.environ.get("MAKEHUMANO_VULKAN_FRAME_FILE")
                 if caminho and not os.path.exists(caminho):
                     with open(caminho, "w", encoding="utf-8") as saida:
