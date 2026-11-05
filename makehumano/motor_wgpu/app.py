@@ -57,6 +57,7 @@ def iniciar():
         carregar_proxy_direto, caminho_olhos_lowpoly,
         carregar_proxy_ponderado, caminho_olhos_highpoly,
     )
+    from .roupas import carregar_peca_externa
     from .macro import (
         ControladorMacros, VALORES_PADRAO, ROTULOS, ETNIAS,
         ETNIAS_PADRAO, ROTULOS_ETNIAS,
@@ -139,6 +140,9 @@ def iniciar():
     combo_olhos.addItem("Olhos alta resolução (proxy ponderado)", "olhos_high")
     coluna.addWidget(combo_olhos)
 
+    pecas_externas = {}
+    proximo_acessorio = [0]
+
     def atualizar_corpo(vertices):
         motor.atualizar_vertices(vertices)
         if checkbox_olhos.isChecked():
@@ -148,6 +152,11 @@ def iniciar():
                     deformador.posicoes_atuais
                 )
             )
+        for nome, (peca, _, _) in pecas_externas.items():
+            if motor.acessorios[nome]["visivel"]:
+                motor.atualizar_acessorio(
+                    nome, peca.atualizar(deformador.posicoes_atuais)
+                )
 
     def alternar_olhos(visivel):
         selecionado = combo_olhos.currentData()
@@ -171,6 +180,90 @@ def iniciar():
         "ambos com .mhclo e textura própria",
         flush=True,
     )
+
+    coluna.addWidget(QtWidgets.QLabel("<b>Peças externas (.mhclo)</b>"))
+    aviso_roupas = QtWidgets.QLabel(
+        "Carrega um .mhclo e seu OBJ local. Peças compatíveis acompanham os "
+        "morphs e aplicam suas máscaras. Sem rig, física ou materiais .mhmat."
+    )
+    aviso_roupas.setWordWrap(True)
+    coluna.addWidget(aviso_roupas)
+    lista_roupas = QtWidgets.QVBoxLayout()
+    coluna.addLayout(lista_roupas)
+
+    def adicionar_peca_externa(caminho, textura=None):
+        """Registra a peça somente depois de ler e validar o proxy/OBJ."""
+        peca = carregar_peca_externa(caminho, malha)
+        from .materiais import textura_neutra
+        pixels = textura_neutra() if textura is None else textura
+        novos_vertices = peca.atualizar(deformador.posicoes_atuais)
+        proximo_acessorio[0] += 1
+        chave = f"externo_{proximo_acessorio[0]}"
+        motor.adicionar_acessorio(
+            chave, peca.modelo.malha, novos_vertices, pixels,
+            deletar_vertices=peca.deletar_vertices,
+        )
+        linha = QtWidgets.QWidget()
+        botoes = QtWidgets.QHBoxLayout(linha)
+        botoes.setContentsMargins(0, 0, 0, 0)
+        visivel = QtWidgets.QCheckBox(Path(caminho).stem)
+        visivel.setChecked(True)
+        visivel.setToolTip(str(Path(caminho)))
+        remover = QtWidgets.QPushButton("Remover")
+        remover.setToolTip(f"Remover {Path(caminho).name}")
+        botoes.addWidget(visivel, 1)
+        botoes.addWidget(remover)
+        lista_roupas.addWidget(linha)
+        pecas_externas[chave] = (peca, visivel, linha)
+
+        def mudar_visibilidade(ativo):
+            motor.mostrar_acessorio(chave, ativo)
+            if ativo:
+                motor.atualizar_acessorio(
+                    chave, peca.atualizar(deformador.posicoes_atuais)
+                )
+
+        def remover_peca():
+            motor.remover_acessorio(chave)
+            del pecas_externas[chave]
+            lista_roupas.removeWidget(linha)
+            linha.setParent(None)
+            linha.deleteLater()
+
+        visivel.toggled.connect(mudar_visibilidade)
+        remover.clicked.connect(remover_peca)
+        print(
+            f"Acessório externo {chave}: {Path(caminho).name}, "
+            f"proxy {peca.tipo}, "
+            f"{len(peca.modelo.malha.indices) // 3} triângulos",
+            flush=True,
+        )
+        return chave
+
+    def escolher_peca_externa():
+        caminho, _ = QtWidgets.QFileDialog.getOpenFileName(
+            janela, "Selecionar acessório/roupa MakeHuman (.mhclo)",
+            str(Path.home()), "Proxies MakeHuman (*.mhclo)",
+        )
+        if not caminho:
+            return
+        try:
+            # A imagem é opcional: o .mhmat legado ainda não é interpretado.
+            imagem, _ = QtWidgets.QFileDialog.getOpenFileName(
+                janela, "Textura opcional (cancelar para usar branco)",
+                str(Path(caminho).parent),
+                "Imagens (*.png *.jpg *.jpeg *.webp *.bmp)",
+            )
+            pixels = ler_imagem_qt(imagem) if imagem else None
+            adicionar_peca_externa(caminho, pixels)
+        except (OSError, UnicodeError, ValueError, RuntimeError) as erro:
+            QtWidgets.QMessageBox.warning(
+                janela, "Acessório não importado", str(erro)
+            )
+
+    botao_roupa = QtWidgets.QPushButton("Adicionar peça .mhclo…")
+    botao_roupa.clicked.connect(escolher_peca_externa)
+    coluna.addWidget(botao_roupa)
 
     controle("Rotação horizontal", -180, 180, 0,
              lambda valor: motor.ajustar_camera(angulo=valor * 3.14159265 / 180))
