@@ -56,7 +56,7 @@ def iniciar():
     raiz = QtWidgets.QWidget()
     layout = QtWidgets.QHBoxLayout(raiz)
     janela.setCentralWidget(raiz)
-    tela = QRenderWidget(raiz, update_mode="on_demand")
+    tela = QRenderWidget(raiz, update_mode="ondemand")
     tela.setMinimumSize(360, 400)
     layout.addWidget(tela, 1)
     painel = QtWidgets.QWidget()
