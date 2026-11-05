@@ -1,23 +1,13 @@
-name: MakeHumano - motor wgpu experimental
+name: MakeHumano original - Vulkan
 
 on:
   push:
     paths:
       - "makehumano/**"
-      - "makehumano/codigo/makehuman/lib/vulkan_*.py"
-      - "makehumano/codigo/makehuman/lib/texture.py"
-      - "makehumano/codigo/makehuman/lib/qtui.py"
-      - "makehumano/testes/smoke_gui.py"
-      - "makehumano/testes/test_*wgpu.py"
       - ".github/workflows/testar-wgpu.yml"
   pull_request:
     paths:
       - "makehumano/**"
-      - "makehumano/codigo/makehuman/lib/vulkan_*.py"
-      - "makehumano/codigo/makehuman/lib/texture.py"
-      - "makehumano/codigo/makehuman/lib/qtui.py"
-      - "makehumano/testes/smoke_gui.py"
-      - "makehumano/testes/test_*wgpu.py"
       - ".github/workflows/testar-wgpu.yml"
   workflow_dispatch:
 
@@ -95,14 +85,13 @@ jobs:
             libxcb-randr0 libxcb-render-util0 libxcb-xinput0 \
             libxcb-util1 libxcb-shape0 libxcb-xfixes0 \
             libxcb-sync1 libx11-xcb1 libfontconfig1
-      - name: Instalar dependências atuais e motor Vulkan do piloto
+      - name: Instalar dependências do MakeHuman Vulkan original
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r makehumano/motor_wgpu/requirements.txt
           python -c "import importlib.util; assert importlib.util.find_spec('OpenGL') is None"
       - name: Abrir MakeHuman ORIGINAL e desenhar G.world via Vulkan
         env:
-          MAKEHUMANO_VULKAN_PILOT: "1"
           WGPU_BACKEND_TYPE: Vulkan
           LIBGL_ALWAYS_SOFTWARE: "1"
           QT_X11_NO_MITSHM: "1"
@@ -134,7 +123,6 @@ jobs:
         run: python -c "import importlib.util; assert importlib.util.find_spec('OpenGL') is None"
       - name: Abrir MakeHuman original em Vulkan sem PyOpenGL
         env:
-          MAKEHUMANO_VULKAN_PILOT: "1"
           WGPU_BACKEND_TYPE: Vulkan
           LIBGL_ALWAYS_SOFTWARE: "1"
           QT_X11_NO_MITSHM: "1"
