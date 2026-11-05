@@ -52,6 +52,7 @@ def iniciar():
     from .materiais import textura_neutra
     from .exportar import exportar_obj_com_material
     from .materiais_obj import caminhos_materiais, caminhos_mapas
+    from .mhm import carregar_mhm
     from .macro import (
         ControladorMacros, VALORES_PADRAO, ROTULOS, ETNIAS,
         ETNIAS_PADRAO, ROTULOS_ETNIAS,
@@ -402,6 +403,55 @@ def iniciar():
     botao_abrir.clicked.connect(carregar_projeto)
     coluna.addWidget(botao_abrir)
 
+    def importar_mhm():
+        caminho, _ = QtWidgets.QFileDialog.getOpenFileName(
+            janela, "Importar personagem do MakeHuman original",
+            str(Path.home()), "Personagens MakeHuman (*.mhm)"
+        )
+        if not caminho:
+            return
+        try:
+            importacao = carregar_mhm(caminho, catalogo)
+        except (OSError, ValueError) as erro:
+            QtWidgets.QMessageBox.warning(
+                janela, "Não foi possível importar o MHM", str(erro)
+            )
+            return
+
+        # Um arquivo MHM pode incluir roupa, pose, materiais e plugins.
+        # Solicitar consentimento explícito, sem prometer importação integral.
+        resumo = (
+            f"{importacao.modificadores_aplicados} de "
+            f"{importacao.modificadores_lidos} modificadores reconhecidos.\\n"
+            "A prévia importa somente a forma corporal; não copia "
+            "roupas, poses, esqueleto, materiais nem configurações de câmera."
+        )
+        if importacao.avisos:
+            resumo += (
+                "\\n\\nAvisos:\\n"
+                + "\\n".join(importacao.avisos[:8])
+                + ("\\n…" if len(importacao.avisos) > 8 else "")
+            )
+        resposta = QtWidgets.QMessageBox.question(
+            janela, "Importação parcial de MHM",
+            resumo + "\\n\\nImportar apenas a forma corporal?",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            QtWidgets.QMessageBox.No,
+        )
+        if resposta != QtWidgets.QMessageBox.Yes:
+            return
+        aplicar_documento(importacao.documento)
+        print(
+            f"MHM importado parcialmente: {caminho} "
+            f"({importacao.modificadores_aplicados} modificadores)",
+            flush=True,
+        )
+
+    botao_mhm = QtWidgets.QPushButton("Importar MHM original…")
+    botao_mhm.clicked.connect(importar_mhm)
+    coluna.addWidget(botao_mhm)
+
+
     def exportar_personagem():
         destino, _ = QtWidgets.QFileDialog.getSaveFileName(
             janela, "Exportar malha corporal deformada",
@@ -557,7 +607,7 @@ def iniciar():
                          "macros", "restauracao", "etnias", "restauracao_total",
                          "salvar_abrir", "exportar_obj", "material_textura",
                          "mapas_detalhe", "mapas_restaurados",
-                         "dispersao"}
+                         "dispersao", "importar_mhm"}
             ok = eventos_smoke == esperados and motor.frames >= 6
             print(f"Smoke: eventos {sorted(eventos_smoke)}, aprovado={ok}", flush=True)
             aplicacao.exit(0 if ok else 2)
@@ -709,6 +759,45 @@ def iniciar():
                 eventos_smoke.add("exportar_obj")
                 print("Corpo deformado exportado como OBJ e reimportado", flush=True)
 
+        def importar_mhm_smoke():
+            from tempfile import TemporaryDirectory
+            import numpy as np
+            with TemporaryDirectory(prefix="makehumano-mhm-") as pasta:
+                caminho = Path(pasta) / "exemplo.mhm"
+                caminho.write_text(
+                    "# Written by MakeHuman v1.2.0\\n"
+                    "version v1.2.0\\n"
+                    "modifier macrodetails/Gender 0.700000\\n"
+                    "modifier macrodetails/Age 0.650000\\n"
+                    "modifier macrodetails-universal/Muscle 0.800000\\n"
+                    "modifier macrodetails/African 0.600000\\n"
+                    "modifier macrodetails/Asian 0.200000\\n"
+                    "modifier macrodetails/Caucasian 0.200000\\n"
+                    "modifier nose/nose-scale-horiz-decr|incr -0.370000\\n"
+                    "camera 0 0 0 0 0 1\\n"
+                    "subdivide False\\n",
+                    encoding="utf-8",
+                )
+                conversao = carregar_mhm(caminho, catalogo)
+                assert conversao.modificadores_aplicados == 7
+                aplicar_documento(conversao.documento)
+                assert macros.perfil.valores["gender"] == 0.7
+                assert macros.perfil.valores["muscle"] == 0.8
+                assert valores_morph["nose/nose-scale-horiz-decr|incr"] == -37
+                assert abs(macros.perfil.etnias["african"] - 0.6) < 1e-6
+                assert not motor.normal_ativo and not motor.rugosidade_ativa
+                assert motor.pele.dispersao == 0
+                np.testing.assert_array_equal(
+                    motor.textura_cpu, textura_neutra()
+                )
+                assert np.isfinite(deformador.vertices).all()
+                eventos_smoke.add("importar_mhm")
+                print(
+                    "MHM original importado parcialmente e geometria "
+                    "atualizada no Vulkan",
+                    flush=True,
+                )
+
         QtCore.QTimer.singleShot(800, atualizar_smoke)
         QtCore.QTimer.singleShot(2000, deformar_smoke)
         QtCore.QTimer.singleShot(4500, deformar_negativo_smoke)
@@ -719,7 +808,8 @@ def iniciar():
         QtCore.QTimer.singleShot(14500, carregar_mapas_smoke)
         QtCore.QTimer.singleShot(15600, arquivo_smoke)
         QtCore.QTimer.singleShot(18500, limpar_mapas_smoke)
-        QtCore.QTimer.singleShot(22400, terminar_smoke)
+        QtCore.QTimer.singleShot(20600, importar_mhm_smoke)
+        QtCore.QTimer.singleShot(27000, terminar_smoke)
 
     return aplicacao.exec_()
 
