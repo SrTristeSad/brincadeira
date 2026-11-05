@@ -58,6 +58,14 @@ Os nomes são gerados a partir do conteúdo, não de caminhos fornecidos pelo us
 
 O formato ainda **não é o `.mhm`** do MakeHuman e não preserva roupas, poses, plugins ou câmera.
 
+### Importar um personagem do MakeHuman original (`.mhm`)
+
+O botão **Importar MHM original…** lê o formato textual do editor legado **somente para recuperar a forma corporal**. Ele reconhece os nomes de **249 controles** definidos em `data/modifiers/modeling_modifiers.json`: 238 modificadores diretos e 11 macrocontroles (incluindo os três parâmetros étnicos). Valores dos sliders diretos são convertidos de [-1, 1] para percentuais inteiros, avisando se houver arredondamento. As três proporções étnicas são normalizadas como no fim de `Human.load()`.
+
+Antes de alterar o personagem, a janela apresenta um resumo da importação e **pede confirmação**. O leitor sinaliza propriedades não suportadas, como `clothes`, `material`, `camera`, `subdivide` e modificadores definidos por outros plugins. Isso significa que **um `.mhm` completo não é reconstituído com fidelidade**: roupas, cabelos, poses, subdivisão, materiais, câmera, UUID, tags e dados de plugins não são importados. A prévia usa o material padrão e as texturas neutras. Arquivos antigos podem requerer `compat.loadMHM`, que este leitor não executa; nesses casos, verifique o resultado na aplicação original.
+
+O arquivo `.mhm` **não é modificado**. Depois de importar a parte anatômica, salve no formato experimental `.makehumano.json` para continuar a edição e guardar as texturas. **Ainda não há exportação de volta para `.mhm`**. Os testes de compatibilidade usam amostras textuais representativas de `Human.save()`; não equivalem a uma bateria de personagens históricos reais.
+
 ### Exportação OBJ com mapas de pele
 
 O botão **Exportar OBJ com mapas de pele…** cria **cinco arquivos** com o mesmo nome-base, por exemplo:
@@ -89,6 +97,7 @@ O GitHub Actions executa esses testes em `.github/workflows/testar-wgpu.yml`.
 - `morphs.py`: leitura dos arquivos `.target`, combinação atômica de pesos e recomputação de normais
 - `modificadores.py`: catálogo de sliders a partir dos JSON oficiais do MakeHuman
 - `projetos.py`: serialização JSON versionada, migração v1/v2 e persistência local de texturas PNG com verificação de integridade
+- `mhm.py`: importação parcial de `.mhm` original e relatório de propriedades ignoradas
 - `exportar.py`: gravação OBJ e vínculo opcional com MTL/PNG, preservando posições canônicas e UVs
 - `materiais_obj.py`: geração de MTL e PNGs RGBA8 (difuso, normal e rugosidade), sem depender de Qt para exportar
 - `macro.py`: interpolação de oito macrovariáveis e normalização dos três controles étnicos seguindo as fórmulas originais, combinando os 564 `.target`
@@ -98,7 +107,7 @@ O GitHub Actions executa esses testes em `.github/workflows/testar-wgpu.yml`.
 
 ## Próximos marcos (não implementados)
 
-1. Avançar da comparação CPU com `algos3d` para os eventos, poses e dependências completos da GUI original; ainda não há teste de equivalência visual entre as duas interfaces.
+1. Ampliar a importação `.mhm` com ensaios sobre arquivos reais históricos e avançar da comparação CPU para poses, eventos e dependências da GUI original; ainda não há teste de equivalência visual entre as interfaces.
 2. Evoluir da dispersão visual aproximada para SSS fisicamente mais fiel (espessura e difusão), depois avaliar exportação PBR como glTF.
 3. Implementar câmera e picking equivalentes à viewport antiga.
 4. Testar shaders com várias GPUs/drivers e qualidade visual.
