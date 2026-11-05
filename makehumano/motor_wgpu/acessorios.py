@@ -179,7 +179,10 @@ def carregar_proxy_ponderado(
                 continue
             campo = dados[0]
             if campo == "obj_file":
-                if len(dados) != 2 or Path(dados[1]).name != dados[1] or not dados[1].endswith(".obj"):
+                if (
+                    len(dados) != 2 or Path(dados[1]).name != dados[1]
+                    or "\\" in dados[1] or not dados[1].endswith(".obj")
+                ):
                     raise ValueError("obj_file precisa apontar a OBJ local")
                 obj = arquivo.parent / dados[1]
             elif campo in {"x_scale", "y_scale", "z_scale"}:
@@ -217,9 +220,20 @@ def carregar_proxy_ponderado(
                 referencias.append(ref)
                 pesos.append(nums[:3])
                 deslocamentos.append(nums[3:])
-            elif campo in {"shear", "l_shear", "r_shear", "weights",
-                           "vertexboneweights_file", "delete_verts"}:
-                raise ValueError(f"Seção {campo} ainda não é suportada")
+            elif campo in {
+                "uuid", "basemesh", "name", "tag", "z_depth", "material",
+            }:
+                # Metadados reconhecidos, não afetam o cálculo das posições.
+                # Usamos a textura oficial conhecida em vez de resolver um
+                # caminho de material arbitrário declarado no .mhclo.
+                if em_vertices:
+                    raise ValueError(
+                        f"Linha {numero}: diretiva após a lista de vértices"
+                    )
+            else:
+                raise ValueError(
+                    f"Linha {numero}: seção {campo} não suportada"
+                )
 
     if obj is None or not em_vertices:
         raise ValueError("Proxy sem OBJ ou seção de vértices")
