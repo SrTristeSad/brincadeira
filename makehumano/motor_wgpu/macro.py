@@ -5,7 +5,7 @@ em codigo/makehuman/apps/human.py. Os pesos de cada .target são o produto
 dos fatores de categoria reconhecidos pelo crawler em lib/targets.py.
 
 Não substitui Human/Modifier: integração do modelo com poses, simetria,
-plugins e normalização étnica completa permanece trabalho separado.
+plugins e eventos da GUI principal permanece trabalho separado.
 """
 
 from pathlib import Path
@@ -27,6 +27,13 @@ CATEGORIAS = {
     "bodyproportions": ("uncommonproportions", "regularproportions", "idealproportions"),
 }
 VALORES = set(v for valores in CATEGORIAS.values() for v in valores)
+ETNIAS = ("african", "asian", "caucasian")
+ETNIAS_PADRAO = {nome: 1.0 / 3.0 for nome in ETNIAS}
+ROTULOS_ETNIAS = {
+    "african": "Africana (alvos MakeHuman)",
+    "asian": "Asiática (alvos MakeHuman)",
+    "caucasian": "Caucasiana (alvos MakeHuman)",
+}
 
 # Caminhos base para cada grupo declarado nos modifiers JSON originais.
 GRUPOS = {
@@ -68,10 +75,11 @@ def _triplo(valor, minimo, medio, maximo):
 
 
 class PerfilMacro:
-    """Fatores originais para 8 macros, com proporções étnicas padrão 1/3."""
+    """Fatores para oito macros e três parâmetros étnicos interdependentes."""
 
     def __init__(self):
         self.valores = VALORES_PADRAO.copy()
+        self.etnias = ETNIAS_PADRAO.copy()
 
     def definir(self, chave: str, valor: float) -> None:
         if chave not in self.valores:
@@ -81,8 +89,44 @@ class PerfilMacro:
             raise ValueError(f"{chave} precisa de valor finito entre 0 e 1")
         self.valores[chave] = valor
 
+    def definir_etnia(self, chave: str, valor: float) -> None:
+        """Reproduz Human._setEthnicVals(exclude) de apps/human.py.
+
+        O parâmetro selecionado é mantido; os dois restantes são ajustados
+        proporcionalmente para totalizar 1. Quando os demais são zero, usamos
+        exatamente os casos especiais do MakeHuman original.
+        """
+        if chave not in ETNIAS:
+            raise KeyError(f"Categoria étnica desconhecida: {chave}")
+        valor = float(valor)
+        if not math.isfinite(valor) or not (0.0 <= valor <= 1.0):
+            raise ValueError("Fração étnica precisa estar entre 0 e 1")
+        self.etnias[chave] = valor
+        outras = tuple(nome for nome in ETNIAS if nome != chave)
+        restante = 1.0 - valor
+        total_outras = sum(self.etnias[nome] for nome in outras)
+
+        if total_outras == 0.0:
+            if valor == 0.0:
+                # Human._setEthnicVals reinicializa os três com 1/3.
+                self.etnias = ETNIAS_PADRAO.copy()
+            elif abs(valor - 1.0) <= 0.001:
+                for nome in outras:
+                    self.etnias[nome] = 0.0
+                self.etnias[chave] = 1.0
+            else:
+                # O original injeta 0.01 nos outros dois e renormaliza.
+                for nome in outras:
+                    self.etnias[nome] = restante / len(outras)
+        else:
+            for nome in outras:
+                self.etnias[nome] = restante * (
+                    self.etnias[nome] / total_outras
+                )
+
     def restaurar(self):
         self.valores = VALORES_PADRAO.copy()
+        self.etnias = ETNIAS_PADRAO.copy()
 
     def fatores(self) -> dict[str, float]:
         a = self.valores["age"]
@@ -104,8 +148,7 @@ class PerfilMacro:
         fatores = {
             **idade,
             "male": genero, "female": 1 - genero,
-            # Padrão exato de Human.setDefaultValues() para as etnias.
-            "african": 1 / 3, "asian": 1 / 3, "caucasian": 1 / 3,
+            **self.etnias,
         }
         fatores.update(_triplo(self.valores["weight"], "minweight", "averageweight", "maxweight"))
         fatores.update(_triplo(self.valores["muscle"], "minmuscle", "averagemuscle", "maxmuscle"))
@@ -156,6 +199,10 @@ class ControladorMacros:
 
     def definir(self, chave: str, valor: float):
         self.perfil.definir(chave, valor)
+        return self.atualizar()
+
+    def definir_etnia(self, chave: str, valor: float):
+        self.perfil.definir_etnia(chave, valor)
         return self.atualizar()
 
     def restaurar(self):
