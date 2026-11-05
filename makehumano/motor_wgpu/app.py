@@ -421,9 +421,57 @@ def iniciar():
     botao_textura = QtWidgets.QPushButton("Carregar textura da pele…")
     botao_textura.clicked.connect(escolher_textura)
     coluna.addWidget(botao_textura)
+
+    coluna.addWidget(QtWidgets.QLabel("<b>Mapas de detalhe da pele</b>"))
+    explicacao_mapas = QtWidgets.QLabel(
+        "Normal map: espaço tangente, convenção OpenGL (+Y). "
+        "Rugosidade: canal vermelho multiplicado pelo slider."
+    )
+    explicacao_mapas.setWordWrap(True)
+    coluna.addWidget(explicacao_mapas)
+
+    def criar_controles_mapa(titulo, carregador):
+        situacao = QtWidgets.QLabel(f"{titulo}: não carregado")
+        situacao.setWordWrap(True)
+        coluna.addWidget(situacao)
+        botoes = QtWidgets.QHBoxLayout()
+        coluna.addLayout(botoes)
+
+        def abrir_mapa():
+            origem, _ = QtWidgets.QFileDialog.getOpenFileName(
+                janela, f"Carregar {titulo.lower()}", str(Path.home()),
+                "Imagens (*.png *.jpg *.jpeg *.webp *.bmp)",
+            )
+            if not origem:
+                return
+            try:
+                carregador(ler_imagem_qt(origem))
+            except (OSError, ValueError, RuntimeError) as erro:
+                QtWidgets.QMessageBox.warning(janela, "Mapa inválido", str(erro))
+            else:
+                situacao.setText(f"{titulo}: {Path(origem).name}")
+
+        def remover_mapa():
+            carregador(None)
+            situacao.setText(f"{titulo}: não carregado")
+
+        botao_abrir = QtWidgets.QPushButton("Carregar…")
+        botao_remover = QtWidgets.QPushButton("Remover")
+        botao_abrir.clicked.connect(abrir_mapa)
+        botao_remover.clicked.connect(remover_mapa)
+        botoes.addWidget(botao_abrir)
+        botoes.addWidget(botao_remover)
+        return situacao
+
+    estado_normal = criar_controles_mapa(
+        "Normais", motor.atualizar_mapa_normal
+    )
+    estado_rugosidade = criar_controles_mapa(
+        "Rugosidade", motor.atualizar_mapa_rugosidade
+    )
     coluna.addStretch(1)
     coluna.addWidget(QtWidgets.QLabel(
-        "WGSL + GGX simplificado. Não há ainda\n"
+        "GGX + normal/roughness maps. Não há ainda\n"
         "subsurface scattering ou pintura 3D."
     ))
 
@@ -448,7 +496,8 @@ def iniciar():
             # sem exigir um quadro para cada callback.
             esperados = {"textura", "modificador_positivo", "modificador_negativo",
                          "macros", "restauracao", "etnias", "restauracao_total",
-                         "salvar_abrir", "exportar_obj", "material_textura"}
+                         "salvar_abrir", "exportar_obj", "material_textura",
+                         "mapas_detalhe", "mapas_restaurados"}
             ok = eventos_smoke == esperados and motor.frames >= 6
             print(f"Smoke: eventos {sorted(eventos_smoke)}, aprovado={ok}", flush=True)
             aplicacao.exit(0 if ok else 2)
@@ -491,6 +540,30 @@ def iniciar():
             assert all(abs(proporcoes[chave] - 1 / 3) < 1e-8 for chave in ETNIAS)
             eventos_smoke.add("restauracao_total")
             print("Todos os modificadores e misturas restaurados", flush=True)
+
+        def carregar_mapas_smoke():
+            import numpy as np
+            normal = np.tile(
+                np.array([150, 115, 250, 255], dtype=np.uint8), (8, 8, 1)
+            )
+            rugosidade = np.full((8, 8, 4), 255, dtype=np.uint8)
+            rugosidade[..., 0] = 130
+            motor.atualizar_mapa_normal(normal)
+            motor.atualizar_mapa_rugosidade(rugosidade)
+            assert motor.normal_ativo and motor.rugosidade_ativa
+            np.testing.assert_array_equal(motor.textura_normal_cpu, normal)
+            np.testing.assert_array_equal(
+                motor.textura_rugosidade_cpu, rugosidade
+            )
+            eventos_smoke.add("mapas_detalhe")
+            print("Mapas de normais e rugosidade aplicados no Vulkan", flush=True)
+
+        def limpar_mapas_smoke():
+            motor.atualizar_mapa_normal(None)
+            motor.atualizar_mapa_rugosidade(None)
+            assert not motor.normal_ativo and not motor.rugosidade_ativa
+            eventos_smoke.add("mapas_restaurados")
+            print("Mapas neutros restaurados no Vulkan", flush=True)
 
         def arquivo_smoke():
             from tempfile import TemporaryDirectory
@@ -547,8 +620,10 @@ def iniciar():
         QtCore.QTimer.singleShot(9000, restaurar_smoke)
         QtCore.QTimer.singleShot(10700, etnia_smoke)
         QtCore.QTimer.singleShot(13600, restaurar_tudo_smoke)
+        QtCore.QTimer.singleShot(14500, carregar_mapas_smoke)
         QtCore.QTimer.singleShot(15600, arquivo_smoke)
-        QtCore.QTimer.singleShot(20900, terminar_smoke)
+        QtCore.QTimer.singleShot(18500, limpar_mapas_smoke)
+        QtCore.QTimer.singleShot(22400, terminar_smoke)
 
     return aplicacao.exec_()
 
