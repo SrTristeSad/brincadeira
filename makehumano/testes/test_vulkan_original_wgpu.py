@@ -23,7 +23,7 @@ from vulkan_offscreen import (
 
 from vulkan_scene import (
     CenaVulkan, preparar_malha_original, matriz_wgpu, assinatura_textura,
-    parametros_material_vulkan, pixels_textura_rgba,
+    parametros_material_vulkan, pixels_textura_rgba, aparencia_material_vulkan,
 )
 from vulkan_texture import Texture as TextureVulkan
 from vulkan_skin import preparar_skin, normalizar_cor_fundo
@@ -518,6 +518,47 @@ class TestarLuzesOriginaisVulkan(unittest.TestCase):
         )
         with self.assertRaises(ValueError):
             dados_iluminacao_cena(cena)
+
+
+class TestarAparenciaAvancadaDeMaterialVulkan(unittest.TestCase):
+    def _obj(self, **atributos):
+        padrao = {
+            "specularColor": SimpleNamespace(values=(0.2, 0.4, 0.7)),
+            "emissiveColor": SimpleNamespace(values=(0.05, 0.1, 0.2)),
+            "shininess": 0.5,
+            "opacity": 0.25,
+        }
+        padrao.update(atributos)
+        return SimpleNamespace(material=SimpleNamespace(**padrao))
+
+    def test_mapeia_specular_emissive_e_opacidade_originais(self):
+        esp, ems, alfa = aparencia_material_vulkan(self._obj())
+        np.testing.assert_allclose(esp, [0.2, 0.4, 0.7, 64.0])
+        np.testing.assert_allclose(ems, [0.05, 0.1, 0.2, 0])
+        self.assertAlmostEqual(alfa, 0.25)
+
+    def test_opacidade_e_brilho_ficam_no_intervalo_original(self):
+        esp, _, alfa = aparencia_material_vulkan(
+            self._obj(shininess=9.0, opacity=-3.0),
+        )
+        self.assertEqual(esp[3], 128.0)
+        self.assertEqual(alfa, 0.0)
+
+    def test_sem_material_usa_opacidade_total_sem_especular(self):
+        esp, ems, alfa = aparencia_material_vulkan(SimpleNamespace())
+        np.testing.assert_array_equal(esp[:3], [0, 0, 0])
+        np.testing.assert_array_equal(ems[:3], [0, 0, 0])
+        self.assertAlmostEqual(alfa, 1.0)
+
+    def test_rejeita_valores_nao_finitos(self):
+        with self.assertRaises(ValueError):
+            aparencia_material_vulkan(self._obj(opacity=float("nan")))
+        with self.assertRaises(ValueError):
+            aparencia_material_vulkan(self._obj(shininess=float("inf")))
+        with self.assertRaises(ValueError):
+            aparencia_material_vulkan(
+                self._obj(specularColor=SimpleNamespace(values=(1, float("nan"), 0))),
+            )
 
 
 if __name__ == "__main__":
