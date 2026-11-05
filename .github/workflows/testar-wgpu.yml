@@ -98,8 +98,8 @@ jobs:
       - name: Instalar dependências atuais e motor Vulkan do piloto
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r makehumano/codigo/requirements.txt \
-            -r makehumano/motor_wgpu/requirements.txt
+          python -m pip install -r makehumano/motor_wgpu/requirements.txt
+          python -c "import importlib.util; assert importlib.util.find_spec('OpenGL') is None"
       - name: Abrir MakeHuman ORIGINAL e desenhar G.world via Vulkan
         env:
           MAKEHUMANO_VULKAN_PILOT: "1"
