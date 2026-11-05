@@ -1,0 +1,86 @@
+#!/usr/bin/env python3
+"""Teste de inicialização real do MakeHuman em servidor X virtual (CI Linux).
+
+Este teste NÃO verifica a aparência da janela ou a correção dos shaders.
+Verifica se o carregamento da GUI, dos plugins e dos morph targets terminou.
+"""
+
+from pathlib import Path
+import os
+import subprocess
+import sys
+import tempfile
+import time
+
+
+ROOT = Path(__file__).resolve().parents[1]
+APP = ROOT / "executar.py"
+TIMEOUT_SECONDS = 90
+
+
+def main():
+    if not os.environ.get("DISPLAY"):
+        print("DISPLAY não definido. Execute com xvfb-run ou em desktop X11.", file=sys.stderr)
+        return 2
+
+    with tempfile.TemporaryDirectory(prefix="makehumano-gui-") as pasta:
+        base = Path(pasta)
+        marker = base / "gui-ready"
+        logfile = base / "startup.log"
+        home = base / "home"
+        home.mkdir()
+        ambiente = os.environ.copy()
+        ambiente["HOME"] = str(home)
+        ambiente["XDG_CONFIG_HOME"] = str(home / ".config")
+        ambiente["MAKEHUMANO_SMOKE_READY_FILE"] = str(marker)
+        ambiente["LIBGL_ALWAYS_SOFTWARE"] = "1"
+        ambiente["QT_X11_NO_MITSHM"] = "1"
+
+        print(f"Iniciando GUI: {APP}", flush=True)
+        with logfile.open("wb") as log:
+            processo = subprocess.Popen(
+                [sys.executable, "-u", str(APP), "--noshaders"],
+                cwd=ROOT,
+                env=ambiente,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+            )
+            iniciou = False
+            try:
+                limite = time.monotonic() + TIMEOUT_SECONDS
+                while time.monotonic() < limite:
+                    if marker.is_file() and marker.read_text(encoding="utf-8").startswith("ready"):
+                        # Se a aplicação saiu imediatamente após iniciar, não considerar sucesso.
+                        time.sleep(1)
+                        iniciou = processo.poll() is None
+                        break
+                    if processo.poll() is not None:
+                        break
+                    time.sleep(0.5)
+            finally:
+                if processo.poll() is None:
+                    processo.terminate()
+                    try:
+                        processo.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        processo.kill()
+                        processo.wait()
+
+        log_text = logfile.read_text(encoding="utf-8", errors="replace")
+        print("--- LOG DE INICIALIZAÇÃO (últimos 15 mil caracteres) ---")
+        print(log_text[-15000:])
+        print("--- FIM DO LOG ---")
+
+        if iniciou:
+            print("SUCESSO: sequência de inicialização da interface terminou.")
+            return 0
+        print(
+            f"FALHA: GUI não terminou a inicialização em {TIMEOUT_SECONDS}s "
+            f"(código de saída: {processo.returncode}).",
+            file=sys.stderr,
+        )
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
