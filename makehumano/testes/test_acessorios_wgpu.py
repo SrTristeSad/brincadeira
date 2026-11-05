@@ -189,7 +189,7 @@ class TestarAcessorios(unittest.TestCase):
                 + "0 1 2 0.3 0.3 0.4 0 0 0\n" * 3,
                 encoding="utf-8",
             )
-            with self.assertRaisesRegex(ValueError, "não suportada"):
+            with self.assertRaisesRegex(ValueError, "incompleto"):
                 carregar_proxy_ponderado(caso, self.corpo)
 
             caso.write_text(
