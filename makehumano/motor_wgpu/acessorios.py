@@ -4,8 +4,8 @@ As roupas completas ainda não estão no repositório. Os olhos funcionam como
 prova de arquitetura: uma malha OBJ separada, UVs próprios, textura própria
 e mapeamento de vértices via .mhclo para seguir os morphs do corpo.
 
-Suporta referências diretas e proxies com pesos de três vértices, offsets
-e escala diagonal de x/y/z. Shear, máscaras, rig e proxies de roupas completos
+Suporta referências diretas e proxies com três referências ponderadas, escala,
+shear e máscaras delete_verts. Rigs e roupas com diretivas não tratadas ainda
 permanecem fora do escopo.
 """
 
@@ -58,7 +58,10 @@ def carregar_proxy_direto(caminho_mhclo: str | Path, corpo: Malha) -> AcessorioD
             if not dados:
                 continue
             if dados[0] == "obj_file":
-                if len(dados) != 2 or Path(dados[1]).name != dados[1]:
+                if (
+                    len(dados) != 2 or Path(dados[1]).name != dados[1]
+                    or "\\" in dados[1] or not dados[1].endswith(".obj")
+                ):
                     raise ValueError("obj_file deve apontar para OBJ local")
                 obj = arquivo.parent / dados[1]
                 em_vertices = False
@@ -67,8 +70,8 @@ def carregar_proxy_direto(caminho_mhclo: str | Path, corpo: Malha) -> AcessorioD
                 # separadamente. Não interpretamos materiais arbitrários.
                 material = dados[1] if len(dados) == 2 else None
             elif dados[0] == "verts":
-                if len(dados) != 2 or dados[1] != "0":
-                    raise ValueError("Somente .mhclo com 'verts 0' é suportado")
+                if len(dados) != 2 or dados[1] != "0" or encontrou_vertices:
+                    raise ValueError("Somente .mhclo com 'verts 0' único é suportado")
                 em_vertices = True
                 encontrou_vertices = True
             elif em_vertices:
@@ -85,6 +88,16 @@ def carregar_proxy_direto(caminho_mhclo: str | Path, corpo: Malha) -> AcessorioD
                 if not 0 <= referencia < len(corpo.posicoes_base):
                     raise ValueError(f"Linha {numero}: referência fora do corpo")
                 referencias.append(referencia)
+            elif dados[0] in {
+                "uuid", "basemesh", "name", "tag", "z_depth",
+            }:
+                # Metadados sem efeito no vínculo; transformações adicionais
+                # precisam falhar explicitamente neste leitor direto.
+                continue
+            else:
+                raise ValueError(
+                    f"Linha {numero}: seção {dados[0]} não suportada"
+                )
 
     if obj is None or not encontrou_vertices:
         raise ValueError("Acessório .mhclo sem OBJ ou referências")
@@ -174,10 +187,10 @@ class AcessorioPonderado:
 def carregar_proxy_ponderado(
     caminho_mhclo: str | Path, corpo: Malha,
 ) -> AcessorioPonderado:
-    """Aceita .mhclo com 'verts 0', 9 campos e escala x/y/z.
+    """Aceita .mhclo com três referências, offsets, escala/shear e máscaras.
 
-    Outros tipos de proxy (shear, rig, máscara, animação) ainda não são
-    interpretados. Evita aplicar offsets com matriz inventada.
+    Rigs, animações, transparência e seções desconhecidas são rejeitados;
+    não inventamos transformações para renderizar arquivos incompatíveis.
     """
     arquivo = Path(caminho_mhclo)
     obj = None
