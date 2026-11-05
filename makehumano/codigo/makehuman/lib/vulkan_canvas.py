@@ -41,7 +41,8 @@ def criar_canvas_vulkan(canvas_original):
             self.setFocusPolicy(QtCore.Qt.TabFocus)
             self.setFocus()
             self.setMouseTracking(True)
-            self.setAttribute(QtCore.Qt.WA_NativeWindow)
+            # QRenderWidget apresenta por bitmap no Qt; forçar
+            # WA_NativeWindow aqui interfere com esse mecanismo.
             self.setAttribute(QtCore.Qt.WA_KeyCompression, False)
             self.setMinimumHeight(5)
             self.setSizePolicy(
@@ -60,7 +61,12 @@ def criar_canvas_vulkan(canvas_original):
 
         def showEvent(self, event):
             super().showEvent(event)
-            print("MAKEHUMANO_VULKAN: showEvent", flush=True)
+            print(
+                "MAKEHUMANO_VULKAN: showEvent, tamanho="
+                + str((self.width(), self.height()))
+                + ", fisico=" + str(self.get_physical_size()),
+                flush=True,
+            )
             self.request_redraw()
             # A viewport pode ser mostrada antes da carga da cena.
             QtCore.QTimer.singleShot(300, self.request_redraw)
