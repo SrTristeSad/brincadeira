@@ -154,14 +154,14 @@ class TestarAcessorios(unittest.TestCase):
         with tempfile.TemporaryDirectory() as pasta:
             tmp = Path(pasta)
             (tmp / "item.obj").write_text(
-                "v 0 0 0\\nv 1 0 0\\nv 0 1 0\\n"
-                "vt 0 0\\nvt 1 0\\nvt 0 1\\n"
-                "f 1/1 2/2 3/3\\n", encoding="utf-8",
+                "v 0 0 0\nv 1 0 0\nv 0 1 0\n"
+                "vt 0 0\nvt 1 0\nvt 0 1\n"
+                "f 1/1 2/2 3/3\n", encoding="utf-8",
             )
             prefixo = (
-                "obj_file item.obj\\n"
-                "x_scale 0 1 1\\ny_scale 0 1 1\\nz_scale 0 1 1\\n"
-                "verts 0\\n"
+                "obj_file item.obj\n"
+                "x_scale 0 1 1\ny_scale 0 1 1\nz_scale 0 1 1\n"
+                "verts 0\n"
             )
             caso = tmp / "item.mhclo"
             for invalido, mensagem in (
@@ -171,12 +171,12 @@ class TestarAcessorios(unittest.TestCase):
                 ("0 1 2 0.3 0.3 0.4 0 0 nope", "inválida"),
             ):
                 with self.subTest(invalido=invalido):
-                    caso.write_text(prefixo + invalido + "\\n" * 3, encoding="utf-8")
+                    caso.write_text(prefixo + invalido + "\n" * 3, encoding="utf-8")
                     with self.assertRaisesRegex(ValueError, mensagem):
                         carregar_proxy_ponderado(caso, self.corpo)
             caso.write_text(
                 prefixo.replace("x_scale 0 1 1", "x_scale 0 1 0")
-                + "0 1 2 0.3 0.3 0.4 0 0 0\\n" * 3,
+                + "0 1 2 0.3 0.3 0.4 0 0 0\n" * 3,
                 encoding="utf-8",
             )
             with self.assertRaisesRegex(ValueError, "escala fora"):
