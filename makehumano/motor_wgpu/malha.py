@@ -10,6 +10,25 @@ import numpy as np
 class Malha:
     vertices: np.ndarray  # float32 [x,y,z,nx,ny,nz,u,v]
     indices: np.ndarray   # uint32: triângulos
+    posicoes_base: np.ndarray  # float32 [n,3]: vértices originais OBJ
+    origens: np.ndarray        # uint32 [m]: índice OBJ por vértice renderizado
+    faces_base: np.ndarray     # uint32 [triângulos,3]: topologia no OBJ
+
+
+def calcular_normais(posicoes: np.ndarray, faces: np.ndarray) -> np.ndarray:
+    """Normais suaves ponderadas pela área, calculadas nos vértices OBJ originais.
+
+    Calculá-las antes de duplicar vértices nas costuras UV evita linhas visíveis
+    quando os morph targets atualizam a geometria.
+    """
+    normais = np.zeros_like(posicoes, dtype=np.float32)
+    tris = posicoes[faces]
+    vetores = np.cross(tris[:, 1] - tris[:, 0], tris[:, 2] - tris[:, 0])
+    for coluna in range(3):
+        np.add.at(normais, faces[:, coluna], vetores)
+    magnitude = np.linalg.norm(normais, axis=1)
+    normais /= np.maximum(magnitude[:, None], 1e-9)
+    return normais
 
 
 def carregar_obj(arquivo: str | Path, grupo: str = "body") -> Malha:
@@ -58,22 +77,20 @@ def carregar_obj(arquivo: str | Path, grupo: str = "body") -> Malha:
         raise ValueError(f"Nenhuma face carregada do grupo {grupo!r} em {arquivo}")
 
     coords = np.asarray(pontos, dtype=np.float32)
-    normais = np.zeros_like(coords)
     triangulos = []
     for face in faces:
         for i in range(1, len(face) - 1):
-            tri = (face[0], face[i], face[i + 1])
-            triangulos.append(tri)
-            a, b, c = (coords[v] for v, _ in tri)
-            normal = np.cross(b - a, c - a)
-            for v, _ in tri:
-                normais[v] += normal
+            triangulos.append((face[0], face[i], face[i + 1]))
 
-    magnitude = np.linalg.norm(normais, axis=1)
-    normais /= np.maximum(magnitude[:, None], 1e-9)
+    faces_base = np.asarray(
+        [[pos for pos, _uv in tri] for tri in triangulos],
+        dtype=np.uint32,
+    )
+    normais = calcular_normais(coords, faces_base)
     mapa: dict[tuple[int, int], int] = {}
     vertices = []
     indices = []
+    origens = []
     for tri in triangulos:
         for pos, tex in tri:
             chave = (pos, tex)
@@ -81,11 +98,15 @@ def carregar_obj(arquivo: str | Path, grupo: str = "body") -> Malha:
                 u, v = uvs[tex] if tex >= 0 else (0.0, 0.0)
                 mapa[chave] = len(vertices)
                 vertices.append([*coords[pos], *normais[pos], u, 1.0 - v])
+                origens.append(pos)
             indices.append(mapa[chave])
 
     return Malha(
         vertices=np.ascontiguousarray(vertices, dtype=np.float32),
         indices=np.ascontiguousarray(indices, dtype=np.uint32),
+        posicoes_base=np.ascontiguousarray(coords, dtype=np.float32),
+        origens=np.ascontiguousarray(origens, dtype=np.uint32),
+        faces_base=np.ascontiguousarray(faces_base, dtype=np.uint32),
     )
 
 
