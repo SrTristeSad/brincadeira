@@ -200,7 +200,15 @@ class CenaVulkan:
         self.formato = self.contexto.get_preferred_format(self.adapter)
         self.contexto.configure(device=self.device, format=self.formato)
         codigo = """
-struct Globals { mvp: mat4x4<f32>, cor: vec4<f32>, flags: vec4<f32> };
+struct Globals {
+    mvp: mat4x4<f32>,
+    modelo: mat4x4<f32>,
+    cor: vec4<f32>,
+    flags: vec4<f32>,
+    ambiente: vec4<f32>,
+    luzes_posicao: array<vec4<f32>, 8>,
+    luzes_cor: array<vec4<f32>, 8>,
+};
 @group(0) @binding(0) var<uniform> dados: Globals;
 @group(0) @binding(1) var mapa: texture_2d<f32>;
 @group(0) @binding(2) var amostra: sampler;
@@ -215,11 +223,13 @@ struct Fragmento {
     @location(0) normal: vec3<f32>,
     @location(1) uv: vec2<f32>,
     @location(2) cor: vec4<f32>,
+    @location(3) mundo: vec3<f32>,
 };
 @vertex fn vs_main(v: Entrada) -> Fragmento {
     var o: Fragmento;
     o.pos = dados.mvp * vec4<f32>(v.pos, 1.0);
-    o.normal = v.normal;
+    o.normal = normalize((dados.modelo * vec4<f32>(v.normal, 0.0)).xyz);
+    o.mundo = (dados.modelo * vec4<f32>(v.pos, 1.0)).xyz;
     o.uv = v.uv;
     o.cor = v.cor;
     return o;
@@ -229,10 +239,17 @@ struct Fragmento {
     let usar_textura = dados.flags.y > 0.5;
     let rgb = select(vec3<f32>(1.0), tex.rgb, usar_textura);
     let alfa = select(1.0, tex.a, usar_textura);
-    let iluminacao = 0.30 + 0.70 * max(
-        dot(normalize(i.normal), normalize(vec3<f32>(0.4, 0.8, 0.5))), 0.0
-    );
-    let luz = select(iluminacao, 1.0, dados.flags.x > 0.5);
+    var iluminacao = dados.ambiente.rgb;
+    for (var j: i32 = 0; j < 8; j = j + 1) {
+        if (j >= i32(dados.flags.z)) {
+            break;
+        }
+        let deslocamento = dados.luzes_posicao[j].xyz - i.mundo;
+        let direcao = normalize(deslocamento);
+        let difusa = max(dot(normalize(i.normal), direcao), 0.0);
+        iluminacao += dados.luzes_cor[j].rgb * difusa;
+    }
+    let luz = select(iluminacao, vec3<f32>(1.0), dados.flags.x > 0.5);
     return vec4<f32>(rgb * i.cor.rgb * dados.cor.rgb * luz,
                      alfa * i.cor.a * dados.cor.a);
 }
@@ -328,6 +345,11 @@ struct Fragmento {
         self.objetos_desenhados = 0
         self.linhas_desenhadas = 0
         self._primitivas_pendentes = set()
+        self._cena_luzes = None
+
+    def atualizar_iluminacao(self, cena):
+        """Guarda a cena original para os próximos passes de renderização."""
+        self._cena_luzes = cena
 
     def invalidar_texturas(self, caminho=None):
         """Invalida texturas da cena; a próxima renderização recarrega na GPU."""
@@ -508,6 +530,10 @@ struct Fragmento {
             ),
         )
         passagem.set_pipeline(self.pipeline)
+        from vulkan_lighting import dados_iluminacao_cena
+        ambiente, posicoes, cores, total_luzes = dados_iluminacao_cena(
+            self._cena_luzes,
+        )
         self.objetos_desenhados = 0
         self.linhas_desenhadas = 0
         if mundo is not None:
@@ -551,9 +577,15 @@ struct Fragmento {
                         tamanho_destino=tamanho,
                     )
                 cor, flags = parametros_material_vulkan(obj)
-                uniforms = np.concatenate(
-                    (mvp.T.reshape(-1), cor, flags)
-                ).astype(np.float32)
+                flags[2] = float(total_luzes)
+                modelo = np.asarray(cam.getModelMatrix(obj), dtype=np.float32)
+                if modelo.shape != (4, 4) or not np.isfinite(modelo).all():
+                    raise ValueError("Modelo da câmera original inválido")
+                uniforms = np.concatenate((
+                    mvp.T.reshape(-1), modelo.T.reshape(-1),
+                    cor, flags, ambiente, posicoes.reshape(-1),
+                    cores.reshape(-1),
+                )).astype(np.float32)
                 buf_u = self.device.create_buffer_with_data(
                     data=uniforms, usage=wgpu.BufferUsage.UNIFORM
                 )
