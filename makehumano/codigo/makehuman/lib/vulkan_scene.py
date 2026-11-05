@@ -322,32 +322,103 @@ struct Fragmento {
         self._texturas[chave] = (assinatura, textura)
         return textura
 
-    def desenhar(self, mundo, cameras, *, cor_fundo=(0.2, 0.2, 0.2, 1)):
+    def framebuffer_offscreen(self, largura, altura):
+        """Aloca destino de renderização legível pela CPU, fora do swapchain."""
+        from vulkan_offscreen import bytes_por_linha_alinhados
+        largura, altura = int(largura), int(altura)
+        bytes_por_linha_alinhados(largura)
+        if altura < 1:
+            raise ValueError("Altura offscreen deve ser positiva")
+        if self.formato not in ("rgba8unorm", "rgba8unorm-srgb",
+                                "bgra8unorm", "bgra8unorm-srgb"):
+            raise ValueError("Formato de framebuffer não suportado: " + str(self.formato))
+        return self.device.create_texture(
+            size=(largura, altura, 1),
+            dimension="2d",
+            format=self.formato,
+            usage=self.wgpu.TextureUsage.RENDER_ATTACHMENT
+                  | self.wgpu.TextureUsage.COPY_SRC,
+        )
+
+    def ler_framebuffer_rgb(self, alvo):
+        """Copia a textura Vulkan para buffer CPU respeitando stride de 256."""
+        from vulkan_offscreen import (
+            bytes_por_linha_alinhados, decodificar_buffer_rgb,
+        )
+        largura, altura = alvo.size[:2]
+        stride = bytes_por_linha_alinhados(largura)
+        buffer = self.device.create_buffer(
+            size=stride * altura,
+            usage=self.wgpu.BufferUsage.COPY_DST
+                  | self.wgpu.BufferUsage.MAP_READ,
+        )
+        encoder = self.device.create_command_encoder()
+        encoder.copy_texture_to_buffer(
+            self.wgpu.TexelCopyTextureInfo(
+                texture=alvo, mip_level=0, origin=(0, 0, 0),
+            ),
+            self.wgpu.TexelCopyBufferInfo(
+                buffer=buffer, offset=0, bytes_per_row=stride,
+                rows_per_image=altura,
+            ),
+            (largura, altura, 1),
+        )
+        self.device.queue.submit([encoder.finish()])
+        dados = self.device.queue.read_buffer(buffer)
+        return decodificar_buffer_rgb(dados, largura, altura, self.formato)
+
+    def capturar_framebuffer(self, mundo, cameras):
+        """Captura GPU real na resolução atual; não é render de produção."""
+        largura, altura = self.canvas.get_physical_size()
+        alvo = self.framebuffer_offscreen(largura, altura)
+        self.desenhar(mundo, cameras, alvo=alvo)
+        return self.ler_framebuffer_rgb(alvo)
+
+    def desenhar(self, mundo, cameras, *, cor_fundo=(0.2, 0.2, 0.2, 1),
+                alvo=None):
+        """Desenha na janela ou em uma textura da mesma resolução da viewport.
+
+        Alvos com outra resolução exigem atualização explícita da projeção
+        original e ainda não são aceitos por este estágio do piloto.
+        """
         wgpu = self.wgpu
         tamanho = tuple(self.canvas.get_physical_size())
         if len(tamanho) < 2 or tamanho[0] < 1 or tamanho[1] < 1:
             return
         tamanho = (int(tamanho[0]), int(tamanho[1]))
-        if self._depth_size != tamanho:
+        if alvo is not None and tuple(alvo.size[:2]) != tamanho:
+            raise ValueError("Alvo offscreen deve corresponder à viewport")
+        if alvo is None:
+            if self._depth_size != tamanho:
+                depth = self.device.create_texture(
+                    size=(tamanho[0], tamanho[1], 1),
+                    format="depth24plus",
+                    usage=wgpu.TextureUsage.RENDER_ATTACHMENT,
+                )
+                self._depth = depth.create_view()
+                self._depth_size = tamanho
+            depth_view = self._depth
+            color_view = self.contexto.get_current_texture().create_view()
+        else:
             depth = self.device.create_texture(
                 size=(tamanho[0], tamanho[1], 1),
                 format="depth24plus",
                 usage=wgpu.TextureUsage.RENDER_ATTACHMENT,
             )
-            self._depth = depth.create_view()
-            self._depth_size = tamanho
+            depth_view = depth.create_view()
+            color_view = alvo.create_view()
 
         encoder = self.device.create_command_encoder()
         passagem = encoder.begin_render_pass(
             color_attachments=[wgpu.RenderPassColorAttachment(
-                view=self.contexto.get_current_texture().create_view(),
+                view=color_view,
                 resolve_target=None,
                 load_op="clear",
                 store_op="store",
                 clear_value=tuple(cor_fundo),
             )],
             depth_stencil_attachment=wgpu.RenderPassDepthStencilAttachment(
-                view=self._depth,
+                view=depth_view,
                 depth_load_op="clear", depth_store_op="store",
                 depth_clear_value=1.0,
             ),
