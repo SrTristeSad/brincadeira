@@ -57,7 +57,7 @@ python -m pip install -r motor_wgpu/requirements.txt
 python -m motor_wgpu.app
 ```
 
-O parâmetro `--backend vulkan` obriga o uso de Vulkan. O modo automático tenta escolher a API que funcione na máquina. Os testes em GitHub Actions verificam o processamento da malha, a correspondência de vértices com o método original `algos3d.Target.apply`, e a criação de quadros com Vulkan por software (Mesa/Lavapipe). O visualizador permite **salvar e abrir projetos experimentais `.makehumano.json`**, com os parâmetros anatômicos e o material básico da pele; esse formato **não é compatível com o `.mhm` original**. Também permite **exportar o corpo deformado como `.obj`**, preservando os índices de vértices, UVs e normais; não inclui roupas, esqueleto, poses, nem texturas incorporadas. **Isto ainda não substitui a viewport principal** nem reproduz todas as regras de dependência, poses e plugins do MakeHuman original; também faltam subsurface scattering, picking e revisão visual em uma GPU física.
+O parâmetro `--backend vulkan` obriga o uso de Vulkan. O modo automático tenta escolher a API que funcione na máquina. Os testes em GitHub Actions verificam o processamento da malha, a correspondência de vértices com o método original `algos3d.Target.apply`, e a criação de quadros com Vulkan por software (Mesa/Lavapipe). O visualizador permite **salvar e abrir projetos experimentais `.makehumano.json`**, com os parâmetros anatômicos e o material básico da pele; esse formato **não é compatível com o `.mhm` original**. Também permite **exportar OBJ, MTL e PNG juntos**: a malha deformada mantém os índices de vértices, UVs e normais, enquanto o material MTL referencia uma cópia da última textura RGBA carregada na GPU e aproxima tonalidade e rugosidade. Não inclui roupas, esqueleto, poses ou materiais PBR completos. **Isto ainda não substitui a viewport principal** nem reproduz todas as regras de dependência, poses e plugins do MakeHuman original; também faltam subsurface scattering, picking e revisão visual em uma GPU física.
 
 ## Como salvar as atualizações neste repositório
 
@@ -82,8 +82,9 @@ O diretório `codigo/` está versionado no GitHub em `brincadeira/makehumano/cod
 15. [x] Acrescentar salvamento e abertura de personagens em formato JSON experimental versionado.
 16. [ ] Conectar os modificadores à lógica completa de dependências e eventos da GUI principal.
 17. [x] Exportar malha corporal deformada para OBJ, preservando a topologia canônica e coordenadas UV, com teste de reimportação.
-18. [ ] Testar o formato `.mhm` original, exportação de roupas/rig e materiais avançados.
-19. [ ] Adaptar dependências e interface sem quebrar deformações, arquivos e plugins.
+18. [x] Gerar arquivos auxiliares MTL e PNG junto ao OBJ; validar material, textura e reimportação em 40 testes automatizados.
+19. [ ] Testar o formato `.mhm` original, exportação de roupas/rig e materiais avançados.
+20. [ ] Adaptar dependências e interface sem quebrar deformações, arquivos e plugins.
 
 ## Licenças e créditos
 
