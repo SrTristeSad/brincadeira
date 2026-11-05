@@ -15,7 +15,9 @@ import numpy as np
 RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "codigo" / "makehuman" / "lib"))
 
-from vulkan_scene import preparar_malha_original, matriz_wgpu, assinatura_textura
+from vulkan_scene import (
+    CenaVulkan, preparar_malha_original, matriz_wgpu, assinatura_textura,
+)
 
 
 def objeto_original(face=None):
@@ -160,6 +162,31 @@ class TestarAssinaturaTexturaVulkan(unittest.TestCase):
             self.assertIsNone(assinatura_textura(caminho))
             caminho.write_bytes(b"nova")
             self.assertNotEqual(antes, assinatura_textura(caminho))
+
+
+class TestarInvalidacaoTexturasVulkan(unittest.TestCase):
+    def setUp(self):
+        # O metodo opera apenas no cache; nao precisa criar device GPU.
+        self.cena = CenaVulkan.__new__(CenaVulkan)
+        self.a = object()
+        self.b = object()
+        self.cena._texturas = {
+            "pele.png": ((1, 5), self.a),
+            "cabelo.png": ((2, 8), self.b),
+        }
+
+    def test_invalida_uma_textura_sem_afetar_outras(self):
+        self.cena.invalidar_texturas("pele.png")
+        self.assertNotIn("pele.png", self.cena._texturas)
+        self.assertIs(self.cena._texturas["cabelo.png"][1], self.b)
+
+    def test_invalida_todas_as_texturas(self):
+        self.cena.invalidar_texturas()
+        self.assertEqual(self.cena._texturas, {})
+
+    def test_textura_nao_carregada_nao_provoca_erro(self):
+        self.cena.invalidar_texturas("inexistente.png")
+        self.assertEqual(len(self.cena._texturas), 2)
 
 
 if __name__ == "__main__":
