@@ -4,9 +4,9 @@ As roupas completas ainda não estão no repositório. Os olhos funcionam como
 prova de arquitetura: uma malha OBJ separada, UVs próprios, textura própria
 e mapeamento de vértices via .mhclo para seguir os morphs do corpo.
 
-Implementa somente proxies .mhclo com referências diretas (uma por vértice).
-Arquivos com interpolação baricêntrica, offsets ou transformação são rejeitados
-explicitamente; não se tenta encaixar roupas complexas de forma incorreta.
+Suporta referências diretas e proxies com pesos de três vértices, offsets
+e escala diagonal de x/y/z. Shear, máscaras, rig e proxies de roupas completos
+permanecem fora do escopo.
 """
 
 from dataclasses import dataclass
@@ -103,6 +103,147 @@ def carregar_proxy_direto(caminho_mhclo: str | Path, corpo: Malha) -> AcessorioD
     return AcessorioDireto(
         malha=malha, referencias=refs,
         nome=obj.stem, textura=arquivo.parent.parent / "materials" / "brown_eye.png",
+    )
+
+
+
+@dataclass
+class AcessorioPonderado:
+    """Proxy .mhclo com três referências, pesos e offsets por vértice."""
+
+    malha: Malha
+    referencias: np.ndarray     # [n,3] uint32, índices do OBJ base
+    pesos: np.ndarray           # [n,3] float32, pesos do .mhclo
+    deslocamentos: np.ndarray   # [n,3] float32, offsets antes da escala
+    escalas: tuple              # três tuplas (v0, v1, denominador)
+    nome: str
+    textura: Path
+
+    def atualizar(self, posicoes_corpo: np.ndarray) -> np.ndarray:
+        """Reproduz Proxy.getCoords + TMatrix.getMatrix com scaleData.
+
+        Os deslocamentos se transformam conforme as dimensões atuais do
+        corpo. Os pesos do .mhclo são usados literalmente (sem normalizar).
+        """
+        corpo = np.asarray(posicoes_corpo, dtype=np.float32)
+        if corpo.ndim != 2 or corpo.shape[1] != 3 or not np.isfinite(corpo).all():
+            raise ValueError("Coordenadas do corpo precisam ter formato [n,3] finito")
+        numero = len(self.malha.posicoes_base)
+        if (self.referencias.shape != (numero, 3)
+                or self.pesos.shape != (numero, 3)
+                or self.deslocamentos.shape != (numero, 3)
+                or np.any(self.referencias >= len(corpo))
+                or not np.isfinite(self.pesos).all()
+                or not np.isfinite(self.deslocamentos).all()):
+            raise ValueError("Dados do proxy ponderado inválidos")
+
+        fatores = np.empty(3, dtype=np.float32)
+        for eixo, (i, j, denominador) in enumerate(self.escalas):
+            if i >= len(corpo) or j >= len(corpo) or not np.isfinite(denominador) or denominador <= 0:
+                raise ValueError("Referências de escala inválidas no .mhclo")
+            fatores[eixo] = abs(float(corpo[i, eixo]) - float(corpo[j, eixo])) / denominador
+
+        # Mesmo produto de Proxy.getCoords: soma ponderada + M @ offsets,
+        # com M diagonal de TMatrix.getMatrix(scaleData).
+        coordenadas = (
+            np.sum(corpo[self.referencias] * self.pesos[..., None], axis=1)
+            + self.deslocamentos * fatores[None, :]
+        ).astype(np.float32)
+        if not np.isfinite(coordenadas).all():
+            raise ValueError("Proxy gerou coordenadas não finitas")
+
+        resultado = self.malha.vertices.copy()
+        normais = calcular_normais(coordenadas, self.malha.faces_base)
+        resultado[:, :3] = coordenadas[self.malha.origens]
+        resultado[:, 3:6] = normais[self.malha.origens]
+        return resultado
+
+
+def carregar_proxy_ponderado(
+    caminho_mhclo: str | Path, corpo: Malha,
+) -> AcessorioPonderado:
+    """Aceita .mhclo com 'verts 0', 9 campos e escala x/y/z.
+
+    Outros tipos de proxy (shear, rig, máscara, animação) ainda não são
+    interpretados. Evita aplicar offsets com matriz inventada.
+    """
+    arquivo = Path(caminho_mhclo)
+    obj = None
+    referencias, pesos, deslocamentos = [], [], []
+    escalas = {}
+    em_vertices = False
+    with arquivo.open(encoding="utf-8") as entrada:
+        for numero, linha in enumerate(entrada, 1):
+            dados = linha.split("#", 1)[0].split()
+            if not dados:
+                continue
+            campo = dados[0]
+            if campo == "obj_file":
+                if len(dados) != 2 or Path(dados[1]).name != dados[1] or not dados[1].endswith(".obj"):
+                    raise ValueError("obj_file precisa apontar a OBJ local")
+                obj = arquivo.parent / dados[1]
+            elif campo in {"x_scale", "y_scale", "z_scale"}:
+                if len(dados) != 4 or campo in escalas:
+                    raise ValueError(f"Linha {numero}: escala duplicada ou inválida")
+                try:
+                    i, j = int(dados[1]), int(dados[2])
+                    denominador = float(dados[3])
+                except ValueError as erro:
+                    raise ValueError(f"Linha {numero}: escala inválida") from erro
+                if not (0 <= i < len(corpo.posicoes_base)
+                        and 0 <= j < len(corpo.posicoes_base)
+                        and np.isfinite(denominador) and denominador > 0):
+                    raise ValueError(f"Linha {numero}: escala fora dos limites")
+                escalas[campo] = (i, j, denominador)
+            elif campo == "verts":
+                if len(dados) != 2 or dados[1] != "0" or em_vertices:
+                    raise ValueError("Somente seção 'verts 0' única é suportada")
+                em_vertices = True
+            elif em_vertices:
+                if len(dados) != 9:
+                    raise ValueError(
+                        f"Linha {numero}: esperado proxy com três referências, "
+                        "três pesos e três offsets"
+                    )
+                try:
+                    ref = tuple(int(d) for d in dados[:3])
+                    nums = tuple(float(d) for d in dados[3:])
+                except ValueError as erro:
+                    raise ValueError(f"Linha {numero}: linha de proxy inválida") from erro
+                if any(v < 0 or v >= len(corpo.posicoes_base) for v in ref):
+                    raise ValueError(f"Linha {numero}: referência fora do corpo")
+                if not all(np.isfinite(v) for v in nums):
+                    raise ValueError(f"Linha {numero}: peso ou offset não finito")
+                referencias.append(ref)
+                pesos.append(nums[:3])
+                deslocamentos.append(nums[3:])
+            elif campo in {"shear", "l_shear", "r_shear", "weights",
+                           "vertexboneweights_file", "delete_verts"}:
+                raise ValueError(f"Seção {campo} ainda não é suportada")
+
+    if obj is None or not em_vertices:
+        raise ValueError("Proxy sem OBJ ou seção de vértices")
+    if set(escalas) != {"x_scale", "y_scale", "z_scale"}:
+        raise ValueError("Proxy ponderado precisa das escalas x/y/z")
+    malha = carregar_obj(obj, grupo=None)
+    if len(referencias) != len(malha.posicoes_base):
+        raise ValueError("Número de referências não corresponde ao OBJ")
+
+    return AcessorioPonderado(
+        malha=malha,
+        referencias=np.ascontiguousarray(referencias, dtype=np.uint32),
+        pesos=np.ascontiguousarray(pesos, dtype=np.float32),
+        deslocamentos=np.ascontiguousarray(deslocamentos, dtype=np.float32),
+        escalas=tuple(escalas[chave] for chave in ("x_scale", "y_scale", "z_scale")),
+        nome=obj.stem,
+        textura=arquivo.parent.parent / "materials" / "brown_eye.png",
+    )
+
+
+def caminho_olhos_highpoly() -> Path:
+    return (
+        Path(__file__).resolve().parents[1] / "codigo" / "makehuman"
+        / "data" / "eyes" / "high-poly" / "high-poly.mhclo"
     )
 
 
