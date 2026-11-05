@@ -789,7 +789,8 @@ def iniciar():
                          "mapas_detalhe", "mapas_restaurados",
                          "dispersao", "importar_mhm", "olhos",
                          "olhos_highpoly", "mascara_corpo",
-                         "mascaras_acessorios", "roupa_externa"}
+                         "mascaras_acessorios", "roupa_externa",
+                         "material_mhmat"}
             ok = eventos_smoke == esperados and motor.frames >= 6
             print(f"Smoke: eventos {sorted(eventos_smoke)}, aprovado={ok}", flush=True)
             aplicacao.exit(0 if ok else 2)
@@ -1073,10 +1074,24 @@ def iniciar():
                     + "vt 0 0\nvt 1 0\nvt 0 1\nf 1/1 2/2 3/3\n",
                     encoding="utf-8",
                 )
+                imagem = QtGui.QImage(
+                    4, 4, QtGui.QImage.Format_RGBA8888
+                )
+                imagem.fill(QtGui.QColor(60, 130, 195, 255))
+                assert imagem.save(str(pasta / "pano.png"), "PNG")
+                (pasta / "pano.mhmat").write_text(
+                    "name PanoTeste\\n"
+                    "diffuseColor 0.3 0.5 0.8\\n"
+                    "diffuseTexture pano.png\\n"
+                    "shininess 0.8\\n"
+                    "shaderParam EffectNaoSuportado 1.0\\n",
+                    encoding="utf-8",
+                )
                 vertice = int(malha.origens[malha.indices[0]])
                 proxy = pasta / "teste_roupa.mhclo"
                 proxy.write_text(
                     "obj_file teste_roupa.obj\n"
+                    "material pano.mhmat\n"
                     "x_scale 5399 11998 1.6482\n"
                     "y_scale 791 881 2.7213\n"
                     "z_scale 962 5320 2.2795\n"
@@ -1090,9 +1105,20 @@ def iniciar():
                 cor = np.full((4, 4, 4), 255, dtype=np.uint8)
                 cor[..., :3] = [60, 130, 195]
                 total = len(malha.indices)
-                chave = adicionar_peca_externa(proxy, cor)
+                chave = adicionar_peca_externa(proxy)
                 assert chave in pecas_externas
                 assert motor.indices_corpo_ativos < total
+                material = pecas_externas[chave][0].material
+                assert material is not None
+                assert material.textura.name == "pano.png"
+                np.testing.assert_allclose(
+                    motor.acessorios[chave]["cor"], [0.3, 0.5, 0.8]
+                )
+                assert abs(motor.acessorios[chave]["rugosidade"] - 0.4) < 1e-6
+                np.testing.assert_array_equal(
+                    motor.acessorios[chave]["textura_cpu"],
+                    ler_imagem_qt(material.textura),
+                )
                 modelo, checkbox, linha = pecas_externas[chave]
                 anterior = motor.acessorios[chave]["vertices"].copy()
                 controles_macros["age"].setValue(60)
@@ -1113,6 +1139,15 @@ def iniciar():
                 assert chave not in pecas_externas
                 assert chave not in motor.acessorios
                 assert motor.indices_corpo_ativos == total
+                chave_manual = adicionar_peca_externa(proxy, cor)
+                np.testing.assert_array_equal(
+                    motor.acessorios[chave_manual]["textura_cpu"], cor
+                )
+                assert pecas_externas[chave_manual][0].material is not None
+                linha_manual = pecas_externas[chave_manual][2]
+                linha_manual.findChildren(QtWidgets.QPushButton)[0].click()
+                assert motor.indices_corpo_ativos == total
+                eventos_smoke.add("material_mhmat")
                 eventos_smoke.add("roupa_externa")
                 print(
                     "Peça .mhclo externa criada, deformada, ocultada, "
