@@ -181,8 +181,8 @@ def iniciar():
 
     coluna.addWidget(QtWidgets.QLabel("<b>Modificadores MakeHuman</b>"))
     coluna.addWidget(QtWidgets.QLabel(
-        "Definições oficiais: apenas alvos .target diretos. "
-        "Macrovariáveis ainda não integradas."
+        "Alvos diretos do catálogo original. Os parâmetros gerais acima "
+        "são combinados na mesma malha."
     ))
     catalogo = carregar_catalogo()
     grupos = sorted({item.grupo for item in catalogo},
