@@ -2,7 +2,7 @@
 
 Esta pasta é a área de trabalho para atualizar o [MakeHuman](https://github.com/makehumancommunity/makehuman) em **Python**, preservando a lógica e os recursos originais sempre que possível.
 
-> **Estado atual:** fontes originais, malha base, rig, morph targets e outros recursos versionados em `codigo/`; dois erros de sintaxe auxiliares corrigidos; testes de deformação 3D e compatibilidade Python 3.12/3.13 passaram. Um teste de inicialização da interface com Xvfb foi adicionado, mas a execução gráfica completa ainda deve ser verificada.
+> **Estado atual:** fontes originais, malha base, rig, morph targets e outros recursos versionados em `codigo/`; dois erros de sintaxe auxiliares corrigidos; testes de deformação 3D e compatibilidade Python 3.12/3.13 passaram. A sequência de inicialização da GUI passou com Python 3.12 e Xvfb no Linux; aparência visual, interação dos controles e exportação ainda dependem de testes em desktop real.
 
 ## O que já existe
 
@@ -10,7 +10,8 @@ Esta pasta é a área de trabalho para atualizar o [MakeHuman](https://github.co
 - `diagnostico.py`: identifica versões do Python e das dependências e verifica a sintaxe dos arquivos importados.
 - `executar.py`: executa o MakeHuman importado com o Python atual, sem alterar sua lógica.
 - `testes/test_morph_targets.py`: testes unitários da aplicação de morph targets do motor original.
-- `testes/smoke_gui.py`: inicialização real da interface com um indicador de prontidão opcional.
+- `testes/test_image_qt.py`: testes de carregamento de imagens RGB/RGBA com Qt e NumPy recente.
+- `testes/smoke_gui.py`: teste de inicialização real da interface até concluir a carga do modelo, plugins e morph targets, com marcador de prontidão opcional.
 - `.github/workflows/smoke-gui-makehumano.yml`: teste gráfico Linux executado sob Xvfb, com renderização por software.
 - `DIAGNOSTICO-INICIAL.txt`: resultado histórico do primeiro exame com Python 3.14; mostra os erros encontrados **antes das correções**.
 - `.github/workflows/testar-makehumano.yml` (na raiz do repositório): testes de sintaxe, dependências e morph targets com Python 3.12/3.13.
@@ -31,19 +32,19 @@ O código original já faz parte deste repositório; **não é necessário** exe
 
 O importador registra em `codigo/.makehumano-origem.txt` o commit exato que foi copiado. Ao repetir a importação com `python importar_original.py --atualizar`, a versão anterior é preservada em um diretório de backup.
 
-Para preparar o ambiente, siga `codigo/README.md`. Por exemplo, as dependências documentadas pelo original podem ser instaladas com:
+Para preparar o ambiente, siga `codigo/README.md`. Recomendamos começar com **Python 3.12** (versão já testada na inicialização gráfica). As dependências documentadas pelo original podem ser instaladas com:
 
 ```bash
 python -m pip install -r codigo/requirements.txt
 ```
 
-Depois de baixar os assets conforme as instruções oficiais, tente iniciar com:
+Os recursos necessários ao teste de abertura foram incluídos nesta cópia. Para iniciar em um desktop com suporte a OpenGL, tente:
 
 ```bash
-python executar.py
+python executar.py --noshaders
 ```
 
-**Atenção:** malhas, rigs, morph targets e outros recursos **presentes no repositório original** já estão versionados nesta cópia. Recursos **externos** disponibilizados separadamente pelo projeto continuam podendo ser necessários para certas funções. Sintaxe válida não comprova compatibilidade completa com Python, Qt, NumPy ou OpenGL.
+**Atenção:** o teste gráfico usa `--noshaders` em um servidor X virtual, portanto **não valida** shaders e aparência final. Malhas, rigs, morph targets e outros recursos **presentes no repositório original** já estão versionados nesta cópia. Recursos **externos** disponibilizados separadamente pelo projeto continuam podendo ser necessários para certas funções. Sintaxe válida não comprova compatibilidade completa com Python, Qt, NumPy ou OpenGL.
 
 ## Como salvar as atualizações neste repositório
 
@@ -56,9 +57,11 @@ O diretório `codigo/` está versionado no GitHub em `brincadeira/makehumano/cod
 3. [x] Criar testes iniciais para morph targets e verificações de Python 3.12/3.13.
 4. [x] Executar a matriz de testes: Python 3.12 e 3.13, importações e deformações passaram.
 5. [x] Restaurar malha base, esqueleto, targets e assets ignorados pela primeira importação.
-6. [ ] Executar o teste gráfico Xvfb e corrigir eventuais falhas.
-7. [ ] Testar visualmente a interface num desktop real e identificar assets externos necessários.
-8. [ ] Adaptar dependências e interface sem quebrar deformações, arquivos e plugins.
+6. [x] Corrigir o uso binário de `numpy.fromstring()` para `numpy.frombuffer()` ao carregar texturas Qt com NumPy 2+.
+7. [x] Executar a abertura gráfica com Xvfb no Linux: inicialização, plugins e morph targets concluídos no Python 3.12.
+8. [ ] Testar visualmente a interface num desktop real e identificar assets externos necessários.
+9. [ ] Testar exportação, salvamento, carga, materiais e interação com sliders.
+10. [ ] Adaptar dependências e interface sem quebrar deformações, arquivos e plugins.
 
 ## Licenças e créditos
 
