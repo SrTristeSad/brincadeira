@@ -49,6 +49,13 @@ class TestarMalhasDaGuiOriginal(unittest.TestCase):
             vertices[:, 8:12][0], [1.0, 128 / 255, 0, 1.0],
         )
 
+    def test_malha_original_sem_faces_pode_ser_auxiliar(self):
+        origem = objeto_original()
+        origem.primitives = np.array([], dtype=np.uint32)
+        vertices, indices = preparar_malha_original(origem)
+        self.assertEqual(vertices.shape, (5, 12))
+        self.assertEqual(indices.shape, (0,))
+
     def test_quads_degenerados_do_original_sao_triangulos(self):
         origem = objeto_original([[0, 1, 2, 0]])
         _, indices = preparar_malha_original(origem)
