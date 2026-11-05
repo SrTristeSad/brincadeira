@@ -208,8 +208,9 @@ class MotorWgpu:
         )
         self.canvas.request_draw()
 
-    def ajustar_pele(self, *, cor=None, rugosidade=None):
-        self.pele.atualizar(cor=cor, rugosidade=rugosidade)
+    def ajustar_pele(self, *, cor=None, rugosidade=None, dispersao=None):
+        self.pele.atualizar(cor=cor, rugosidade=rugosidade,
+                            dispersao=dispersao)
         self.canvas.request_draw()
 
     def ajustar_camera(self, *, angulo=None, elevacao=None, distancia=None):
@@ -239,8 +240,8 @@ class MotorWgpu:
             mvp.T.copy().tobytes(),
             model.T.copy().tobytes(),
             np.array([*self.pele.cor, 1.0], dtype=np.float32).tobytes(),
-            np.array([self.pele.rugosidade, float(self.normal_ativo), 0, 0],
-                     dtype=np.float32).tobytes(),
+            np.array([self.pele.rugosidade, float(self.normal_ativo),
+                      self.pele.dispersao, 0], dtype=np.float32).tobytes(),
             np.array([*olho, 1.0], dtype=np.float32).tobytes(),
         ])
         self.device.queue.write_buffer(self.uniform_buffer, 0, payload)
