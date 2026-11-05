@@ -91,6 +91,22 @@ def main():
         print(log_text[-15000:])
         print("--- FIM DO LOG ---")
 
+        if iniciou and piloto_vulkan:
+            # Um frame parcial não equivale à viewport renderizada.
+            # Exigir ausência de erros do RenderCanvas no processo.
+            erros_graficos = (
+                "Draw error",
+                "Traceback (most recent call last):",
+                "GPUValidationError",
+                "WGPUValidationError",
+            )
+            if any(erro in log_text for erro in erros_graficos):
+                print(
+                    "FALHA: a viewport Vulkan gerou erros no log da GUI.",
+                    file=sys.stderr,
+                )
+                iniciou = False
+
         if iniciou:
             print(
                 "SUCESSO: GUI original carregada"
