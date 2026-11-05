@@ -56,6 +56,12 @@ class TestarMalhasDaGuiOriginal(unittest.TestCase):
         self.assertEqual(vertices.shape, (5, 12))
         self.assertEqual(indices.shape, (0,))
 
+    def test_grade_original_usa_segmentos_de_linha(self):
+        origem = objeto_original([[0, 1], [1, 2], [2, 3], [3, 3]])
+        vertices, indices = preparar_malha_original(origem)
+        self.assertEqual(vertices.shape, (5, 12))
+        self.assertEqual(indices.tolist(), [0, 1, 1, 2, 2, 3])
+
     def test_quads_degenerados_do_original_sao_triangulos(self):
         origem = objeto_original([[0, 1, 2, 0]])
         _, indices = preparar_malha_original(origem)
