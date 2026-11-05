@@ -250,6 +250,8 @@ def iniciar():
     ))
 
     if args.smoke:
+        eventos_smoke = set()
+
         def atualizar_smoke():
             # Testar mudanças de material e upload de textura após o 1º frame.
             import numpy as np
@@ -258,31 +260,42 @@ def iniciar():
             motor.atualizar_textura(textura)
             motor.ajustar_pele(cor=(0.92, 0.75, 0.66), rugosidade=0.42)
             motor.ajustar_camera(angulo=0.2)
+            eventos_smoke.add("textura")
             print("Textura RGBA e material atualizados em execução", flush=True)
 
         def terminar_smoke():
             print(f"Quadros desenhados: {motor.frames}", flush=True)
-            # Um quadro inicial e outros após atualizar textura e geometria.
-            aplicacao.exit(0 if motor.frames >= 7 else 2)
+            # rendercanvas em modo ondemand pode coalescer mudanças feitas
+            # rapidamente. Verificar eventos completados e múltiplos frames,
+            # sem exigir um quadro para cada callback.
+            esperados = {"textura", "modificador_positivo", "modificador_negativo",
+                         "macros", "restauracao"}
+            ok = eventos_smoke == esperados and motor.frames >= 5
+            print(f"Smoke: eventos {sorted(eventos_smoke)}, aprovado={ok}", flush=True)
+            aplicacao.exit(0 if ok else 2)
 
         def deformar_smoke():
             chave = "nose/nose-scale-horiz-decr|incr"
             controles_morph[chave].setValue(65)
+            eventos_smoke.add("modificador_positivo")
             print("Modificador bidirecional original aplicado ao Vulkan", flush=True)
 
         def deformar_negativo_smoke():
             chave = "nose/nose-scale-horiz-decr|incr"
             controles_morph[chave].setValue(-35)
+            eventos_smoke.add("modificador_negativo")
             print("Direção negativa do modificador aplicada ao Vulkan", flush=True)
         
         def macro_smoke():
             controles_macros["muscle"].setValue(75)
             controles_macros["weight"].setValue(65)
+            eventos_smoke.add("macros")
             print("Musculatura e peso combinados no Vulkan", flush=True)
 
         def restaurar_smoke():
             controles_macros["muscle"].setValue(50)
             controles_macros["weight"].setValue(50)
+            eventos_smoke.add("restauracao")
             print("Macrovariáveis restauradas aos valores padrão", flush=True)
 
         QtCore.QTimer.singleShot(800, atualizar_smoke)
