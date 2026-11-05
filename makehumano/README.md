@@ -2,25 +2,30 @@
 
 Esta pasta é a área de trabalho para atualizar o [MakeHuman](https://github.com/makehumancommunity/makehuman) em **Python**, preservando a lógica e os recursos originais sempre que possível.
 
-> **Estado atual:** estrutura inicial e ferramentas de importação, diagnóstico e execução. A aplicação **ainda não foi modernizada nem testada** em versões recentes do Python. O código-fonte completo do MakeHuman ainda **não está incluído** neste repositório.
+> **Estado atual (primeira iteração):** fontes originais do MakeHuman **já importadas** em `codigo/`; dois erros de sintaxe nos scripts auxiliares identificados e corrigidos; testes automatizados de deformação 3D e compatibilidade Python 3.12/3.13 adicionados. **Ainda não foi verificado que o aplicativo completo funciona.**
 
 ## O que já existe
 
 - `importar_original.py`: obtém uma cópia do código-fonte oficial para `codigo/`, sem modificar o repositório de origem.
 - `diagnostico.py`: identifica versões do Python e das dependências e verifica a sintaxe dos arquivos importados.
 - `executar.py`: executa o MakeHuman importado com o Python atual, sem alterar sua lógica.
+- `testes/test_morph_targets.py`: testes unitários da aplicação de morph targets do motor original.
+- `DIAGNOSTICO-INICIAL.txt`: resultado histórico do primeiro exame com Python 3.14; mostra os erros encontrados **antes das correções**.
+- `.github/workflows/testar-makehumano.yml` (na raiz do repositório): testes de sintaxe, dependências e morph targets com Python 3.12/3.13.
+- `.github/workflows/importar-makehuman.yml` (na raiz do repositório): importação inicial automatizada, com proteção contra sobrescrita.
 - `.gitignore`: ignora arquivos temporários, mas **não ignora** `codigo/`, para que atualizações possam ser versionadas.
 
 ## Primeiros passos
 
 É necessário ter **Python 3** e **Git** instalados.
 
-Abra um terminal dentro de `makehumano/` e execute:
+Para testar **esta versão**, clone `brincadeira`, entre na pasta `makehumano/` e execute:
 
 ```bash
-python importar_original.py
 python diagnostico.py
 ```
+
+O código original já faz parte deste repositório; **não é necessário** executar a importação novamente. O script `importar_original.py` serve para preparar outra cópia em uma pasta de trabalho nova.
 
 O importador registra em `codigo/.makehumano-origem.txt` o commit exato que foi copiado. Ao repetir a importação com `python importar_original.py --atualizar`, a versão anterior é preservada em um diretório de backup.
 
@@ -40,14 +45,16 @@ python executar.py
 
 ## Como salvar as atualizações neste repositório
 
-O diretório `codigo/` foi deixado fora das regras de exclusão do Git para permitir que o código atualizado seja salvo em `brincadeira/makehumano/codigo/`. A importação inicial é uma etapa local; os arquivos só aparecem no GitHub depois de adicionados e registrados em um commit.
+O diretório `codigo/` está versionado no GitHub em `brincadeira/makehumano/codigo/`. Assim, as modificações feitas nos arquivos originais aparecem como diferenças auditáveis. Use commits pequenos e execute os testes antes de alterar a lógica de modelagem.
 
 ## Objetivo das próximas alterações
 
-1. Identificar incompatibilidades reais e documentar o estado inicial.
-2. Atualizar gradualmente o ambiente Python e os testes automatizados.
-3. Adaptar dependências e interface gráfica sem quebrar o sistema de deformação.
-4. Modernizar os módulos mantendo, sempre que possível, os arquivos e os plugins originais.
+1. [x] Importar o código original com proveniência e licenças.
+2. [x] Corrigir os dois erros de sintaxe encontrados em scripts auxiliares legados.
+3. [x] Criar testes iniciais para morph targets e verificações de Python 3.12/3.13.
+4. [ ] Conferir o resultado da execução da matriz de testes e corrigir possíveis falhas.
+5. [ ] Testar a inicialização com os assets externos e ambiente gráfico real.
+6. [ ] Adaptar dependências e interface sem quebrar deformações, arquivos e plugins.
 
 ## Licenças e créditos
 
