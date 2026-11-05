@@ -127,10 +127,21 @@ def criar_canvas_vulkan(canvas_original):
                 resultado.save(filename)
             return resultado
 
+        def atualizar_iluminacao(self, cena):
+            """Recebe a cena de luzes original sem invocar o antigo glmodule."""
+            self._cena_luzes = cena
+            if self._cena is not None:
+                self._cena.atualizar_iluminacao(cena)
+            self.request_redraw()
+
         def _garantir_cena(self):
             """Inicializa uma única instância GPU para viewport e offscreen."""
             if self._cena is None:
                 self._cena = CenaVulkan(self)
+                self._cena.atualizar_iluminacao(
+                    getattr(self, "_cena_luzes", None)
+                    or getattr(self.app, "scene", None)
+                )
                 self.app.logger_redraw.info(
                     "Canvas Vulkan ORIGINAL: %s", self._cena.adapter.info,
                 )
