@@ -187,6 +187,7 @@ def carregar_proxy_ponderado(
     deletados = np.zeros(len(corpo.posicoes_base), dtype=bool)
     em_delete = False
     em_vertices = False
+    encontrou_vertices = False
     with arquivo.open(encoding="utf-8") as entrada:
         for numero, linha in enumerate(entrada, 1):
             dados = linha.split("#", 1)[0].split()
@@ -239,6 +240,7 @@ def carregar_proxy_ponderado(
                 if len(dados) != 2 or dados[1] != "0" or em_vertices or em_delete:
                     raise ValueError("Somente seção 'verts 0' única é suportada")
                 em_vertices = True
+                encontrou_vertices = True
             elif campo == "delete_verts":
                 if len(dados) != 1 or em_delete:
                     raise ValueError(f"Linha {numero}: delete_verts inválido")
@@ -304,7 +306,7 @@ def carregar_proxy_ponderado(
                     f"Linha {numero}: seção {campo} não suportada"
                 )
 
-    if obj is None or not em_vertices:
+    if obj is None or not encontrou_vertices:
         raise ValueError("Proxy sem OBJ ou seção de vértices")
     completos = {"x_scale", "y_scale", "z_scale"}
     if escalas and set(escalas) != completos:
