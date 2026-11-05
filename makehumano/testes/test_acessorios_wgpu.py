@@ -182,6 +182,25 @@ class TestarAcessorios(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "escala fora"):
                 carregar_proxy_ponderado(caso, self.corpo)
 
+            caso.write_text(
+                "obj_file item.obj\n"
+                "shear_x 0 1 0.5 0.8\n"
+                + prefixo.replace("obj_file item.obj\n", "")
+                + "0 1 2 0.3 0.3 0.4 0 0 0\n" * 3,
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "não suportada"):
+                carregar_proxy_ponderado(caso, self.corpo)
+
+            caso.write_text(
+                "obj_file ..\\\\escape.obj\n" + prefixo.replace(
+                    "obj_file item.obj\n", ""
+                ) + "0 1 2 0.3 0.3 0.4 0 0 0\n" * 3,
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "OBJ local"):
+                carregar_proxy_ponderado(caso, self.corpo)
+
     def test_nao_confunde_proxy_complexo_com_mapeamento_direto(self):
         with tempfile.TemporaryDirectory() as pasta:
             tmp = Path(pasta)
