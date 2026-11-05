@@ -76,6 +76,19 @@ def criar_canvas_vulkan(canvas_original):
             # A viewport pode ser mostrada antes da carga da cena.
             QtCore.QTimer.singleShot(300, self.request_redraw)
 
+        def getPickedColor(self, x=None, y=None):
+            """Compatibilidade com mh.getPickedColor, sem tocar em OpenGL."""
+            from vulkan_picking import selecionar_cor
+            if x is None or y is None:
+                pos = self.getMousePos()
+                if pos is None:
+                    return (0, 0, 0)
+                x, y = pos
+            return selecionar_cor(
+                G.world, G.cameras, x, y,
+                G.windowWidth, G.windowHeight,
+            )
+
         def request_redraw(self):
             # Não sobrescrever QWidget.update(): rendercanvas chama update()
             # internamente para apresentar os quadros. Interceptar update()
