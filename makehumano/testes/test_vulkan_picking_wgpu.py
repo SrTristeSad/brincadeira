@@ -10,7 +10,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "codigo" / "makehuman" / "lib"))
 
-from vulkan_picking import selecionar_cor
+from vulkan_picking import selecionar_cor, selecionar_profundidade
 
 
 def camera():
@@ -121,6 +121,28 @@ class TestarPickingOriginal(unittest.TestCase):
         self.assertEqual(
             selecionar_cor([original], [cam], 50, 50, 100, 100),
             (255, 0, 0),
+        )
+
+
+class TestarProfundidadeSemOpenGL(unittest.TestCase):
+    def test_profundidade_usa_o_objeto_visivel_mais_perto(self):
+        perto = objeto("perto", z=0.15)
+        longe = objeto("longe", z=0.65)
+        z = selecionar_profundidade(
+            [perto, longe], [camera()], 50, 50, 100, 100,
+        )
+        self.assertAlmostEqual(z, (0.15 + 1) / 2, places=5)
+
+    def test_fundo_sem_objetos_retorna_profundidade_maxima(self):
+        self.assertEqual(
+            selecionar_profundidade([], [camera()], 25, 25, 100, 100),
+            1.0,
+        )
+        self.assertEqual(
+            selecionar_profundidade(
+                [objeto("fora")], [camera()], -1, 25, 100, 100,
+            ),
+            1.0,
         )
 
 
