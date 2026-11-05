@@ -45,6 +45,7 @@ def iniciar():
     from .gpu import MotorWgpu
     from .morphs import Deformador, ler_target, pasta_targets
     from .modificadores import carregar_catalogo, NOMES_GRUPOS
+    from .projetos import montar_documento, salvar_documento, carregar_documento
     from .macro import (
         ControladorMacros, VALORES_PADRAO, ROTULOS, ETNIAS,
         ETNIAS_PADRAO, ROTULOS_ETNIAS,
@@ -267,6 +268,87 @@ def iniciar():
     botao_restaurar = QtWidgets.QPushButton("Restaurar todas as deformações")
     botao_restaurar.clicked.connect(restaurar_morphs)
     coluna.addWidget(botao_restaurar)
+
+    coluna.addWidget(QtWidgets.QLabel("<b>Projeto experimental</b>"))
+
+    def aplicar_documento(documento):
+        """Carrega estado validado e atualiza a malha somente uma vez.
+
+        Resolver todos os arquivos externos primeiro evita restaurar metade
+        do personagem se algum .target tiver desaparecido.
+        """
+        alteracoes = {}
+        for modificador in catalogo:
+            valor = documento["modificadores"].get(modificador.identificador, 0)
+            if not valor:
+                continue
+            for caminho, peso in modificador.pesos(valor).items():
+                nome = str(caminho)
+                if nome not in alvos_cache:
+                    alvos_cache[nome] = ler_target(caminho, len(malha.posicoes_base))
+                alteracoes[nome] = (alvos_cache[nome], peso)
+
+        deformador.restaurar()
+        macros.perfil.valores = documento["macros"].copy()
+        macros.perfil.etnias = documento["etnias"].copy()
+        macros.atualizar()
+        if alteracoes:
+            deformador.definir_pesos(alteracoes)
+
+        valores_morph.clear()
+        valores_morph.update(documento["modificadores"])
+        exibir_grupo(caixa_grupos.currentIndex())
+        for nome, slider in controles_macros.items():
+            slider.blockSignals(True)
+            slider.setValue(round(documento["macros"][nome] * 100))
+            slider.blockSignals(False)
+        sincronizar_etnias()
+        motor.ajustar_pele(
+            cor=documento["pele"]["cor"],
+            rugosidade=documento["pele"]["rugosidade"],
+        )
+        motor.atualizar_vertices(deformador.vertices)
+
+    def salvar_projeto():
+        destino, _ = QtWidgets.QFileDialog.getSaveFileName(
+            janela, "Salvar projeto MakeHumano",
+            str(Path.home() / "personagem.makehumano.json"),
+            "Projeto MakeHumano (*.makehumano.json)",
+        )
+        if not destino:
+            return
+        if not destino.endswith(".makehumano.json"):
+            destino += ".makehumano.json"
+        try:
+            documento = montar_documento(macros.perfil, valores_morph, motor.pele, catalogo)
+            salvar_documento(destino, documento, catalogo)
+        except (ValueError, OSError) as erro:
+            QtWidgets.QMessageBox.warning(janela, "Falha ao salvar", str(erro))
+        else:
+            print(f"Projeto salvo: {destino}", flush=True)
+
+    def carregar_projeto():
+        origem, _ = QtWidgets.QFileDialog.getOpenFileName(
+            janela, "Abrir projeto MakeHumano", str(Path.home()),
+            "Projeto MakeHumano (*.makehumano.json)",
+        )
+        if not origem:
+            return
+        try:
+            documento = carregar_documento(origem, catalogo)
+            aplicar_documento(documento)
+        except (ValueError, OSError, RuntimeError) as erro:
+            QtWidgets.QMessageBox.warning(janela, "Falha ao abrir", str(erro))
+        else:
+            print(f"Projeto aberto: {origem}", flush=True)
+
+    botao_salvar = QtWidgets.QPushButton("Salvar personagem…")
+    botao_salvar.clicked.connect(salvar_projeto)
+    coluna.addWidget(botao_salvar)
+
+    botao_abrir = QtWidgets.QPushButton("Abrir personagem…")
+    botao_abrir.clicked.connect(carregar_projeto)
+    coluna.addWidget(botao_abrir)
 
     estado = QtWidgets.QLabel("Textura: branca (tonalidade por shader)")
     estado.setWordWrap(True)
