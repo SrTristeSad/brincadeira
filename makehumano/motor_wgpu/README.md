@@ -29,6 +29,12 @@ Use **Salvar personagem…** e **Abrir personagem…** na coluna de controles. A
 
 **Importante:** não é o formato `.mhm` do MakeHuman original. Texturas externas carregadas por arquivo, roupas, poses, animações, plugins e câmera não são armazenados nesse JSON. A textura UV pode ser selecionada novamente ao abrir o projeto.
 
+### Exportação de malha 3D
+
+O botão **Exportar malha OBJ…** salva a geometria corporal **com os modificadores já aplicados**, usando o formato Wavefront OBJ. A exportação escreve posições (`v`), coordenadas de textura (`vt`), normais (`vn`) e triângulos (`f`). Os índices dos vértices canônicos do MakeHuman são preservados, inclusive nas costuras UV, permitindo reimportar o corpo sem perder a topologia de referência.
+
+**Limites atuais:** somente o grupo `body` da malha base é exportado; não há roupas, cabelo, rig, pose, animações, MTL ou arquivo de textura incorporado. Os quads originais são triangulados. A cor e a rugosidade do material WGSL **não são exportadas** para OBJ. Para preservar os parâmetros de edição, use também o `.makehumano.json`.
+
 O arquivo de requisitos do novo motor é separado dos requisitos do editor antigo. **Não misture** as duas viewports na mesma janela por enquanto.
 
 ## Testes
@@ -46,6 +52,7 @@ O GitHub Actions executa esses testes em `.github/workflows/testar-wgpu.yml`.
 - `morphs.py`: leitura dos arquivos `.target`, combinação atômica de pesos e recomputação de normais
 - `modificadores.py`: catálogo de sliders a partir dos JSON oficiais do MakeHuman
 - `projetos.py`: serialização JSON versionada e validação antes de restaurar parâmetros
+- `exportar.py`: gravação OBJ independente de Qt/GPU, preservando posições canônicas e UVs
 - `macro.py`: interpolação de oito macrovariáveis e normalização dos três controles étnicos seguindo as fórmulas originais, combinando os 564 `.target`
 - `shaders/pele.wgsl`: material difuso + GGX simplificado
 - `gpu.py`: device, pipeline, texturas, uniforms, depth, vertex buffer mutável e draw
@@ -54,7 +61,7 @@ O GitHub Actions executa esses testes em `.github/workflows/testar-wgpu.yml`.
 ## Próximos marcos (não implementados)
 
 1. Avançar da comparação CPU com `algos3d` para os eventos, poses e dependências completos da GUI original; ainda não há teste de equivalência visual entre as duas interfaces.
-2. Converter os materiais atuais para mapas base-color, normal e roughness.
+2. Converter os materiais atuais para mapas base-color, normal e roughness, e acrescentar exportação MTL/texturas quando houver suporte confiável.
 3. Implementar câmera e picking equivalentes à viewport antiga.
 4. Testar shaders com várias GPUs/drivers e qualidade visual.
 5. Migrar o canvas oficial quando houver paridade de recursos.
