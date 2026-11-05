@@ -3,7 +3,7 @@ name: MakeHumano - motor wgpu experimental
 on:
   push:
     paths:
-      - "makehumano/motor_wgpu/**"
+      - "makehumano/**"
       - "makehumano/codigo/makehuman/lib/vulkan_*.py"
       - "makehumano/codigo/makehuman/lib/texture.py"
       - "makehumano/codigo/makehuman/lib/qtui.py"
@@ -12,7 +12,7 @@ on:
       - ".github/workflows/testar-wgpu.yml"
   pull_request:
     paths:
-      - "makehumano/motor_wgpu/**"
+      - "makehumano/**"
       - "makehumano/codigo/makehuman/lib/vulkan_*.py"
       - "makehumano/codigo/makehuman/lib/texture.py"
       - "makehumano/codigo/makehuman/lib/qtui.py"
