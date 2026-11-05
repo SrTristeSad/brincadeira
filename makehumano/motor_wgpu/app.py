@@ -767,7 +767,7 @@ def iniciar():
                          "mapas_detalhe", "mapas_restaurados",
                          "dispersao", "importar_mhm", "olhos",
                          "olhos_highpoly", "mascara_corpo",
-                         "mascaras_acessorios"}
+                         "mascaras_acessorios", "roupa_externa"}
             ok = eventos_smoke == esperados and motor.frames >= 6
             print(f"Smoke: eventos {sorted(eventos_smoke)}, aprovado={ok}", flush=True)
             aplicacao.exit(0 if ok else 2)
@@ -1031,6 +1031,73 @@ def iniciar():
                 flush=True,
             )
 
+        def roupa_externa_smoke():
+            """Carrega uma peça sintética via a mesma UI das importações reais.
+
+            Os arquivos são temporários. A máscara se aplica só enquanto
+            o acessório está visível e não afeta os morphs permanentes.
+            """
+            import numpy as np
+            from tempfile import TemporaryDirectory
+            with TemporaryDirectory(prefix="makehumano-roupa-") as pasta:
+                pasta = Path(pasta)
+                v = malha.posicoes_base
+                obj = pasta / "teste_roupa.obj"
+                obj.write_text(
+                    "".join(
+                        "v " + " ".join(str(float(x)) for x in pos) + "\n"
+                        for pos in v[:3]
+                    )
+                    + "vt 0 0\nvt 1 0\nvt 0 1\nf 1/1 2/2 3/3\n",
+                    encoding="utf-8",
+                )
+                vertice = int(malha.origens[malha.indices[0]])
+                proxy = pasta / "teste_roupa.mhclo"
+                proxy.write_text(
+                    "obj_file teste_roupa.obj\n"
+                    "x_scale 5399 11998 1.6482\n"
+                    "y_scale 791 881 2.7213\n"
+                    "z_scale 962 5320 2.2795\n"
+                    "verts 0\n"
+                    "0 1 2 1 0 0 0 0 0\n"
+                    "0 1 2 0 1 0 0 0 0\n"
+                    "0 1 2 0 0 1 0 0 0\n"
+                    "delete_verts\n"
+                    + str(vertice) + "\n", encoding="utf-8",
+                )
+                cor = np.full((4, 4, 4), 255, dtype=np.uint8)
+                cor[..., :3] = [60, 130, 195]
+                total = len(malha.indices)
+                chave = adicionar_peca_externa(proxy, cor)
+                assert chave in pecas_externas
+                assert motor.indices_corpo_ativos < total
+                modelo, checkbox, linha = pecas_externas[chave]
+                anterior = motor.acessorios[chave]["vertices"].copy()
+                controles_macros["age"].setValue(60)
+                np.testing.assert_allclose(
+                    motor.acessorios[chave]["vertices"],
+                    modelo.atualizar(deformador.posicoes_atuais),
+                    atol=1e-5,
+                )
+                assert np.isfinite(anterior).all()
+                checkbox.setChecked(False)
+                assert motor.indices_corpo_ativos == total
+                checkbox.setChecked(True)
+                assert motor.indices_corpo_ativos < total
+                controles_macros["age"].setValue(50)
+                botoes = linha.findChildren(QtWidgets.QPushButton)
+                assert len(botoes) == 1
+                botoes[0].click()
+                assert chave not in pecas_externas
+                assert chave not in motor.acessorios
+                assert motor.indices_corpo_ativos == total
+                eventos_smoke.add("roupa_externa")
+                print(
+                    "Peça .mhclo externa criada, deformada, ocultada, "
+                    "reativada e removida no Vulkan",
+                    flush=True,
+                )
+
         def importar_mhm_smoke():
             from tempfile import TemporaryDirectory
             import numpy as np
@@ -1082,6 +1149,7 @@ def iniciar():
         QtCore.QTimer.singleShot(14500, carregar_mapas_smoke)
         QtCore.QTimer.singleShot(15600, arquivo_smoke)
         QtCore.QTimer.singleShot(18500, limpar_mapas_smoke)
+        QtCore.QTimer.singleShot(19000, roupa_externa_smoke)
         QtCore.QTimer.singleShot(20600, importar_mhm_smoke)
         QtCore.QTimer.singleShot(27000, terminar_smoke)
 
