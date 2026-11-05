@@ -98,7 +98,7 @@ def validar_documento(documento: dict, catalogo) -> dict:
         nome = imagens[tipo]
         if nome is not None and (
             not isinstance(nome, str)
-            or re.fullmatch(rf"{tipo}-[0-9a-f]{{20}}\\.png", nome) is None
+            or re.fullmatch(rf"{tipo}-[0-9a-f]{{20}}\.png", nome) is None
         ):
             raise ValueError(f"Arquivo de textura inválido: {tipo}")
         texturas[tipo] = nome
@@ -230,7 +230,7 @@ def carregar_texturas_projeto(caminho: str | Path, documento: dict, leitor):
             resultado[tipo] = None
             continue
         # Validar também aqui, para não aceitar documentos não validados.
-        if re.fullmatch(rf"{tipo}-[0-9a-f]{{20}}\\.png", nome) is None:
+        if re.fullmatch(rf"{tipo}-[0-9a-f]{{20}}\.png", nome) is None:
             raise ValueError(f"Caminho da textura não permitido: {tipo}")
         arquivo = pasta / nome
         # Arquivos menores que 512 MB; dimensões de pixels também limitadas.
