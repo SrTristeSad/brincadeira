@@ -252,6 +252,30 @@ def criar_canvas_vulkan(canvas_original):
                         "MAKEHUMANO_VULKAN: framebuffer offscreen RGB="
                         + str(pixels.shape), flush=True,
                     )
+                render_marker = os.environ.get("MAKEHUMANO_VULKAN_RENDER_FILE")
+                if render_marker and not os.path.exists(render_marker):
+                    # Exercita a mesma API pública usada pelo renderer original.
+                    import mh
+                    rgb = mh.renderToBuffer(160, 120)
+                    alfa = mh.renderAlphaMask(160, 120)
+                    if rgb.data.shape != (120, 160, 3):
+                        raise RuntimeError("renderToBuffer Vulkan: tamanho incorreto")
+                    if alfa.data.shape != (120, 160, 3):
+                        raise RuntimeError("renderAlphaMask Vulkan: tamanho incorreto")
+                    if (alfa.data[:, :, 0] != alfa.data[:, :, 1]).any() or (
+                        alfa.data[:, :, 0] != alfa.data[:, :, 2]
+                    ).any():
+                        raise RuntimeError("Máscara alfa Vulkan não é cinza")
+                    with open(render_marker, "w", encoding="utf-8") as saida:
+                        saida.write(
+                            "vulkan-render:160x120:"
+                            + str(int(alfa.data.min())) + "-"
+                            + str(int(alfa.data.max())) + "\n"
+                        )
+                    print(
+                        "MAKEHUMANO_VULKAN: renderToBuffer e renderAlphaMask OK",
+                        flush=True,
+                    )
                 caminho = os.environ.get("MAKEHUMANO_VULKAN_FRAME_FILE")
                 if caminho and not os.path.exists(caminho):
                     with open(caminho, "w", encoding="utf-8") as saida:
