@@ -4,7 +4,7 @@
 
 O módulo `motor_wgpu/` usa **wgpu-py + WGSL** para visualizar o `codigo/makehuman/data/3dobjs/base.obj` original. A leitura OBJ seleciona o grupo `body`, triangula quads, preserva UV e calcula normais suavizadas. O renderizador suporta depth buffer, rotação/zoom via controles e **troca de textura RGBA em tempo real**, além de tonalidade e rugosidade da pele com iluminação difusa + reflexo GGX básico.
 
-O painel experimental agora usa **as definições oficiais** de `modeling_modifiers.json` e `modeling_sliders.json`: 238 modificadores anatômicos têm `.target` diretos nesta revisão e podem ser selecionados por região. Os sliders têm direção positiva/negativa quando o MakeHuman define ambos os targets. Os arquivos são carregados sob demanda, com cache; o renderizador recalcula normais, preserva UVs e atualiza o vertex buffer da GPU. **Oito macrocontroles anatômicos agora funcionam na prévia:** idade, gênero morfológico, peso, musculatura, altura, proporções corporais, volume e firmeza dos seios. Seus fatores são comparados nos testes aos cálculos originais de `apps/human.py`, e **564 `.target`** participam do catálogo de macroformas. **Os três parâmetros de mistura étnica herdados do MakeHuman agora também possuem sliders interdependentes**, totalizando 11 controles gerais. O ajuste de um parâmetro renormaliza os outros dois para a soma permanecer em 100%, seguindo `Human._setEthnicVals`. Essas categorias correspondem a alvos de deformação herdados, **não a uma medição de identidade étnica**. Ainda não foram integradas todas as relações entre o sistema original de modificadores, a GUI principal, as poses e os plugins. Esta prévia já aceita mapas de normal e rugosidade no shader GGX, mas não implementa subsurface scattering, pintura 3D, rigging ou picking. Os presets de cores são exemplos, não texturas oficiais.
+O painel experimental agora usa **as definições oficiais** de `modeling_modifiers.json` e `modeling_sliders.json`: 238 modificadores anatômicos têm `.target` diretos nesta revisão e podem ser selecionados por região. Os sliders têm direção positiva/negativa quando o MakeHuman define ambos os targets. Os arquivos são carregados sob demanda, com cache; o renderizador recalcula normais, preserva UVs e atualiza o vertex buffer da GPU. **Oito macrocontroles anatômicos agora funcionam na prévia:** idade, gênero morfológico, peso, musculatura, altura, proporções corporais, volume e firmeza dos seios. Seus fatores são comparados nos testes aos cálculos originais de `apps/human.py`, e **564 `.target`** participam do catálogo de macroformas. **Os três parâmetros de mistura étnica herdados do MakeHuman agora também possuem sliders interdependentes**, totalizando 11 controles gerais. O ajuste de um parâmetro renormaliza os outros dois para a soma permanecer em 100%, seguindo `Human._setEthnicVals`. Essas categorias correspondem a alvos de deformação herdados, **não a uma medição de identidade étnica**. Ainda não foram integradas todas as relações entre o sistema original de modificadores, a GUI principal, as poses e os plugins. Esta prévia já aceita mapas de normal e rugosidade no shader GGX e um **efeito aproximado de dispersão da pele**, mas ainda não implementa dispersão subsuperficial física, pintura 3D, rigging ou picking. Os presets de cores são exemplos, não texturas oficiais.
 
 ## Executar
 
@@ -32,9 +32,15 @@ O painel **Mapas de detalhe da pele** permite **carregar/remover** dois mapas di
 
 O mapa neutro/ausência de mapas mantém a apresentação anterior. Um normal map não é um height/bump map, e o resultado exige um UV layout compatível com o `base.obj`. Como o WGSL usa iluminação GGX simplificada, a aparência ainda não é equivalente ao sistema avançado de materiais do MakeHuman original.
 
+### Dispersão da pele (aproximação, não SSS físico)
+
+O slider **Dispersão da pele (aproximada)** vai de 0 a 100%. Em 0%, a iluminação difusa preserva o resultado anterior; valores maiores acrescentam um componente difuso suavizado e levemente avermelhado nas regiões próximas às bordas de iluminação. O cálculo ocorre em **um único fragment shader**, sem texturas novas, passagens adicionais ou alteração da malha. A intensidade inicial para personagens novos é 25%.
+
+Este efeito é **artístico**, não um cálculo físico de `subsurface scattering`: não calcula espessura, iluminação transmitida, distância percorrida sob a superfície, dispersão espacial ou sombras translúcidas. Não espere comportamento realista de orelhas retroiluminadas. Ele serve para avaliar a direção visual com baixo custo antes de implementar um SSS mais completo.
+
 ### Salvar e reabrir um personagem
 
-Use **Salvar personagem…** e **Abrir personagem…** na coluna de controles. A prévia usa arquivos **`.makehumano.json`** legíveis e editáveis; o arquivo guarda os onze parâmetros gerais, os modificadores anatômicos alterados e a cor/rugosidade da pele. A aplicação valida a versão e os valores antes de reconstituir a malha e reenviar os vértices à GPU.
+Use **Salvar personagem…** e **Abrir personagem…** na coluna de controles. A prévia usa arquivos **`.makehumano.json`** legíveis e editáveis. A **versão 2** guarda os onze parâmetros gerais, os modificadores anatômicos alterados e a cor, rugosidade e dispersão da pele. Arquivos **versão 1** abrem normalmente, recebendo dispersão **0%** para preservar a aparência anterior; ao salvar novamente, são convertidos à versão 2. A aplicação valida os valores antes de reconstituir a malha e reenviar os vértices à GPU.
 
 **Importante:** não é o formato `.mhm` do MakeHuman original. Texturas externas carregadas por arquivo, roupas, poses, animações, plugins e câmera não são armazenados nesse JSON. A textura UV pode ser selecionada novamente ao abrir o projeto.
 
@@ -48,7 +54,7 @@ O botão **Exportar OBJ com mapas de pele…** cria **cinco arquivos** com o mes
 - `personagem_pele_normal.png`: cópia do normal map usado ou um mapa neutro.
 - `personagem_pele_rugosidade.png`: cópia do mapa de rugosidade usado ou um mapa neutro.
 
-**O MTL clássico só referencia a textura difusa.** Os dois últimos PNGs são arquivos auxiliares não conectados automaticamente. Para obter o efeito em Blender e outros editores, é necessário atribuir manualmente o normal map como **Non-Color**, usar um nó **Normal Map** e conectar o canal de rugosidade ao material apropriado. Os PNGs preservam os dados RGBA sem conversão de gama.
+**O MTL clássico só referencia a textura difusa e não armazena o efeito aproximado de dispersão.** Os dois últimos PNGs são arquivos auxiliares não conectados automaticamente. Para obter o efeito em Blender e outros editores, é necessário atribuir manualmente o normal map como **Non-Color**, usar um nó **Normal Map** e conectar o canal de rugosidade ao material apropriado. Os PNGs preservam os dados RGBA sem conversão de gama.
 
 A exportação cobre apenas o corpo, sem roupas, rig, poses e animações. Os quads originais são triangulados. Os arquivos são substituídos individualmente, não numa transação atômica conjunta; a interface pede confirmação antes de sobrescrever. Para preservar os sliders, salve também o projeto `.makehumano.json`. Os mapas externos ainda não são armazenados nesse projeto JSON.
 
@@ -79,7 +85,7 @@ O GitHub Actions executa esses testes em `.github/workflows/testar-wgpu.yml`.
 ## Próximos marcos (não implementados)
 
 1. Avançar da comparação CPU com `algos3d` para os eventos, poses e dependências completos da GUI original; ainda não há teste de equivalência visual entre as duas interfaces.
-2. Completar o material PBR (subsurface scattering, mapas de detalhe avançados) e criar exportação compatível com materiais PBR em glTF, se a arquitetura justificar.
+2. Evoluir da dispersão visual aproximada para SSS fisicamente mais fiel (espessura e difusão), depois avaliar exportação PBR como glTF.
 3. Implementar câmera e picking equivalentes à viewport antiga.
 4. Testar shaders com várias GPUs/drivers e qualidade visual.
 5. Migrar o canvas oficial quando houver paridade de recursos.
