@@ -5,6 +5,16 @@ on:
     paths:
       - "makehumano/motor_wgpu/**"
       - "makehumano/codigo/makehuman/lib/vulkan_*.py"
+      - "makehumano/codigo/makehuman/lib/texture.py"
+      - "makehumano/codigo/makehuman/lib/qtui.py"
+      - "makehumano/testes/smoke_gui.py"
+      - "makehumano/testes/test_*wgpu.py"
+      - ".github/workflows/testar-wgpu.yml"
+  pull_request:
+    paths:
+      - "makehumano/motor_wgpu/**"
+      - "makehumano/codigo/makehuman/lib/vulkan_*.py"
+      - "makehumano/codigo/makehuman/lib/texture.py"
       - "makehumano/codigo/makehuman/lib/qtui.py"
       - "makehumano/testes/smoke_gui.py"
       - "makehumano/testes/test_*wgpu.py"
