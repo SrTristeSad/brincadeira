@@ -4,6 +4,8 @@ Testes CPU usam a mesma interface que lib/object3d.Object3D fornece,
 sem criar um editor paralelo nem importar o motor OpenGL.
 """
 from pathlib import Path
+import os
+import tempfile
 import sys
 import unittest
 from types import SimpleNamespace
@@ -13,7 +15,7 @@ import numpy as np
 RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "codigo" / "makehuman" / "lib"))
 
-from vulkan_scene import preparar_malha_original, matriz_wgpu
+from vulkan_scene import preparar_malha_original, matriz_wgpu, assinatura_textura
 
 
 def objeto_original(face=None):
@@ -128,6 +130,36 @@ class TestarMalhasDaGuiOriginal(unittest.TestCase):
         )
         matriz = matriz_wgpu(cam, objeto_original())
         np.testing.assert_allclose(matriz[0, :], modelo[0, :])
+
+
+class TestarAssinaturaTexturaVulkan(unittest.TestCase):
+    def test_sem_arquivo_ou_caminho_usa_fallback(self):
+        self.assertIsNone(assinatura_textura(None))
+        self.assertIsNone(assinatura_textura(""))
+        with tempfile.TemporaryDirectory() as pasta:
+            self.assertIsNone(assinatura_textura(Path(pasta) / "ausente.png"))
+
+    def test_detecta_modificacao_mesmo_com_tamanho_igual(self):
+        with tempfile.TemporaryDirectory() as pasta:
+            caminho = Path(pasta) / "textura.png"
+            caminho.write_bytes(b"abcd")
+            antes = assinatura_textura(caminho)
+            info = caminho.stat()
+            caminho.write_bytes(b"efgh")
+            os.utime(caminho, ns=(info.st_atime_ns, info.st_mtime_ns + 2_000_000_000))
+            depois = assinatura_textura(caminho)
+            self.assertNotEqual(antes, depois)
+            self.assertEqual(antes[1], depois[1])
+
+    def test_detecta_remocao_e_recriacao(self):
+        with tempfile.TemporaryDirectory() as pasta:
+            caminho = Path(pasta) / "textura.png"
+            caminho.write_bytes(b"original")
+            antes = assinatura_textura(caminho)
+            caminho.unlink()
+            self.assertIsNone(assinatura_textura(caminho))
+            caminho.write_bytes(b"nova")
+            self.assertNotEqual(antes, assinatura_textura(caminho))
 
 
 if __name__ == "__main__":
