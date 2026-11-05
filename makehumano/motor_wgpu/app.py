@@ -44,6 +44,7 @@ def iniciar():
     from rendercanvas.qt import QRenderWidget
     from .gpu import MotorWgpu
     from .morphs import Deformador, ler_target, pasta_targets
+    from .modificadores import carregar_catalogo, NOMES_GRUPOS
 
     malha = carregar_obj(caminho_base_obj())
     print(
@@ -109,36 +110,85 @@ def iniciar():
         botao.clicked.connect(lambda _checked=False, cor=rgb: motor.ajustar_pele(cor=cor))
         coluna.addWidget(botao)
 
-    coluna.addWidget(QtWidgets.QLabel("<b>Deformações MakeHuman</b>"))
-    coluna.addWidget(QtWidgets.QLabel("Alvos .target originais (demonstração)"))
-    exemplos = (
-        ("Nariz: largura +", "nose/nose-scale-horiz-incr.target"),
-        ("Torso: formato V +", "torso/torso-vshape-incr.target"),
-        ("Abdômen: tônus +", "stomach/stomach-tone-incr.target"),
-        ("Mão esquerda: tamanho +", "armslegs/l-hand-scale-incr.target"),
-    )
-    controles_morph = []
-    for titulo, caminho_relativo in exemplos:
-        alvo = ler_target(
-            pasta_targets() / caminho_relativo,
-            len(malha.posicoes_base),
+    coluna.addWidget(QtWidgets.QLabel("<b>Modificadores MakeHuman</b>"))
+    coluna.addWidget(QtWidgets.QLabel(
+        "Definições oficiais: apenas alvos .target diretos. "
+        "Macrovariáveis ainda não integradas."
+    ))
+    catalogo = carregar_catalogo()
+    grupos = sorted({item.grupo for item in catalogo},
+                    key=lambda grupo: NOMES_GRUPOS.get(grupo, grupo))
+    caixa_grupos = QtWidgets.QComboBox()
+    for grupo in grupos:
+        caixa_grupos.addItem(
+            f"{NOMES_GRUPOS.get(grupo, grupo)} ({sum(m.grupo == grupo for m in catalogo)})",
+            grupo,
         )
+    coluna.addWidget(caixa_grupos)
 
-        def mudar_morph(valor, nome=caminho_relativo, target=alvo):
-            alterados = deformador.definir_peso(nome, target, valor / 100.0)
-            motor.atualizar_vertices(alterados)
+    widget_morph = QtWidgets.QWidget()
+    layout_morph = QtWidgets.QVBoxLayout(widget_morph)
+    layout_morph.setContentsMargins(0, 0, 0, 0)
+    coluna.addWidget(widget_morph)
 
-        controles_morph.append(controle(titulo, 0, 100, 0, mudar_morph))
+    valores_morph = {}
+    alvos_cache = {}
+    controles_morph = {}
+
+    def atualizar_modificador(valor, modificador):
+        # Busca arquivos somente quando o usuário usa um slider.
+        # O mesmo target é reaproveitado entre alterações de peso.
+        alteracoes = {}
+        for caminho, peso in modificador.pesos(valor).items():
+            chave = str(caminho)
+            if chave not in alvos_cache:
+                alvos_cache[chave] = ler_target(
+                    caminho, len(malha.posicoes_base)
+                )
+            alteracoes[chave] = (alvos_cache[chave], peso)
+        novos_vertices = deformador.definir_pesos(alteracoes)
+        motor.atualizar_vertices(novos_vertices)
+        valores_morph[modificador.identificador] = valor
+
+    def exibir_grupo(_index):
+        while layout_morph.count():
+            item = layout_morph.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        controles_morph.clear()
+        grupo_atual = caixa_grupos.currentData()
+        for modificador in catalogo:
+            if modificador.grupo != grupo_atual:
+                continue
+            nome = QtWidgets.QLabel(modificador.rotulo)
+            nome.setWordWrap(True)
+            layout_morph.addWidget(nome)
+            controle_morph = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+            controle_morph.setRange(modificador.minimo, 100)
+            controle_morph.setValue(
+                valores_morph.get(modificador.identificador, 0)
+            )
+            controle_morph.valueChanged.connect(
+                lambda valor, mod=modificador: atualizar_modificador(valor, mod)
+            )
+            layout_morph.addWidget(controle_morph)
+            controles_morph[modificador.identificador] = controle_morph
+
+    caixa_grupos.currentIndexChanged.connect(exibir_grupo)
+    indice_nariz = caixa_grupos.findData("nose")
+    caixa_grupos.setCurrentIndex(indice_nariz if indice_nariz >= 0 else 0)
+    exibir_grupo(caixa_grupos.currentIndex())
 
     def restaurar_morphs():
-        # Evitar uma atualização da GPU para cada slider durante o reset.
-        for slider in controles_morph:
+        # Restaurar todos os grupos, inclusive sliders fora da tela.
+        valores_morph.clear()
+        for slider in controles_morph.values():
             slider.blockSignals(True)
             slider.setValue(0)
             slider.blockSignals(False)
         motor.atualizar_vertices(deformador.restaurar())
 
-    botao_restaurar = QtWidgets.QPushButton("Restaurar deformações")
+    botao_restaurar = QtWidgets.QPushButton("Restaurar todas as deformações")
     botao_restaurar.clicked.connect(restaurar_morphs)
     coluna.addWidget(botao_restaurar)
 
@@ -183,15 +233,22 @@ def iniciar():
         def terminar_smoke():
             print(f"Quadros desenhados: {motor.frames}", flush=True)
             # Um quadro inicial e outros após atualizar textura e geometria.
-            aplicacao.exit(0 if motor.frames >= 3 else 2)
+            aplicacao.exit(0 if motor.frames >= 4 else 2)
 
         def deformar_smoke():
-            controles_morph[0].setValue(65)
-            print("Morph target original aplicado ao buffer Vulkan", flush=True)
+            chave = "nose/nose-scale-horiz-decr|incr"
+            controles_morph[chave].setValue(65)
+            print("Modificador bidirecional original aplicado ao Vulkan", flush=True)
+
+        def deformar_negativo_smoke():
+            chave = "nose/nose-scale-horiz-decr|incr"
+            controles_morph[chave].setValue(-35)
+            print("Direção negativa do modificador aplicada ao Vulkan", flush=True)
 
         QtCore.QTimer.singleShot(800, atualizar_smoke)
         QtCore.QTimer.singleShot(2000, deformar_smoke)
-        QtCore.QTimer.singleShot(8500, terminar_smoke)
+        QtCore.QTimer.singleShot(4500, deformar_negativo_smoke)
+        QtCore.QTimer.singleShot(10000, terminar_smoke)
 
     return aplicacao.exec_()
 
