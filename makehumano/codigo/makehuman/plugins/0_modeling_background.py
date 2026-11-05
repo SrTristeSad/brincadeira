@@ -49,7 +49,11 @@ import gui
 import filechooser as fc
 import log
 import language
-import texture
+import os
+if os.environ.get("MAKEHUMANO_VULKAN_PILOT") == "1":
+    import vulkan_texture as texture
+else:
+    import texture
 import transformations as tm
 import math
 import getpath
