@@ -257,4 +257,7 @@ def render_skin(cena, dst, vertsPerPrimitive, verts, index=None,
             dst._data = np.ascontiguousarray(canais_render)
         else:
             dst._data = np.ascontiguousarray(resultado[:, :, :canais])
+        import time
+        dst.modified = time.time_ns()
+        cena.invalidar_texturas()
     return Image(data=resultado)
