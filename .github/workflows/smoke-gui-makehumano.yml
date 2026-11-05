@@ -1,0 +1,48 @@
+name: Testar abertura real da interface MakeHumano
+
+on:
+  push:
+    paths:
+      - ".github/workflows/smoke-gui-makehumano.yml"
+      - "makehumano/testes/smoke_gui.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gui-linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preparar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: makehumano/codigo/requirements.txt
+
+      - name: Instalar bibliotecas X11 e renderização em software
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            xvfb xauth libglu1-mesa libgl1-mesa-dri \
+            libxkbcommon-x11-0 libxcb-xinerama0 libxcb-cursor0
+
+      - name: Instalar dependências Python originais
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r makehumano/codigo/requirements.txt
+
+      - name: Testar opções de linha de comando
+        run: |
+          python makehumano/executar.py --help
+          python makehumano/executar.py --license > /dev/null
+
+      - name: Iniciar MakeHumano com Xvfb
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          QT_X11_NO_MITSHM: "1"
+        run: xvfb-run -a -s "-screen 0 1280x800x24" python makehumano/testes/smoke_gui.py
