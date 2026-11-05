@@ -11,6 +11,7 @@ import numpy as np
 import wgpu
 
 from .malha import Malha
+from .mascaras import indices_corpo_visiveis
 from .materiais import (Pele, textura_neutra, validar_rgba,
                         mapa_normal_neutro, mapa_rugosidade_neutro)
 
@@ -97,8 +98,10 @@ class MotorWgpu:
             data=malha.vertices, usage=wgpu.BufferUsage.VERTEX | wgpu.BufferUsage.COPY_DST
         )
         self.index_buffer = self.device.create_buffer_with_data(
-            data=malha.indices, usage=wgpu.BufferUsage.INDEX
+            data=malha.indices,
+            usage=wgpu.BufferUsage.INDEX | wgpu.BufferUsage.COPY_DST,
         )
+        self.indices_corpo_ativos = int(malha.indices.size)
         self.uniform_buffer = self.device.create_buffer(
             size=176, usage=wgpu.BufferUsage.UNIFORM | wgpu.BufferUsage.COPY_DST
         )
@@ -207,6 +210,24 @@ class MotorWgpu:
         self.device.queue.write_buffer(
             self.vertex_buffer, 0, np.ascontiguousarray(vertices)
         )
+        self.canvas.request_draw()
+
+    def atualizar_mascara_corpo(self, deletar_vertices=None):
+        """Atualiza apenas os índices dos triângulos visíveis do corpo.
+
+        A máscara é opcional. Nenhum asset de roupa é adicionado aqui:
+        o método prepara a viewport para o 'delete_verts' de proxies
+        legítimos. Não muda posições, UVs ou a geometria de referência.
+        """
+        if deletar_vertices is None:
+            indices = self.malha.indices
+        else:
+            indices = indices_corpo_visiveis(self.malha, deletar_vertices)
+        if len(indices):
+            self.device.queue.write_buffer(
+                self.index_buffer, 0, np.ascontiguousarray(indices)
+            )
+        self.indices_corpo_ativos = int(len(indices))
         self.canvas.request_draw()
 
     def adicionar_acessorio(
@@ -377,7 +398,8 @@ class MotorWgpu:
         passagem.set_bind_group(0, self._bind_group)
         passagem.set_vertex_buffer(0, self.vertex_buffer)
         passagem.set_index_buffer(self.index_buffer, "uint32")
-        passagem.draw_indexed(int(self.malha.indices.size))
+        if self.indices_corpo_ativos:
+            passagem.draw_indexed(self.indices_corpo_ativos)
         for item in self.acessorios.values():
             if not item["visivel"]:
                 continue
