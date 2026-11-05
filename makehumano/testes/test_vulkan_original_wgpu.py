@@ -23,8 +23,9 @@ from vulkan_offscreen import (
 
 from vulkan_scene import (
     CenaVulkan, preparar_malha_original, matriz_wgpu, assinatura_textura,
-    parametros_material_vulkan,
+    parametros_material_vulkan, pixels_textura_rgba,
 )
+from vulkan_texture import Texture as TextureVulkan
 
 
 def objeto_original(face=None):
@@ -385,6 +386,38 @@ class TestarAlfaDeRenderizacaoVulkan(unittest.TestCase):
             mascarar_alfa_rgba(np.zeros((1, 2, 3), dtype=np.uint8))
         with self.assertRaises(ValueError):
             mascarar_alfa_rgba(np.zeros((1, 2, 4), dtype=np.float32))
+
+
+class TestarTexturasSemOpenGL(unittest.TestCase):
+    def test_cpu_texture_aloca_e_atualiza_subimagem(self):
+        tex = TextureVulkan(size=(4, 3), components=3)
+        self.assertEqual((tex.width, tex.height), (4, 3))
+        self.assertEqual(tex.data.shape, (3, 4, 3))
+        self.assertIsNone(tex.textureId)
+        sub = SimpleNamespace(data=np.full((2, 2, 3), 97, np.uint8))
+        tex.loadSubImage(sub, 1, 1)
+        np.testing.assert_array_equal(tex.data[1:3, 1:3], 97)
+        self.assertTrue(np.all(tex.data[0, :, :] == 0))
+
+    def test_imagem_rgba_do_material_dinamico(self):
+        cinza = pixels_textura_rgba(np.array([[[25]]], dtype=np.uint8))
+        np.testing.assert_array_equal(cinza[0, 0], [25, 25, 25, 255])
+        la = pixels_textura_rgba(np.array([[[30, 99]]], dtype=np.uint8))
+        np.testing.assert_array_equal(la[0, 0], [30, 30, 30, 99])
+        rgb = pixels_textura_rgba(np.array([[[1, 2, 3]]], dtype=np.uint8))
+        np.testing.assert_array_equal(rgb[0, 0], [1, 2, 3, 255])
+
+    def test_imagem_dinamica_rejeita_formatos_invalidos(self):
+        with self.assertRaises(ValueError):
+            pixels_textura_rgba(np.zeros((1, 1, 5), dtype=np.uint8))
+        with self.assertRaises(ValueError):
+            pixels_textura_rgba(np.zeros((1, 1, 4), dtype=np.float32))
+
+    def test_subimagem_rejeita_fora_dos_limites(self):
+        tex = TextureVulkan(size=(4, 4), components=4)
+        sub = SimpleNamespace(data=np.zeros((3, 3, 4), dtype=np.uint8))
+        with self.assertRaises(ValueError):
+            tex.loadSubImage(sub, 2, 2)
 
 
 if __name__ == "__main__":
