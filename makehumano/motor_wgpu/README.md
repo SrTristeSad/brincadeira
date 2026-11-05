@@ -1,6 +1,8 @@
-# Motor WGPU experimental — MakeHumano
+# Motor WGPU experimental — histórico técnico (não é o produto final)
 
-**Estado:** protótipo isolado. A interface original em PyQt5/OpenGL permanece funcionando e não foi substituída.
+**[Escopo oficial do MakeHumano](../ESCOPO.md):** atualizar o Python do MakeHuman original e trocar sua viewport OpenGL por Vulkan **na própria interface original**, preservando todas as funcionalidades existentes. Não criar novos recursos nem manter um editor paralelo como produto.
+
+**Estado:** este módulo é apenas um **protótipo isolado, pré-existente à definição do escopo**. A interface original em PyQt5/OpenGL não foi substituída. Suas funcionalidades abaixo são registradas para consulta e eventual reaproveitamento na migração, **não são tarefas de desenvolvimento autorizadas**.
 
 O módulo `motor_wgpu/` usa **wgpu-py + WGSL** para visualizar o `codigo/makehuman/data/3dobjs/base.obj` original. A leitura OBJ seleciona o grupo `body`, triangula quads, preserva UV e calcula normais suavizadas. O renderizador suporta depth buffer, rotação/zoom via controles e **troca de textura RGBA em tempo real**, além de tonalidade e rugosidade da pele com iluminação difusa + reflexo GGX básico.
 
@@ -149,13 +151,16 @@ O GitHub Actions executa esses testes em `.github/workflows/testar-wgpu.yml`.
 - `mascaras.py`: filtragem de triângulos, transferência de máscara conforme `transferVertexMaskToProxy()` e gerenciador de `delete_verts` por visibilidade
 - `app.py`: widget Qt e controles de demonstração
 
-## Próximos marcos (não implementados)
+## Encaminhamento conforme o escopo oficial
 
-1. Ampliar a importação `.mhm` com ensaios sobre arquivos reais históricos e avançar da comparação CPU para poses, eventos e dependências da GUI original; ainda não há teste de equivalência visual entre as interfaces.
-2. Evoluir da dispersão visual aproximada para SSS fisicamente mais fiel (espessura e difusão), depois avaliar exportação PBR como glTF.
-3. Validar `.mhclo` em roupas históricas reais, ampliar propriedades `.mhmat` ainda não suportadas e tratar sobreposição entre camadas. A persistência de acessórios externos, suas máscaras e seus materiais básicos já funciona na versão 4.
-4. Implementar câmera e picking equivalentes à viewport antiga.
-5. Testar shaders com várias GPUs/drivers e qualidade visual.
-6. Migrar o canvas oficial quando houver paridade de recursos.
+**Não prosseguir com este roteiro antigo de funcionalidades do protótipo.**
+O trabalho autorizado agora é modernizar as dependências Python do MakeHuman
+original e **integrar o backend Vulkan ao renderizador e à viewport originais**,
+preservando interfaces, controles, arquivos e plugins.
+
+Esta documentação permanece como histórico técnico. O cumprimento do projeto
+não será medido pelo crescimento deste diretório ou pelo número de testes
+executados nele, mas pelo funcionamento do MakeHuman original com Vulkan,
+conforme [ESCOPO.md](../ESCOPO.md).
 
 A pasta `codigo/` preserva avisos e licenças do [MakeHuman Community](https://github.com/makehumancommunity/makehuman). O novo protótipo é parte do experimento MakeHumano; manter atribuições e termos AGPL pertinentes.
