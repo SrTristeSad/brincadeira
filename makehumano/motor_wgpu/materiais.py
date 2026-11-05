@@ -37,3 +37,16 @@ def validar_rgba(pixels) -> np.ndarray:
 def textura_neutra() -> np.ndarray:
     """Textura branca para que a tonalidade venha do material por padrão."""
     return np.full((4, 4, 4), 255, dtype=np.uint8)
+
+
+def mapa_normal_neutro() -> np.ndarray:
+    """Normal tangente aproximada (0, 0, 1), em RGB linear."""
+    pixels = np.empty((4, 4, 4), dtype=np.uint8)
+    pixels[..., 0:2] = 128
+    pixels[..., 2:4] = 255
+    return pixels
+
+
+def mapa_rugosidade_neutro() -> np.ndarray:
+    """Fator multiplicativo 1: preserva o slider de rugosidade."""
+    return np.full((4, 4, 4), 255, dtype=np.uint8)
