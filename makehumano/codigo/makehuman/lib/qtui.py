@@ -313,6 +313,14 @@ class Canvas(QtWidgets.QOpenGLWidget):
         gl.reshape(w, h)
         G.app.callEvent('onResizedCallback', events3d.ResizeEvent(w, h, False))
 
+# Primeira integração experimental na janela ORIGINAL, sem criar um editor
+# paralelo. O modo é temporário até que todos os recursos glmodule estejam
+# migrados; só a versão final removerá o backend OpenGL de vez.
+if os.environ.get("MAKEHUMANO_VULKAN_PILOT") == "1":
+    from vulkan_canvas import criar_canvas_vulkan
+    Canvas = criar_canvas_vulkan(Canvas)
+
+
 class VLayout(QtWidgets.QLayout):
     def __init__(self, parent = None):
         super(VLayout, self).__init__(parent)
@@ -735,7 +743,8 @@ class Application(QtWidgets.QApplication, events3d.EventHandler):
         self.callAsync(self.started)
         self.messages.start()
         self.exec_()
-        gl.OnExit()
+        if os.environ.get("MAKEHUMANO_VULKAN_PILOT") != "1":
+            gl.OnExit()
 
     def stop(self):
         log.notice("ABOUT TO STOP APPLICATION")
