@@ -89,6 +89,12 @@ def criar_canvas_vulkan(canvas_original):
                 G.windowWidth, G.windowHeight,
             )
 
+        def invalidar_texturas(self, caminho=None):
+            """Expõe a recarga de texturas à API original do MakeHuman."""
+            if self._cena is not None:
+                self._cena.invalidar_texturas(caminho)
+            self.request_redraw()
+
         def request_redraw(self):
             # Não sobrescrever QWidget.update(): rendercanvas chama update()
             # internamente para apresentar os quadros. Interceptar update()
