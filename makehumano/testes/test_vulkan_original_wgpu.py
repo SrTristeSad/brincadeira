@@ -397,7 +397,7 @@ class TestarTexturasSemOpenGL(unittest.TestCase):
         self.assertIsNone(tex.textureId)
         sub = SimpleNamespace(data=np.full((2, 2, 3), 97, np.uint8))
         tex.loadSubImage(sub, 1, 1)
-        np.testing.assert_array_equal(tex.data[1:3, 1:3], 97)
+        self.assertTrue(np.all(tex.data[1:3, 1:3] == 97))
         self.assertTrue(np.all(tex.data[0, :, :] == 0))
 
     def test_imagem_rgba_do_material_dinamico(self):
