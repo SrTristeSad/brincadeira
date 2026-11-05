@@ -48,6 +48,11 @@ def criar_canvas_vulkan(canvas_original):
                 QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Ignored
             )
             self._pronto = True
+            print(
+                "MAKEHUMANO_VULKAN: Canvas Qt original conectado",
+                flush=True,
+            )
+            self.request_draw(self._desenhar)
 
         def makeCurrent(self):
             """Compatibilidade de chamada com handlers Qt, sem contexto GL."""
@@ -55,7 +60,12 @@ def criar_canvas_vulkan(canvas_original):
 
         def showEvent(self, event):
             super().showEvent(event)
+            print("MAKEHUMANO_VULKAN: showEvent", flush=True)
             self.update()
+            # A viewport pode ser mostrada antes da carga da cena.
+            # Uma segunda solicitação após onStart assegura a primeira
+            # apresentação da geometria original, sem loop contínuo.
+            QtCore.QTimer.singleShot(300, self.update)
 
         def update(self):
             if getattr(self, "_pronto", False):
@@ -79,14 +89,26 @@ def criar_canvas_vulkan(canvas_original):
             if self.blockRedraw:
                 return
             if self._cena is None:
+                print("MAKEHUMANO_VULKAN: inicializando GPU", flush=True)
                 self._cena = CenaVulkan(self)
                 self.app.logger_redraw.info(
                     "Canvas Vulkan PILOTO na interface original: %s",
                     self._cena.adapter.info,
                 )
-            self._cena.desenhar(
-                G.world, G.cameras, cor_fundo=G.clearColor,
-            )
+            try:
+                self._cena.desenhar(
+                    G.world, G.cameras, cor_fundo=G.clearColor,
+                )
+            except Exception:
+                import traceback
+                traceback.print_exc()
+                raise
+            if self._cena.frames == 1:
+                print(
+                    "MAKEHUMANO_VULKAN: primeiro quadro, objetos="
+                    + str(self._cena.objetos_desenhados),
+                    flush=True,
+                )
             if self._cena.objetos_desenhados:
                 caminho = os.environ.get("MAKEHUMANO_VULKAN_FRAME_FILE")
                 if caminho and not os.path.exists(caminho):
