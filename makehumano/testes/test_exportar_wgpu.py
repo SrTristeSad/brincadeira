@@ -47,11 +47,9 @@ class TestarExportacaoOBJ(unittest.TestCase):
             # Mesmo índice OBJ e a mesma ordem de vértices renderizados.
             np.testing.assert_array_equal(reimportada.origens, malha.origens)
             np.testing.assert_array_equal(reimportada.indices, malha.indices)
-            np.testing.assert_array_equal(reimportada.posicoes_base, np.asarray([
-                dados[np.flatnonzero(malha.origens == k)[0], :3]
-                if np.any(malha.origens == k) else malha.posicoes_base[k]
-                for k in range(len(malha.posicoes_base))
-            ], dtype=np.float32))
+            canonic_pos = malha.posicoes_base.copy()
+            canonic_pos[malha.origens] = dados[:, :3]
+            np.testing.assert_array_equal(reimportada.posicoes_base, canonic_pos)
             np.testing.assert_allclose(reimportada.vertices[:, :3], dados[:, :3],
                                        rtol=0, atol=1e-5)
             np.testing.assert_allclose(reimportada.vertices[:, 6:8], dados[:, 6:8],
