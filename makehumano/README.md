@@ -2,7 +2,7 @@
 
 Esta pasta é a área de trabalho para atualizar o [MakeHuman](https://github.com/makehumancommunity/makehuman) em **Python**, preservando a lógica e os recursos originais sempre que possível.
 
-> **Estado atual (primeira iteração):** fontes originais do MakeHuman **já importadas** em `codigo/`; dois erros de sintaxe nos scripts auxiliares identificados e corrigidos; testes automatizados de deformação 3D e compatibilidade Python 3.12/3.13 adicionados. **Ainda não foi verificado que o aplicativo completo funciona.**
+> **Estado atual:** fontes originais, malha base, rig, morph targets e outros recursos versionados em `codigo/`; dois erros de sintaxe auxiliares corrigidos; testes de deformação 3D e compatibilidade Python 3.12/3.13 passaram. Um teste de inicialização da interface com Xvfb foi adicionado, mas a execução gráfica completa ainda deve ser verificada.
 
 ## O que já existe
 
@@ -10,6 +10,8 @@ Esta pasta é a área de trabalho para atualizar o [MakeHuman](https://github.co
 - `diagnostico.py`: identifica versões do Python e das dependências e verifica a sintaxe dos arquivos importados.
 - `executar.py`: executa o MakeHuman importado com o Python atual, sem alterar sua lógica.
 - `testes/test_morph_targets.py`: testes unitários da aplicação de morph targets do motor original.
+- `testes/smoke_gui.py`: inicialização real da interface com um indicador de prontidão opcional.
+- `.github/workflows/smoke-gui-makehumano.yml`: teste gráfico Linux executado sob Xvfb, com renderização por software.
 - `DIAGNOSTICO-INICIAL.txt`: resultado histórico do primeiro exame com Python 3.14; mostra os erros encontrados **antes das correções**.
 - `.github/workflows/testar-makehumano.yml` (na raiz do repositório): testes de sintaxe, dependências e morph targets com Python 3.12/3.13.
 - `.github/workflows/importar-makehuman.yml` (na raiz do repositório): importação inicial automatizada, com proteção contra sobrescrita.
@@ -41,7 +43,7 @@ Depois de baixar os assets conforme as instruções oficiais, tente iniciar com:
 python executar.py
 ```
 
-**Atenção:** a importação do código não baixa automaticamente todos os assets externos. A sintaxe válida não garante compatibilidade com versões recentes do Python, Qt, NumPy ou OpenGL.
+**Atenção:** malhas, rigs, morph targets e outros recursos **presentes no repositório original** já estão versionados nesta cópia. Recursos **externos** disponibilizados separadamente pelo projeto continuam podendo ser necessários para certas funções. Sintaxe válida não comprova compatibilidade completa com Python, Qt, NumPy ou OpenGL.
 
 ## Como salvar as atualizações neste repositório
 
@@ -52,9 +54,11 @@ O diretório `codigo/` está versionado no GitHub em `brincadeira/makehumano/cod
 1. [x] Importar o código original com proveniência e licenças.
 2. [x] Corrigir os dois erros de sintaxe encontrados em scripts auxiliares legados.
 3. [x] Criar testes iniciais para morph targets e verificações de Python 3.12/3.13.
-4. [ ] Conferir o resultado da execução da matriz de testes e corrigir possíveis falhas.
-5. [ ] Testar a inicialização com os assets externos e ambiente gráfico real.
-6. [ ] Adaptar dependências e interface sem quebrar deformações, arquivos e plugins.
+4. [x] Executar a matriz de testes: Python 3.12 e 3.13, importações e deformações passaram.
+5. [x] Restaurar malha base, esqueleto, targets e assets ignorados pela primeira importação.
+6. [ ] Executar o teste gráfico Xvfb e corrigir eventuais falhas.
+7. [ ] Testar visualmente a interface num desktop real e identificar assets externos necessários.
+8. [ ] Adaptar dependências e interface sem quebrar deformações, arquivos e plugins.
 
 ## Licenças e créditos
 
