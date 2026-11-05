@@ -14,7 +14,7 @@ def main():
     if not ENTRADA.is_file():
         print("Código-fonte ausente. Execute primeiro: python importar_original.py")
         return 1
-    print("Abrindo o MakeHuman original importado (ainda não modernizado)...", flush=True)
+    print("Abrindo o MakeHuman original com backend Vulkan...", flush=True)
     return subprocess.call([sys.executable, str(ENTRADA), *sys.argv[1:]], cwd=PASTA_APP)
 
 
