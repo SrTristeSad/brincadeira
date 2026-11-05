@@ -1,5 +1,6 @@
-# Dependências adicionais somente para o visualizador wgpu experimental.
-# A GUI OpenGL original continua usando codigo/requirements.txt.
--r ../codigo/requirements.txt
+# Backend Vulkan do MakeHuman original: nenhuma dependência de PyOpenGL.
+# O backend OpenGL legado ainda possui seu próprio codigo/requirements.txt.
+numpy>=2,<3
+PyQt5>=5.12.8
 wgpu>=0.32,<0.33
 rendercanvas>=2.7,<3
