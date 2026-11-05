@@ -48,7 +48,7 @@ python executar.py --noshaders
 
 ## Prévia experimental com wgpu-py / Vulkan
 
-Foi acrescentado um **visualizador independente** em [`motor_wgpu/`](motor_wgpu/README.md). Ele carrega a malha original `base.obj`, mantém as coordenadas UV, possui material WGSL com difuso + reflexão GGX simplificada e permite alterar texturas durante a execução. O painel agora carrega **238 modificadores diretos** das definições oficiais do MakeHuman, agrupados por região do corpo. Os sliders aplicam morph targets positivos e negativos ao vertex buffer Vulkan, recalculando as normais sem alterar UVs. Os **11 macro-modificadores** e suas dependências continuam pendentes.
+Foi acrescentado um **visualizador independente** em [`motor_wgpu/`](motor_wgpu/README.md). Ele carrega a malha original `base.obj`, mantém as coordenadas UV, possui material WGSL com difuso + reflexão GGX simplificada e permite alterar texturas durante a execução. O painel agora carrega **238 modificadores diretos** das definições oficiais do MakeHuman, agrupados por região do corpo. Os sliders aplicam morph targets positivos e negativos ao vertex buffer Vulkan, recalculando as normais sem alterar UVs. Também existem **oito controles gerais** na prévia — idade, gênero morfológico, peso, musculatura, altura, proporções corporais, volume e firmeza dos seios — que combinam até 564 alvos originais. A sincronização completa dos três controles étnicos e das dependências da GUI principal ainda está pendente.
 
 Execute no diretório `makehumano/`:
 
@@ -57,7 +57,7 @@ python -m pip install -r motor_wgpu/requirements.txt
 python -m motor_wgpu.app
 ```
 
-O parâmetro `--backend vulkan` obriga o uso de Vulkan. O modo automático tenta escolher a API que funcione na máquina. Os testes em GitHub Actions verificam o processamento da malha e a criação de quadros com Vulkan por software (Mesa/Lavapipe). **Isto ainda não substitui a viewport principal** nem integra os 11 macro-modificadores; também faltam subsurface scattering, picking e revisão visual em uma GPU física.
+O parâmetro `--backend vulkan` obriga o uso de Vulkan. O modo automático tenta escolher a API que funcione na máquina. Os testes em GitHub Actions verificam o processamento da malha e a criação de quadros com Vulkan por software (Mesa/Lavapipe). **Isto ainda não substitui a viewport principal** nem reproduz todas as regras de dependência, poses e plugins do MakeHuman original; também faltam subsurface scattering, picking e revisão visual em uma GPU física.
 
 ## Como salvar as atualizações neste repositório
 
@@ -76,9 +76,10 @@ O diretório `codigo/` está versionado no GitHub em `brincadeira/makehumano/cod
 9. [x] Validar deformação, costuras UV, restauração e renderização de novos vértices no backend Vulkan por software.
 10. [x] Criar catálogo de 238 sliders diretos a partir dos arquivos oficiais, incluindo controles bidirecionais e cache de targets.
 11. [ ] Testar visualmente a interface num desktop real e identificar assets externos necessários.
-12. [ ] Integrar os macro-modificadores à nova viewport, preservando suas regras de dependência.
-13. [ ] Testar exportação, salvamento, carga e materiais.
-14. [ ] Adaptar dependências e interface sem quebrar deformações, arquivos e plugins.
+12. [x] Acrescentar oito macros com interpolação verificada contra `human.py` e aplicação de alvos originais.
+13. [ ] Completar os três controles étnicos, as dependências entre modificadores e a integração à GUI principal.
+14. [ ] Testar exportação, salvamento, carga e materiais.
+15. [ ] Adaptar dependências e interface sem quebrar deformações, arquivos e plugins.
 
 ## Licenças e créditos
 
