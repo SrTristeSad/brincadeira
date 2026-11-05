@@ -183,6 +183,7 @@ struct Fragmento {
         self._depth = None
         self._depth_size = None
         self.frames = 0
+        self.objetos_desenhados = 0
 
     def _textura(self, caminho):
         chave = str(caminho or "")
@@ -252,6 +253,7 @@ struct Fragmento {
             ),
         )
         passagem.set_pipeline(self.pipeline)
+        self.objetos_desenhados = 0
         if mundo is not None:
             for obj in sorted(mundo, key=lambda item: item.priority):
                 if not obj.visibility:
@@ -302,6 +304,7 @@ struct Fragmento {
                 passagem.set_vertex_buffer(0, buf_v)
                 passagem.set_index_buffer(buf_i, "uint32")
                 passagem.draw_indexed(len(indices))
+                self.objetos_desenhados += 1
         passagem.end()
         self.device.queue.submit([encoder.finish()])
         self.frames += 1
