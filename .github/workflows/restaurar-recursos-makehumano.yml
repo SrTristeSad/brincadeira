@@ -1,0 +1,80 @@
+name: Completar recursos originais do MakeHumano
+
+on:
+  push:
+    paths:
+      - ".github/workflows/restaurar-recursos-makehumano.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: makehumano-recursos
+  cancel-in-progress: false
+
+jobs:
+  recursos:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout da pasta de testes
+        uses: actions/checkout@v4
+
+      - name: Obter revisão exata do MakeHuman original
+        shell: bash
+        env:
+          GIT_LFS_SKIP_SMUDGE: "1"
+        run: |
+          set -euo pipefail
+          REVISAO="$(sed -n 's/^Commit: //p' makehumano/codigo/.makehumano-origem.txt)"
+          if [ -z "$REVISAO" ]; then
+            echo "Revisão original não encontrada"; exit 1
+          fi
+          git clone --depth 1 --single-branch --branch master \
+            https://github.com/makehumancommunity/makehuman.git \
+            "$RUNNER_TEMP/makehuman-original"
+          OBTIDO="$(git -C "$RUNNER_TEMP/makehuman-original" rev-parse HEAD)"
+          if [ "$OBTIDO" != "$REVISAO" ]; then
+            echo "A revisão upstream mudou: esperado $REVISAO, obtido $OBTIDO."
+            echo "Interrompendo para evitar misturar versões."
+            exit 1
+          fi
+
+      - name: Copiar somente recursos que ainda faltam
+        shell: bash
+        run: |
+          set -euo pipefail
+          ORIGEM="$RUNNER_TEMP/makehuman-original/makehuman"
+          test -f "$ORIGEM/data/3dobjs/base.obj"
+          if [ -e makehumano/codigo/makehuman/data/3dobjs/base.obj ]; then
+            echo "Recursos já presentes. Não haverá substituição."
+            exit 1
+          fi
+          cp -an "$ORIGEM/data/." makehumano/codigo/makehuman/data/ 2>/dev/null || {
+            mkdir -p makehumano/codigo/makehuman/data
+            cp -an "$ORIGEM/data/." makehumano/codigo/makehuman/data/
+          }
+          if [ ! -e makehumano/codigo/makehuman/icons/makehuman.png ]; then
+            cp "$ORIGEM/icons/makehuman.png" makehumano/codigo/makehuman/icons/makehuman.png
+          fi
+          test -f makehumano/codigo/makehuman/data/3dobjs/base.obj
+          test -f makehumano/codigo/makehuman/data/rigs/default.mhskel
+
+      - name: Versionar explicitamente assets ignorados pelo arquivo original
+        shell: bash
+        run: |
+          set -euo pipefail
+          # O .gitignore herdado do upstream ignora data/ e diversas extensões
+          # de modelos e imagens. git add -f é necessário só nesta importação.
+          git add -f -- makehumano/codigo/makehuman/data \
+            makehumano/codigo/makehuman/icons/makehuman.png
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --cached --quiet; then
+            echo "Não há recursos novos."
+            exit 0
+          fi
+          git commit -m "chore(makehumano): incluir malhas, morph targets e assets originais"
+          git push origin HEAD:main
