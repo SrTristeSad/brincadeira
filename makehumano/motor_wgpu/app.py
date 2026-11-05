@@ -127,6 +127,7 @@ def iniciar():
             nome, acessorio.malha,
             acessorio.atualizar(deformador.posicoes_atuais),
             textura_olhos,
+            deletar_vertices=getattr(acessorio, "deletar_vertices", None),
         )
     motor.mostrar_acessorio("olhos_high", False)
     coluna.addWidget(QtWidgets.QLabel("<b>Acessórios experimentais</b>"))
@@ -672,7 +673,8 @@ def iniciar():
                          "salvar_abrir", "exportar_obj", "material_textura",
                          "mapas_detalhe", "mapas_restaurados",
                          "dispersao", "importar_mhm", "olhos",
-                         "olhos_highpoly", "mascara_corpo"}
+                         "olhos_highpoly", "mascara_corpo",
+                         "mascaras_acessorios"}
             ok = eventos_smoke == esperados and motor.frames >= 6
             print(f"Smoke: eventos {sorted(eventos_smoke)}, aprovado={ok}", flush=True)
             aplicacao.exit(0 if ok else 2)
@@ -864,19 +866,64 @@ def iniciar():
             )
 
         def mascara_smoke():
+            """Duas máscaras sintéticas vinculadas a acessórios existentes.
+
+            Não apresentamos os olhos como roupa nem deixamos a máscara
+            artificial ativa fora deste teste.
+            """
             import numpy as np
-            apagados = np.zeros(len(malha.posicoes_base), dtype=bool)
-            apagados[malha.origens[malha.indices[0]]] = True
-            motor.atualizar_mascara_corpo(apagados)
-            assert motor.indices_corpo_ativos < len(malha.indices)
-            print(
-                f"Máscara de triângulos no Vulkan: "
-                f"{motor.indices_corpo_ativos // 3} faces visíveis",
-                flush=True,
+            from .mascaras import indices_corpo_visiveis
+            tamanho = len(malha.posicoes_base)
+            corpo_inteiro = len(malha.indices)
+            low = np.zeros(tamanho, dtype=bool)
+            high = np.zeros(tamanho, dtype=bool)
+            low[int(malha.origens[malha.indices[0]])] = True
+            high[int(malha.origens[malha.indices[-1]])] = True
+
+            assert motor.acessorios["olhos"]["visivel"]
+            assert not motor.acessorios["olhos_high"]["visivel"]
+            motor.definir_mascara_acessorio("olhos", low)
+            motor.definir_mascara_acessorio("olhos_high", high)
+            assert motor.indices_corpo_ativos == len(
+                indices_corpo_visiveis(malha, low)
+            )
+
+            # Ao mostrar o segundo acessório, as duas máscaras se somam.
+            motor.mostrar_acessorio("olhos_high", True)
+            assert motor.indices_corpo_ativos == len(
+                indices_corpo_visiveis(malha, low | high)
+            )
+            motor.mostrar_acessorio("olhos", False)
+            assert motor.indices_corpo_ativos == len(
+                indices_corpo_visiveis(malha, high)
+            )
+            motor.mostrar_acessorio("olhos_high", False)
+            assert motor.indices_corpo_ativos == corpo_inteiro
+
+            # A máscara manual é independente da dos acessórios.
+            motor.mostrar_acessorio("olhos", True)
+            motor.atualizar_mascara_corpo(high)
+            assert motor.indices_corpo_ativos == len(
+                indices_corpo_visiveis(malha, low | high)
             )
             motor.atualizar_mascara_corpo(None)
-            assert motor.indices_corpo_ativos == len(malha.indices)
+            assert motor.indices_corpo_ativos == len(
+                indices_corpo_visiveis(malha, low)
+            )
+
+            # Restaurar o estado inicial do visualizador.
+            motor.definir_mascara_acessorio("olhos", None)
+            motor.definir_mascara_acessorio("olhos_high", None)
+            assert motor.indices_corpo_ativos == corpo_inteiro
+            assert motor.acessorios["olhos"]["visivel"]
+            assert not motor.acessorios["olhos_high"]["visivel"]
             eventos_smoke.add("mascara_corpo")
+            eventos_smoke.add("mascaras_acessorios")
+            print(
+                "Máscaras de dois acessórios combinadas, alternadas e "
+                "restauradas no Vulkan",
+                flush=True,
+            )
 
         def importar_mhm_smoke():
             from tempfile import TemporaryDirectory
