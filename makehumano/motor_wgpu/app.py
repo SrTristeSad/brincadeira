@@ -836,7 +836,7 @@ def iniciar():
                          "dispersao", "importar_mhm", "olhos",
                          "olhos_highpoly", "mascara_corpo",
                          "mascaras_acessorios", "roupa_externa",
-                         "material_mhmat"}
+                         "material_mhmat", "acessorios_projeto"}
             ok = eventos_smoke == esperados and motor.frames >= 6
             print(f"Smoke: eventos {sorted(eventos_smoke)}, aprovado={ok}", flush=True)
             aplicacao.exit(0 if ok else 2)
@@ -1193,6 +1193,62 @@ def iniciar():
                 linha_manual = pecas_externas[chave_manual][2]
                 linha_manual.findChildren(QtWidgets.QPushButton)[0].click()
                 assert motor.indices_corpo_ativos == total
+
+                # Projeto v4 deve abrir sem nenhuma dependência dos arquivos
+                # de origem, incluindo o PNG substituído manualmente.
+                chave_portatil = adicionar_peca_externa(proxy, cor)
+                pecas_externas[chave_portatil][1].setChecked(False)
+                destino = pasta / "com-acessorio.makehumano.json"
+                doc = montar_documento(
+                    macros.perfil, valores_morph, motor.pele, catalogo
+                )
+                salvar_projeto_com_texturas(
+                    destino, doc, catalogo,
+                    {
+                        "cor": motor.textura_cpu,
+                        "normal": None,
+                        "rugosidade": None,
+                    },
+                    acessorios=listar_acessorios_para_salvar(),
+                )
+                salvo = carregar_documento(destino, catalogo)
+                assert len(salvo["acessorios"]) == 1
+                assert not salvo["acessorios"][0]["visivel"]
+                carregados = carregar_acessorios_projeto(
+                    destino, salvo, malha, ler_imagem_qt
+                )
+                assert len(carregados) == 1
+                np.testing.assert_array_equal(carregados[0]["pixels"], cor)
+                assert carregados[0]["cor"] == (0.3, 0.5, 0.8)
+                assert abs(carregados[0]["rugosidade"] - 0.4) < 1e-6
+
+                # Simular mudança de computador: só o projeto e a pasta
+                # .assets sobrevivem.
+                proxy.unlink()
+                obj.unlink()
+                (pasta / "pano.mhmat").unlink()
+                (pasta / "pano.png").unlink()
+                imagens = carregar_texturas_projeto(
+                    destino, salvo, ler_imagem_qt
+                )
+                aplicar_documento(salvo, imagens, carregados)
+                assert len(pecas_externas) == 1
+                chave_nova = next(iter(pecas_externas))
+                assert not motor.acessorios[chave_nova]["visivel"]
+                assert motor.indices_corpo_ativos == total
+                np.testing.assert_array_equal(
+                    motor.acessorios[chave_nova]["textura_cpu"], cor
+                )
+                np.testing.assert_allclose(
+                    motor.acessorios[chave_nova]["cor"], [0.3, 0.5, 0.8]
+                )
+                pecas_externas[chave_nova][1].setChecked(True)
+                assert motor.indices_corpo_ativos < total
+                pecas_externas[chave_nova][2].findChildren(
+                    QtWidgets.QPushButton
+                )[0].click()
+                assert motor.indices_corpo_ativos == total
+                eventos_smoke.add("acessorios_projeto")
                 eventos_smoke.add("material_mhmat")
                 eventos_smoke.add("roupa_externa")
                 print(
