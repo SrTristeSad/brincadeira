@@ -53,6 +53,7 @@ def iniciar():
     from .exportar import exportar_obj_com_material
     from .materiais_obj import caminhos_materiais, caminhos_mapas
     from .mhm import carregar_mhm
+    from .acessorios import carregar_proxy_direto, caminho_olhos_lowpoly
     from .macro import (
         ControladorMacros, VALORES_PADRAO, ROTULOS, ETNIAS,
         ETNIAS_PADRAO, ROTULOS_ETNIAS,
@@ -107,6 +108,41 @@ def iniciar():
     motor.atualizar_vertices(macros.atualizar())
     print(f"Macrovariáveis: {len(macros.arquivos)} targets no catálogo", flush=True)
 
+    # O pacote original desta cópia possui olhos low-poly completos, mas
+    # não inclui roupas. Este é o primeiro acessório com malha independente.
+    acessorio_olhos = carregar_proxy_direto(caminho_olhos_lowpoly(), malha)
+    motor.adicionar_acessorio(
+        "olhos", acessorio_olhos.malha,
+        acessorio_olhos.atualizar(deformador.posicoes_atuais),
+        ler_imagem_qt(acessorio_olhos.textura),
+    )
+    coluna.addWidget(QtWidgets.QLabel("<b>Acessórios experimentais</b>"))
+    checkbox_olhos = QtWidgets.QCheckBox("Mostrar olhos originais (low-poly)")
+    checkbox_olhos.setChecked(True)
+    coluna.addWidget(checkbox_olhos)
+
+    def atualizar_corpo(vertices):
+        motor.atualizar_vertices(vertices)
+        if checkbox_olhos.isChecked():
+            novos_olhos = acessorio_olhos.atualizar(
+                deformador.posicoes_atuais
+            )
+            motor.atualizar_acessorio("olhos", novos_olhos)
+
+    def alternar_olhos(visivel):
+        motor.mostrar_acessorio("olhos", visivel)
+        if visivel:
+            motor.atualizar_acessorio(
+                "olhos", acessorio_olhos.atualizar(deformador.posicoes_atuais)
+            )
+
+    checkbox_olhos.toggled.connect(alternar_olhos)
+    print(
+        f"Acessório olhos: {len(acessorio_olhos.malha.posicoes_base)} "
+        "vértices originais com .mhclo e textura própria",
+        flush=True,
+    )
+
     controle("Rotação horizontal", -180, 180, 0,
              lambda valor: motor.ajustar_camera(angulo=valor * 3.14159265 / 180))
     controle("Elevação", -75, 75, 3,
@@ -151,7 +187,7 @@ def iniciar():
         barra.setRange(0, 100)
         barra.setValue(round(padrao * 100))
         barra.valueChanged.connect(
-            lambda valor, nome=chave: motor.atualizar_vertices(
+            lambda valor, nome=chave: atualizar_corpo(
                 macros.definir(nome, valor / 100.0)
             )
         )
@@ -192,7 +228,7 @@ def iniciar():
     def alterar_etnia(chave, valor):
         vertices_atualizados = macros.definir_etnia(chave, valor / 1000.0)
         sincronizar_etnias()
-        motor.atualizar_vertices(vertices_atualizados)
+        atualizar_corpo(vertices_atualizados)
 
     for nome, slider in controles_etnias.items():
         slider.valueChanged.connect(
@@ -237,7 +273,7 @@ def iniciar():
                 )
             alteracoes[chave] = (alvos_cache[chave], peso)
         novos_vertices = deformador.definir_pesos(alteracoes)
-        motor.atualizar_vertices(novos_vertices)
+        atualizar_corpo(novos_vertices)
         valores_morph[modificador.identificador] = valor
 
     def exibir_grupo(_index):
@@ -282,7 +318,7 @@ def iniciar():
             slider.blockSignals(False)
         deformador.restaurar()
         # O MakeHuman padrão possui os macros iniciais ativos.
-        motor.atualizar_vertices(macros.restaurar())
+        atualizar_corpo(macros.restaurar())
         sincronizar_etnias()
 
     botao_restaurar = QtWidgets.QPushButton("Restaurar todas as deformações")
@@ -351,7 +387,7 @@ def iniciar():
         estado_rugosidade.setText("Rugosidade: restaurada do projeto"
                                  if imagens["rugosidade"] is not None
                                  else "Rugosidade: não carregado")
-        motor.atualizar_vertices(deformador.vertices)
+        atualizar_corpo(deformador.vertices)
 
     def salvar_projeto():
         destino, _ = QtWidgets.QFileDialog.getSaveFileName(
@@ -607,7 +643,7 @@ def iniciar():
                          "macros", "restauracao", "etnias", "restauracao_total",
                          "salvar_abrir", "exportar_obj", "material_textura",
                          "mapas_detalhe", "mapas_restaurados",
-                         "dispersao", "importar_mhm"}
+                         "dispersao", "importar_mhm", "olhos"}
             ok = eventos_smoke == esperados and motor.frames >= 6
             print(f"Smoke: eventos {sorted(eventos_smoke)}, aprovado={ok}", flush=True)
             aplicacao.exit(0 if ok else 2)
@@ -759,6 +795,27 @@ def iniciar():
                 eventos_smoke.add("exportar_obj")
                 print("Corpo deformado exportado como OBJ e reimportado", flush=True)
 
+        def olhos_smoke():
+            import numpy as np
+            item = motor.acessorios["olhos"]
+            np.testing.assert_allclose(
+                item["vertices"],
+                acessorio_olhos.atualizar(deformador.posicoes_atuais),
+                rtol=0, atol=1e-6,
+            )
+            assert item["visivel"]
+            checkbox_olhos.setChecked(False)
+            assert not item["visivel"]
+            checkbox_olhos.setChecked(True)
+            assert item["visivel"]
+            np.testing.assert_allclose(
+                item["vertices"],
+                acessorio_olhos.atualizar(deformador.posicoes_atuais),
+                rtol=0, atol=1e-6,
+            )
+            eventos_smoke.add("olhos")
+            print("Olhos do .mhclo desenhados e alternados no Vulkan", flush=True)
+
         def importar_mhm_smoke():
             from tempfile import TemporaryDirectory
             import numpy as np
@@ -802,6 +859,7 @@ def iniciar():
         QtCore.QTimer.singleShot(2000, deformar_smoke)
         QtCore.QTimer.singleShot(4500, deformar_negativo_smoke)
         QtCore.QTimer.singleShot(6400, macro_smoke)
+        QtCore.QTimer.singleShot(7700, olhos_smoke)
         QtCore.QTimer.singleShot(9000, restaurar_smoke)
         QtCore.QTimer.singleShot(10700, etnia_smoke)
         QtCore.QTimer.singleShot(13600, restaurar_tudo_smoke)
