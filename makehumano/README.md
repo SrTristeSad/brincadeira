@@ -57,7 +57,7 @@ python -m pip install -r motor_wgpu/requirements.txt
 python -m motor_wgpu.app
 ```
 
-O parâmetro `--backend vulkan` obriga o uso de Vulkan. O modo automático tenta escolher a API que funcione na máquina. Os testes em GitHub Actions verificam o processamento da malha e a criação de quadros com Vulkan por software (Mesa/Lavapipe). **Isto ainda não substitui a viewport principal** nem reproduz todas as regras de dependência, poses e plugins do MakeHuman original; também faltam subsurface scattering, picking e revisão visual em uma GPU física.
+O parâmetro `--backend vulkan` obriga o uso de Vulkan. O modo automático tenta escolher a API que funcione na máquina. Os testes em GitHub Actions verificam o processamento da malha, a correspondência de vértices com o método original `algos3d.Target.apply`, e a criação de quadros com Vulkan por software (Mesa/Lavapipe). O visualizador também permite **salvar e abrir projetos experimentais `.makehumano.json`**, com os parâmetros anatômicos e o material básico da pele; esse formato **não é compatível com o `.mhm` original**. **Isto ainda não substitui a viewport principal** nem reproduz todas as regras de dependência, poses e plugins do MakeHuman original; também faltam subsurface scattering, picking e revisão visual em uma GPU física.
 
 ## Como salvar as atualizações neste repositório
 
@@ -78,9 +78,11 @@ O diretório `codigo/` está versionado no GitHub em `brincadeira/makehumano/cod
 11. [ ] Testar visualmente a interface num desktop real e identificar assets externos necessários.
 12. [x] Acrescentar oito macros com interpolação verificada contra `human.py` e aplicação de alvos originais.
 13. [x] Integrar os três controles étnicos e sua normalização com testes comparativos contra o MakeHuman original.
-14. [ ] Conectar os modificadores à lógica completa de dependências e eventos da GUI principal.
-15. [ ] Testar exportação, salvamento, carga e materiais.
-16. [ ] Adaptar dependências e interface sem quebrar deformações, arquivos e plugins.
+14. [x] Comparar todos os 238 sliders com o crawler original e checar posições deformadas usando `algos3d.Target.apply` como referência.
+15. [x] Acrescentar salvamento e abertura de personagens em formato JSON experimental versionado.
+16. [ ] Conectar os modificadores à lógica completa de dependências e eventos da GUI principal.
+17. [ ] Testar o formato `.mhm` original, exportação 3D e materiais avançados.
+18. [ ] Adaptar dependências e interface sem quebrar deformações, arquivos e plugins.
 
 ## Licenças e créditos
 
