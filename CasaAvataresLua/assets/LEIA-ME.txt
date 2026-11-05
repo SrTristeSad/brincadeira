@@ -1,14 +1,11 @@
-Coloque aqui:
-  avatar1.glb  -> personagem 1
-  avatar2.glb  -> personagem 2
+CASA VIVA — PERSONAGENS
 
-Sem esses arquivos, o projeto exibe bonecos 3D provisórios que se animam
-por programação Lua. Modelos GLB animados carregam seus próprios clipes.
+avatar1.glb e avatar2.glb estão incluídos nesta versão.
+Cada um traz corpo estilizado com 26 animações glTF incorporadas.
 
-Arquivos FBX do MakeHuman/Mixamo precisam ser convertidos para GLB
-(incluindo o esqueleto, texturas e as animações que você deseja usar).
-O LÖVR não carrega FBX diretamente.
+Para usar o seu MakeHuman, substitua avatar1.glb e/ou avatar2.glb
+por um GLB animado seu, preservando os nomes dos arquivos.
 
-Observação: o código não adiciona animações a uma malha estática.
-Para movimentos reais de braços, pernas e rosto de um humano importado,
-o GLB precisa conter clipes de animação compatíveis.
+Os GLBs originais podem ser regenerados com:
+  python tools/gerar_avatares_demo.py
+Requer numpy e trimesh somente para reconstruir os modelos.

@@ -5,10 +5,13 @@ local Simulation=require('simulation')
 local Avatars=require('avatars')
 local Camera=require('camera')
 local Library=require('animation_library')
+local HUD=require('hud')
 
 local sim, catalog, camera
 local selecionado,indice=1,1
 local painel=true
+local mensagem=''
+local mensagemTempo=0
 local function clamp(v,a,b) return math.max(a,math.min(b,v)) end
 
 local function importar()
@@ -38,7 +41,10 @@ local function executar()
     sim:ativarAnimacao(selecionado,item.id,item.duracao)
   end
   local agente=sim.agentes[selecionado]
-  print('[ANIMAÇÕES] '..item.id..' -> '..Avatars.temAnimacao(agente,item.id))
+  local status=Avatars.temAnimacao(agente,item.id)
+  mensagem=(status=='GLB ausente' or status=='sem clipe') and 'Arquivo de animação não instalado' or ('Executando: '..item.id)
+  mensagemTempo=4
+  print('[ANIMAÇÕES] '..item.id..' -> '..status)
 end
 
 local function rotulo(p,agente)
@@ -102,6 +108,7 @@ function lovr.update(dt)
   if lovr.system.isKeyDown('q') then camera:aproximar(-dt*7) end
   if lovr.system.isKeyDown('e') then camera:aproximar(dt*7) end
   sim:update(dt*(Settings.velocidadeTempo or 1))
+  mensagemTempo=math.max(0,mensagemTempo-dt)
   camera:seguir(sim.agentes[selecionado],dt)
 end
 
@@ -114,7 +121,7 @@ function lovr.draw(pass)
     Avatars.draw(pass,a)
     rotulo(pass,a)
   end
-  interface(pass)
+  if painel then HUD.draw(pass,sim,catalog,indice,selecionado,camera,mensagemTempo>0 and mensagem or '') end
 end
 
 function lovr.keypressed(key,_,repeated)
@@ -148,7 +155,26 @@ function lovr.keypressed(key,_,repeated)
     for i,item in ipairs(catalog) do print(i..' - '..item.id) end
   elseif key=='escape' then lovr.event.quit() end
 end
-function lovr.mousepressed(x,y,button) camera.drag=button end
+function lovr.mousepressed(x,y,button)
+  if button==1 and painel then
+    local w,h=lovr.system.getWindowDimensions()
+    -- Suporta mouse com coordenadas em pixels do desktop.
+    local command=HUD.hit(x,y,w,h)
+    if command then
+      if command:sub(1,4)=='room' then camera:irPara(tonumber(command:sub(5)))
+      elseif command=='one' then sim:setTotal(1);selecionado=1
+      elseif command=='two' then sim:setTotal(2)
+      elseif command=='previous' then proximaAcao(-1)
+      elseif command=='next' then proximaAcao(1)
+      elseif command=='play' then executar()
+      elseif command=='chat' then sim:setComunicacao(not sim.comunicacao)
+      elseif command=='camera' then selecionado=selecionado%sim.total+1
+      elseif command=='follow' then camera.follow=not camera.follow end
+      return
+    end
+  end
+  camera.drag=button
+end
 function lovr.mousereleased(x,y,button) if camera.drag==button then camera.drag=0 end end
 function lovr.mousemoved(x,y,dx,dy)
   if camera.drag~=0 then camera:arrastar(dx,dy,camera.drag) end

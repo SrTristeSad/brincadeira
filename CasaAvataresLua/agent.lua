@@ -7,7 +7,8 @@ Agent.__index = Agent
 Agent.acoes = {
   'idle', 'walk', 'run', 'sit', 'sleep', 'dance', 'wave', 'talk',
   'read', 'cook', 'eat', 'work', 'stretch', 'exercise', 'think',
-  'observe', 'clean', 'laugh', 'relax', 'greet', 'explore'
+  'observe', 'clean', 'laugh', 'relax', 'greet', 'explore',
+  'jump', 'clap', 'nod', 'celebrate', 'point'
 }
 
 Agent.locais = {

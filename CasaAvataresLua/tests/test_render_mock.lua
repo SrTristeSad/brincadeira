@@ -4,16 +4,18 @@ local draws = 0
 lovr = {
   graphics = {setBackgroundColor = function(...) end},
   filesystem = {isFile = function(_) return false end},
-  system = {isKeyDown = function(...) return false end},
+  system = {isKeyDown = function(...) return false end, getWindowDimensions=function() return 1280,800 end},
   event = {quit = function() end}
 }
 local mock = {}
-for _,method in ipairs({'box','sphere','setColor','text','push','pop',
-                         'translate','rotate','scale','draw','setViewPose'}) do
+for _,method in ipairs({'box','sphere','cylinder','setColor','text','push','pop',
+                         'translate','rotate','scale','draw','setViewPose',
+                         'getDimensions','origin','setShader','setProjection','setDepthTest'}) do
   mock[method] = function(self,...)
     draws = draws + 1
   end
 end
+function mock:getDimensions() return 1280,800 end
 function mat4() return {lookAt=function(self,...) return self end} end
 function vector(...) return {...} end
 require('main')

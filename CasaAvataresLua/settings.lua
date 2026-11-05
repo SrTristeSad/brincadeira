@@ -6,11 +6,8 @@ return {
   -- Animações adultas são opcionais e nunca são executadas automaticamente.
   -- Use somente personagens adultos, animações consensuais e arquivos autorizados.
   animacoesAdultas = true,
-  -- Opcional: declare ações mesmo antes de importar os arquivos .glb.
-  animacoesExtra = {
-    {id='adult_cena_01', rotulo='Cena adulta 01', adulto=true, duracao=12},
-    {id='dupla_adult_01', rotulo='Cena em dupla 01', adulto=true, dupla=true, duracao=15}
-  },
+  -- Apenas arquivos reais aparecerão como cenas extras no catálogo.
+  animacoesExtra = {},
   avatares = {
     {
       nome = 'Avatar 1',

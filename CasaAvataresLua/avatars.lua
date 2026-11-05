@@ -12,7 +12,8 @@ local aliases = {
   stretch={'stretch'}, exercise={'exercise','jump','workout'},
   think={'think','ponder'}, observe={'look','observe','inspect'},
   clean={'clean','sweep'}, laugh={'laugh'}, relax={'relax','rest'},
-  greet={'greet','hello','wave'}, explore={'walk'}
+  greet={'greet','hello','wave'}, explore={'explore','walk'},
+  jump={'jump'}, clap={'clap'}, nod={'nod'}, celebrate={'celebrate'}, point={'point'}
 }
 
 local function setColor(p,c) p:setColor(c[1],c[2],c[3]) end
