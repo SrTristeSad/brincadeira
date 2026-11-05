@@ -92,14 +92,32 @@ def preparar_malha_original(obj):
             np.ascontiguousarray(indices.reshape(-1), dtype=np.uint32))
 
 
-def matriz_wgpu(camera, obj):
-    """Reaproveita câmera/modelo originais e converte depth GL [-1,1] a [0,1]."""
+def matriz_wgpu(camera, obj, *, tamanho_origem=None, tamanho_destino=None):
+    """Converte câmera original para Vulkan, com proporção opcional offscreen.
+
+    A matriz projetiva é ajustada para o aspecto do destino sem modificar
+    G.windowWidth, G.windowHeight nem os parâmetros da câmera original.
+    """
+    if (tamanho_origem is None) != (tamanho_destino is None):
+        raise ValueError("É preciso informar origem e destino da projeção")
+
     if not camera.updated:
         camera.updateCamera()
         camera.updated = True
     proj, view = camera.getMatrices(0)
     model = camera.getModelMatrix(obj)
-    proj = np.asarray(proj, dtype=np.float32)
+    proj = np.asarray(proj, dtype=np.float32).copy()
+    if tamanho_destino is not None:
+        ow, oh = tamanho_origem
+        dw, dh = tamanho_destino
+        if min(ow, oh, dw, dh) <= 0:
+            raise ValueError("Tamanhos de câmera offscreen inválidos")
+        origem_aspect = float(ow) / float(oh)
+        destino_aspect = float(dw) / float(dh)
+        # MakeHuman Camera.getMatrices(0) e OrbitalCamera.getMatrices(0)
+        # usam aspect somente no eixo horizontal em perspectiva/ortho.
+        # Para eye=0, o ajuste da linha X preserva a direção da câmera.
+        proj[0, :] *= origem_aspect / destino_aspect
     view = np.asarray(view, dtype=np.float32)
     model = np.asarray(model, dtype=np.float32)
     if any(m.shape != (4, 4) or not np.isfinite(m).all()
@@ -373,27 +391,29 @@ struct Fragmento {
             buffer.unmap()
         return decodificar_buffer_rgb(dados, largura, altura, self.formato)
 
-    def capturar_framebuffer(self, mundo, cameras):
-        """Captura GPU real na resolução atual; não é render de produção."""
-        largura, altura = self.canvas.get_physical_size()
+    def capturar_framebuffer(self, mundo, cameras, largura=None, altura=None):
+        """Captura a cena GPU em tamanho solicitado, sem alterar a viewport."""
+        fisica_w, fisica_h = self.canvas.get_physical_size()
+        if largura is None:
+            largura = fisica_w
+        if altura is None:
+            altura = fisica_h
         alvo = self.framebuffer_offscreen(largura, altura)
         self.desenhar(mundo, cameras, alvo=alvo)
         return self.ler_framebuffer_rgb(alvo)
 
     def desenhar(self, mundo, cameras, *, cor_fundo=(0.2, 0.2, 0.2, 1),
                 alvo=None):
-        """Desenha na janela ou em uma textura da mesma resolução da viewport.
+        """Desenha na janela ou num alvo offscreen de resolução independente.
 
-        Alvos com outra resolução exigem atualização explícita da projeção
-        original e ainda não são aceitos por este estágio do piloto.
+        A viewport e os parâmetros originais da câmera não são alterados.
         """
         wgpu = self.wgpu
-        tamanho = tuple(self.canvas.get_physical_size())
-        if len(tamanho) < 2 or tamanho[0] < 1 or tamanho[1] < 1:
+        tamanho_janela = tuple(self.canvas.get_physical_size())
+        if len(tamanho_janela) < 2 or min(tamanho_janela[:2]) < 1:
             return
-        tamanho = (int(tamanho[0]), int(tamanho[1]))
-        if alvo is not None and tuple(alvo.size[:2]) != tamanho:
-            raise ValueError("Alvo offscreen deve corresponder à viewport")
+        tamanho_janela = tuple(map(int, tamanho_janela[:2]))
+        tamanho = tuple(map(int, alvo.size[:2])) if alvo is not None else tamanho_janela
         if alvo is None:
             if self._depth_size != tamanho:
                 depth = self.device.create_texture(
@@ -459,7 +479,17 @@ struct Fragmento {
                 pipeline = self.pipeline_linhas if linhas else self.pipeline
                 passagem.set_pipeline(pipeline)
                 cam = cameras[obj.cameraMode]
-                mvp = matriz_wgpu(cam, obj)
+                if alvo is None:
+                    mvp = matriz_wgpu(cam, obj)
+                else:
+                    # getMatrices usa G.windowWidth/Height (projeção original).
+                    # Não alterar G: ajustamos apenas a matriz para o alvo.
+                    from core import G
+                    mvp = matriz_wgpu(
+                        cam, obj,
+                        tamanho_origem=(G.windowWidth, G.windowHeight),
+                        tamanho_destino=tamanho,
+                    )
                 cor, flags = parametros_material_vulkan(obj)
                 uniforms = np.concatenate(
                     (mvp.T.reshape(-1), cor, flags)
