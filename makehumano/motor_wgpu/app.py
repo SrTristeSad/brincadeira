@@ -43,6 +43,7 @@ def iniciar():
     from PyQt5 import QtCore, QtWidgets, QtGui
     from rendercanvas.qt import QRenderWidget
     from .gpu import MotorWgpu
+    from .morphs import Deformador, ler_target, pasta_targets
 
     malha = carregar_obj(caminho_base_obj())
     print(
@@ -80,6 +81,7 @@ def iniciar():
     janela.show()
     motor = MotorWgpu(tela, malha)
     print(f"Adaptador gráfico: {motor.adapter.info}", flush=True)
+    deformador = Deformador(malha)
 
     controle("Rotação horizontal", -180, 180, 0,
              lambda valor: motor.ajustar_camera(angulo=valor * 3.14159265 / 180))
@@ -100,6 +102,33 @@ def iniciar():
         botao = QtWidgets.QPushButton(nome)
         botao.clicked.connect(lambda _checked=False, cor=rgb: motor.ajustar_pele(cor=cor))
         coluna.addWidget(botao)
+
+    coluna.addWidget(QtWidgets.QLabel("<b>Deformações MakeHuman</b>"))
+    coluna.addWidget(QtWidgets.QLabel("Alvos .target originais (demonstração)"))
+    exemplos = (
+        ("Nariz: largura +", "nose/nose-scale-horiz-incr.target"),
+        ("Torso: formato V +", "torso/torso-vshape-incr.target"),
+        ("Abdômen: tônus +", "stomach/stomach-tone-incr.target"),
+        ("Mão esquerda: tamanho +", "armslegs/l-hand-scale-incr.target"),
+    )
+    controles_morph = []
+    for titulo, caminho_relativo in exemplos:
+        alvo = ler_target(
+            pasta_targets() / caminho_relativo,
+            len(malha.posicoes_base),
+        )
+
+        def mudar_morph(valor, nome=caminho_relativo, target=alvo):
+            alterados = deformador.definir_peso(nome, target, valor / 100.0)
+            motor.atualizar_vertices(alterados)
+
+        controles_morph.append(controle(titulo, 0, 100, 0, mudar_morph))
+
+    botao_restaurar = QtWidgets.QPushButton("Restaurar deformações")
+    botao_restaurar.clicked.connect(
+        lambda: [slider.setValue(0) for slider in controles_morph]
+    )
+    coluna.addWidget(botao_restaurar)
 
     estado = QtWidgets.QLabel("Textura: branca (tonalidade por shader)")
     estado.setWordWrap(True)
@@ -141,11 +170,16 @@ def iniciar():
 
         def terminar_smoke():
             print(f"Quadros desenhados: {motor.frames}", flush=True)
-            # Pelo menos um quadro antes e outro após a atualização do material.
-            aplicacao.exit(0 if motor.frames >= 2 else 2)
+            # Um quadro inicial e outros após atualizar textura e geometria.
+            aplicacao.exit(0 if motor.frames >= 3 else 2)
+
+        def deformar_smoke():
+            controles_morph[0].setValue(65)
+            print("Morph target original aplicado ao buffer Vulkan", flush=True)
 
         QtCore.QTimer.singleShot(800, atualizar_smoke)
-        QtCore.QTimer.singleShot(4500, terminar_smoke)
+        QtCore.QTimer.singleShot(2000, deformar_smoke)
+        QtCore.QTimer.singleShot(8500, terminar_smoke)
 
     return aplicacao.exec_()
 
