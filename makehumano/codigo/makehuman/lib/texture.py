@@ -190,6 +190,17 @@ class Texture(object):
 
 _textureCache = {}
 
+
+def _invalidar_texturas_vulkan(caminho=None):
+    """Desvia recargas explícitas para o canvas piloto sem criar contexto GL."""
+    canvas = getattr(G, 'canvas', None)
+    invalidar = getattr(canvas, 'invalidar_texturas', None)
+    if not callable(invalidar):
+        return False
+    invalidar(caminho)
+    return True
+
+
 def getTexture(path, cache=None):
     texture = None
     cache = cache or _textureCache
@@ -261,6 +272,8 @@ def reloadTextures():
     objects).
     """
     log.message('Reloading all textures')
+    if _invalidar_texturas_vulkan():
+        return
     for path in _textureCache:
         try:
             _textureCache[path].loadImage(path)
@@ -274,6 +287,8 @@ def reloadTexture(path):
     reference to it is kept.
     """
     log.message('Reloading texture %s', path)
+    if _invalidar_texturas_vulkan(path):
+        return
     if path not in _textureCache:
         log.error('Cannot reload non-existing texture %s', path)
         return
