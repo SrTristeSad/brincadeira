@@ -422,19 +422,19 @@ def iniciar():
         # Solicitar consentimento explícito, sem prometer importação integral.
         resumo = (
             f"{importacao.modificadores_aplicados} de "
-            f"{importacao.modificadores_lidos} modificadores reconhecidos.\\n"
+            f"{importacao.modificadores_lidos} modificadores reconhecidos.\n"
             "A prévia importa somente a forma corporal; não copia "
             "roupas, poses, esqueleto, materiais nem configurações de câmera."
         )
         if importacao.avisos:
             resumo += (
-                "\\n\\nAvisos:\\n"
-                + "\\n".join(importacao.avisos[:8])
-                + ("\\n…" if len(importacao.avisos) > 8 else "")
+                "\n\nAvisos:\n"
+                + "\n".join(importacao.avisos[:8])
+                + ("\n…" if len(importacao.avisos) > 8 else "")
             )
         resposta = QtWidgets.QMessageBox.question(
             janela, "Importação parcial de MHM",
-            resumo + "\\n\\nImportar apenas a forma corporal?",
+            resumo + "\n\nImportar apenas a forma corporal?",
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
             QtWidgets.QMessageBox.No,
         )
@@ -765,17 +765,17 @@ def iniciar():
             with TemporaryDirectory(prefix="makehumano-mhm-") as pasta:
                 caminho = Path(pasta) / "exemplo.mhm"
                 caminho.write_text(
-                    "# Written by MakeHuman v1.2.0\\n"
-                    "version v1.2.0\\n"
-                    "modifier macrodetails/Gender 0.700000\\n"
-                    "modifier macrodetails/Age 0.650000\\n"
-                    "modifier macrodetails-universal/Muscle 0.800000\\n"
-                    "modifier macrodetails/African 0.600000\\n"
-                    "modifier macrodetails/Asian 0.200000\\n"
-                    "modifier macrodetails/Caucasian 0.200000\\n"
-                    "modifier nose/nose-scale-horiz-decr|incr -0.370000\\n"
-                    "camera 0 0 0 0 0 1\\n"
-                    "subdivide False\\n",
+                    "# Written by MakeHuman v1.2.0\n"
+                    "version v1.2.0\n"
+                    "modifier macrodetails/Gender 0.700000\n"
+                    "modifier macrodetails/Age 0.650000\n"
+                    "modifier macrodetails-universal/Muscle 0.800000\n"
+                    "modifier macrodetails/African 0.600000\n"
+                    "modifier macrodetails/Asian 0.200000\n"
+                    "modifier macrodetails/Caucasian 0.200000\n"
+                    "modifier nose/nose-scale-horiz-decr|incr -0.370000\n"
+                    "camera 0 0 0 0 0 1\n"
+                    "subdivide False\n",
                     encoding="utf-8",
                 )
                 conversao = carregar_mhm(caminho, catalogo)
