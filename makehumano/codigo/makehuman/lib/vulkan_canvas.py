@@ -207,7 +207,7 @@ def criar_canvas_vulkan(canvas_original):
                         saida.write(
                             "vulkan-offscreen:"
                             + str(pixels.shape[1]) + "x"
-                            + str(pixels.shape[0]) + "\\n"
+                            + str(pixels.shape[0]) + "\n"
                         )
                     print(
                         "MAKEHUMANO_VULKAN: framebuffer offscreen RGB="
