@@ -29,7 +29,7 @@ class TestarProjetos(unittest.TestCase):
         perfil.definir("age", 0.6)
         perfil.definir("weight", 0.72)
         perfil.definir_etnia("asian", 0.55)
-        pele = Pele(cor=(0.6, 0.4, 0.3), rugosidade=0.4)
+        pele = Pele(cor=(0.6, 0.4, 0.3), rugosidade=0.4, dispersao=0.68)
         return montar_documento(
             perfil, {
                 "nose/nose-scale-horiz-decr|incr": -35,
@@ -47,6 +47,7 @@ class TestarProjetos(unittest.TestCase):
             self.assertEqual(json.loads(caminho.read_text())["formato"], FORMATO)
             self.assertEqual(aberto["versao"], VERSAO)
             self.assertAlmostEqual(sum(aberto["etnias"].values()), 1.0)
+            self.assertAlmostEqual(aberto["pele"]["dispersao"], 0.68)
 
     def test_valida_modificadores_desconhecidos_e_limites(self):
         documento = self.exemplo()
@@ -76,6 +77,38 @@ class TestarProjetos(unittest.TestCase):
         invalido["macros"]["weight"] = float("nan")
         with self.assertRaises(ValueError):
             validar_documento(invalido, self.catalogo)
+
+    def test_projeto_v1_abre_sem_mudar_aparencia_antiga(self):
+        legado = self.exemplo()
+        legado["versao"] = 1
+        del legado["pele"]["dispersao"]
+        with tempfile.TemporaryDirectory() as pasta:
+            arquivo = Path(pasta) / "legado.makehumano.json"
+            arquivo.write_text(json.dumps(legado), encoding="utf-8")
+            migrado = carregar_documento(arquivo, self.catalogo)
+            self.assertEqual(migrado["versao"], VERSAO)
+            # Projetos antigos não tinham dispersão, portanto nenhum efeito.
+            self.assertEqual(migrado["pele"]["dispersao"], 0.0)
+            self.assertEqual(migrado["macros"], legado["macros"])
+            self.assertEqual(migrado["modificadores"], legado["modificadores"])
+            salvar_documento(arquivo, migrado, self.catalogo)
+            self.assertEqual(
+                json.loads(arquivo.read_text(encoding="utf-8"))["versao"], VERSAO
+            )
+
+    def test_dispersao_valida_limites_e_rejeita_invalidos(self):
+        original = self.exemplo()
+        for valor in (0, 0.33, 1):
+            p = deepcopy(original)
+            p["pele"]["dispersao"] = valor
+            self.assertAlmostEqual(
+                validar_documento(p, self.catalogo)["pele"]["dispersao"], valor
+            )
+        for valor in (-0.1, 1.1, float("nan"), float("inf"), True, "0.5"):
+            p = deepcopy(original)
+            p["pele"]["dispersao"] = valor
+            with self.subTest(valor=valor), self.assertRaises(ValueError):
+                validar_documento(p, self.catalogo)
 
     def test_arquivo_json_invalido_e_tamanho_excessivo(self):
         with tempfile.TemporaryDirectory() as pasta:
