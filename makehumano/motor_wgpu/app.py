@@ -129,10 +129,23 @@ def iniciar():
     ))
 
     if args.smoke:
+        def atualizar_smoke():
+            # Testar mudanças de material e upload de textura após o 1º frame.
+            import numpy as np
+            textura = np.full((8, 8, 4), 255, dtype=np.uint8)
+            textura[..., :3] = (170, 113, 97)
+            motor.atualizar_textura(textura)
+            motor.ajustar_pele(cor=(0.92, 0.75, 0.66), rugosidade=0.42)
+            motor.ajustar_camera(angulo=0.2)
+            print("Textura RGBA e material atualizados em execução", flush=True)
+
         def terminar_smoke():
             print(f"Quadros desenhados: {motor.frames}", flush=True)
-            aplicacao.exit(0 if motor.frames > 0 else 2)
-        QtCore.QTimer.singleShot(3500, terminar_smoke)
+            # Pelo menos um quadro antes e outro após a atualização do material.
+            aplicacao.exit(0 if motor.frames >= 2 else 2)
+
+        QtCore.QTimer.singleShot(800, atualizar_smoke)
+        QtCore.QTimer.singleShot(4500, terminar_smoke)
 
     return aplicacao.exec_()
 
