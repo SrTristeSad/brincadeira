@@ -53,7 +53,10 @@ def iniciar():
     from .exportar import exportar_obj_com_material
     from .materiais_obj import caminhos_materiais, caminhos_mapas
     from .mhm import carregar_mhm
-    from .acessorios import carregar_proxy_direto, caminho_olhos_lowpoly
+    from .acessorios import (
+        carregar_proxy_direto, caminho_olhos_lowpoly,
+        carregar_proxy_ponderado, caminho_olhos_highpoly,
+    )
     from .macro import (
         ControladorMacros, VALORES_PADRAO, ROTULOS, ETNIAS,
         ETNIAS_PADRAO, ROTULOS_ETNIAS,
@@ -111,35 +114,60 @@ def iniciar():
     # O pacote original desta cópia possui olhos low-poly completos, mas
     # não inclui roupas. Este é o primeiro acessório com malha independente.
     acessorio_olhos = carregar_proxy_direto(caminho_olhos_lowpoly(), malha)
-    motor.adicionar_acessorio(
-        "olhos", acessorio_olhos.malha,
-        acessorio_olhos.atualizar(deformador.posicoes_atuais),
-        ler_imagem_qt(acessorio_olhos.textura),
+    acessorio_olhos_high = carregar_proxy_ponderado(
+        caminho_olhos_highpoly(), malha
     )
+    modelos_olhos = {
+        "olhos": acessorio_olhos,
+        "olhos_high": acessorio_olhos_high,
+    }
+    textura_olhos = ler_imagem_qt(acessorio_olhos.textura)
+    for nome, acessorio in modelos_olhos.items():
+        motor.adicionar_acessorio(
+            nome, acessorio.malha,
+            acessorio.atualizar(deformador.posicoes_atuais),
+            textura_olhos,
+        )
+    motor.mostrar_acessorio("olhos_high", False)
     coluna.addWidget(QtWidgets.QLabel("<b>Acessórios experimentais</b>"))
-    checkbox_olhos = QtWidgets.QCheckBox("Mostrar olhos originais (low-poly)")
+    checkbox_olhos = QtWidgets.QCheckBox("Mostrar olhos originais")
     checkbox_olhos.setChecked(True)
     coluna.addWidget(checkbox_olhos)
+    combo_olhos = QtWidgets.QComboBox()
+    combo_olhos.addItem("Olhos baixa resolução (referência direta)", "olhos")
+    combo_olhos.addItem("Olhos alta resolução (proxy ponderado)", "olhos_high")
+    coluna.addWidget(combo_olhos)
 
     def atualizar_corpo(vertices):
         motor.atualizar_vertices(vertices)
         if checkbox_olhos.isChecked():
-            novos_olhos = acessorio_olhos.atualizar(
-                deformador.posicoes_atuais
+            nome = combo_olhos.currentData()
+            motor.atualizar_acessorio(
+                nome, modelos_olhos[nome].atualizar(
+                    deformador.posicoes_atuais
+                )
             )
-            motor.atualizar_acessorio("olhos", novos_olhos)
 
     def alternar_olhos(visivel):
-        motor.mostrar_acessorio("olhos", visivel)
+        selecionado = combo_olhos.currentData()
+        for nome in modelos_olhos:
+            motor.mostrar_acessorio(nome, visivel and nome == selecionado)
         if visivel:
             motor.atualizar_acessorio(
-                "olhos", acessorio_olhos.atualizar(deformador.posicoes_atuais)
+                selecionado, modelos_olhos[selecionado].atualizar(
+                    deformador.posicoes_atuais
+                )
             )
 
     checkbox_olhos.toggled.connect(alternar_olhos)
+    combo_olhos.currentIndexChanged.connect(
+        lambda _: alternar_olhos(checkbox_olhos.isChecked())
+    )
     print(
-        f"Acessório olhos: {len(acessorio_olhos.malha.posicoes_base)} "
-        "vértices originais com .mhclo e textura própria",
+        "Acessórios olhos: "
+        f"{len(acessorio_olhos.malha.posicoes_base)} vértices low-poly, "
+        f"{len(acessorio_olhos_high.malha.posicoes_base)} high-poly; "
+        "ambos com .mhclo e textura própria",
         flush=True,
     )
 
@@ -643,7 +671,8 @@ def iniciar():
                          "macros", "restauracao", "etnias", "restauracao_total",
                          "salvar_abrir", "exportar_obj", "material_textura",
                          "mapas_detalhe", "mapas_restaurados",
-                         "dispersao", "importar_mhm", "olhos"}
+                         "dispersao", "importar_mhm", "olhos",
+                         "olhos_highpoly"}
             ok = eventos_smoke == esperados and motor.frames >= 6
             print(f"Smoke: eventos {sorted(eventos_smoke)}, aprovado={ok}", flush=True)
             aplicacao.exit(0 if ok else 2)
@@ -797,24 +826,42 @@ def iniciar():
 
         def olhos_smoke():
             import numpy as np
-            item = motor.acessorios["olhos"]
+            low = motor.acessorios["olhos"]
+            high = motor.acessorios["olhos_high"]
             np.testing.assert_allclose(
-                item["vertices"],
+                low["vertices"],
                 acessorio_olhos.atualizar(deformador.posicoes_atuais),
                 rtol=0, atol=1e-6,
             )
-            assert item["visivel"]
+            assert low["visivel"] and not high["visivel"]
             checkbox_olhos.setChecked(False)
-            assert not item["visivel"]
+            assert not low["visivel"] and not high["visivel"]
             checkbox_olhos.setChecked(True)
-            assert item["visivel"]
-            np.testing.assert_allclose(
-                item["vertices"],
-                acessorio_olhos.atualizar(deformador.posicoes_atuais),
-                rtol=0, atol=1e-6,
-            )
+            assert low["visivel"]
             eventos_smoke.add("olhos")
-            print("Olhos do .mhclo desenhados e alternados no Vulkan", flush=True)
+
+            combo_olhos.setCurrentIndex(1)
+            assert high["visivel"] and not low["visivel"]
+            assert high["vertices"].shape[0] > low["vertices"].shape[0]
+            np.testing.assert_allclose(
+                high["vertices"],
+                acessorio_olhos_high.atualizar(deformador.posicoes_atuais),
+                rtol=0, atol=1e-5,
+            )
+            # Alterações do rosto atualizam o proxy ponderado ativo.
+            controles_macros["age"].setValue(70)
+            np.testing.assert_allclose(
+                high["vertices"],
+                acessorio_olhos_high.atualizar(deformador.posicoes_atuais),
+                rtol=0, atol=1e-5,
+            )
+            combo_olhos.setCurrentIndex(0)
+            assert low["visivel"] and not high["visivel"]
+            eventos_smoke.add("olhos_highpoly")
+            print(
+                "Olhos low/high poly alternados e high-poly deformado no Vulkan",
+                flush=True,
+            )
 
         def importar_mhm_smoke():
             from tempfile import TemporaryDirectory
