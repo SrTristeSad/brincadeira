@@ -11,7 +11,9 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from motor_wgpu.malha import caminho_base_obj, carregar_obj
-from motor_wgpu.mascaras import indices_corpo_visiveis, transferir_mascara_proxy
+from motor_wgpu.mascaras import (
+    GerenciadorMascaras, indices_corpo_visiveis, transferir_mascara_proxy,
+)
 
 
 def referencia_original():
@@ -57,6 +59,74 @@ class TestarMascaras(unittest.TestCase):
             )
         with self.assertRaises(ValueError):
             indices_corpo_visiveis(malha, np.zeros(12, dtype=bool))
+
+    def test_acessorios_visiveis_combinam_mascaras_sem_desgaste(self):
+        malha = self.malha
+        total = len(malha.posicoes_base)
+        primeiro = np.zeros(total, dtype=bool)
+        segundo = np.zeros(total, dtype=bool)
+        primeiro[int(malha.origens[malha.indices[0]])] = True
+        segundo[int(malha.origens[malha.indices[-1]])] = True
+        gerenciador = GerenciadorMascaras(total)
+        gerenciador.registrar("camisa", primeiro)
+        gerenciador.registrar("calca", segundo, visivel=False)
+        np.testing.assert_array_equal(gerenciador.combinada(), primeiro)
+        self.assertEqual(
+            len(indices_corpo_visiveis(malha, gerenciador.combinada())),
+            len(indices_corpo_visiveis(malha, primeiro)),
+        )
+
+        # O chamador não pode alterar a máscara já registrada.
+        primeiro[:] = False
+        self.assertTrue(gerenciador.combinada().any())
+
+        gerenciador.definir_visibilidade("calca", True)
+        esperado = np.logical_or(primeiro, segundo)
+        esperado[int(malha.origens[malha.indices[0]])] = True
+        np.testing.assert_array_equal(gerenciador.combinada(), esperado)
+        gerenciador.definir_visibilidade("camisa", False)
+        np.testing.assert_array_equal(gerenciador.combinada(), segundo)
+        gerenciador.definir_visibilidade("calca", False)
+        self.assertFalse(gerenciador.combinada().any())
+        gerenciador.definir_visibilidade("camisa", True)
+        self.assertTrue(gerenciador.combinada().any())
+        gerenciador.remover("camisa")
+        self.assertFalse(gerenciador.combinada().any())
+
+    def test_mascara_pode_ser_substituida_e_removida(self):
+        manager = GerenciadorMascaras(8)
+        manager.registrar("olhos")
+        self.assertFalse(manager.combinada().any())
+        mask = np.zeros(8, dtype=bool)
+        mask[[1, 3]] = True
+        manager.definir_mascara("olhos", mask)
+        mask[:] = False
+        np.testing.assert_array_equal(
+            np.flatnonzero(manager.combinada()), [1, 3]
+        )
+        manager.definir_mascara("olhos", None)
+        self.assertFalse(manager.combinada().any())
+
+    def test_gerenciador_recusa_mascaras_e_nomes_invalidos(self):
+        with self.assertRaises(ValueError):
+            GerenciadorMascaras(0)
+        manager = GerenciadorMascaras(7)
+        with self.assertRaises(ValueError):
+            manager.registrar("", np.zeros(7, dtype=bool))
+        with self.assertRaises(ValueError):
+            manager.registrar("roupa", np.zeros(4, dtype=bool))
+        with self.assertRaises(ValueError):
+            manager.registrar("roupa", np.ones(7, dtype=np.float32))
+        manager.registrar("roupa")
+        with self.assertRaises(ValueError):
+            manager.registrar("roupa")
+        with self.assertRaises(KeyError):
+            manager.definir_visibilidade("inexistente", True)
+        with self.assertRaises(KeyError):
+            manager.definir_mascara("inexistente", None)
+        with self.assertRaises(KeyError):
+            manager.remover("inexistente")
+        self.assertFalse(manager.combinada().any())
 
     def test_transferencia_mascara_equivalente_original(self):
         original = referencia_original()
