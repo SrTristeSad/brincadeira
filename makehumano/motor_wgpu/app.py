@@ -45,7 +45,11 @@ def iniciar():
     from .gpu import MotorWgpu
     from .morphs import Deformador, ler_target, pasta_targets
     from .modificadores import carregar_catalogo, NOMES_GRUPOS
-    from .projetos import montar_documento, salvar_documento, carregar_documento
+    from .projetos import (
+        montar_documento, carregar_documento,
+        salvar_projeto_com_texturas, carregar_texturas_projeto,
+    )
+    from .materiais import textura_neutra
     from .exportar import exportar_obj_com_material
     from .materiais_obj import caminhos_materiais, caminhos_mapas
     from .macro import (
@@ -286,12 +290,13 @@ def iniciar():
 
     coluna.addWidget(QtWidgets.QLabel("<b>Projeto experimental</b>"))
 
-    def aplicar_documento(documento):
-        """Carrega estado validado e atualiza a malha somente uma vez.
+    def aplicar_documento(documento, imagens=None):
+        """Restaura sliders, material e imagens já validadas do projeto.
 
-        Resolver todos os arquivos externos primeiro evita restaurar metade
-        do personagem se algum .target tiver desaparecido.
+        O chamador carrega os PNGs antes de alterar qualquer estado da GPU.
         """
+        if imagens is None:
+            imagens = {"cor": None, "normal": None, "rugosidade": None}
         alteracoes = {}
         for modificador in catalogo:
             valor = documento["modificadores"].get(modificador.identificador, 0)
@@ -330,6 +335,21 @@ def iniciar():
             slider.blockSignals(True)
             slider.setValue(round(valor * 100))
             slider.blockSignals(False)
+        # Os mapas ausentes são explicitamente neutralizados ao abrir
+        # um projeto antigo; não herdamos as texturas do projeto anterior.
+        motor.atualizar_textura(
+            imagens["cor"] if imagens["cor"] is not None else textura_neutra()
+        )
+        motor.atualizar_mapa_normal(imagens["normal"])
+        motor.atualizar_mapa_rugosidade(imagens["rugosidade"])
+        estado.setText("Textura: restaurada do projeto" if imagens["cor"] is not None
+                       else "Textura: branca (tonalidade por shader)")
+        estado_normal.setText("Normais: restauradas do projeto"
+                             if imagens["normal"] is not None
+                             else "Normais: não carregado")
+        estado_rugosidade.setText("Rugosidade: restaurada do projeto"
+                                 if imagens["rugosidade"] is not None
+                                 else "Rugosidade: não carregado")
         motor.atualizar_vertices(deformador.vertices)
 
     def salvar_projeto():
@@ -344,7 +364,15 @@ def iniciar():
             destino += ".makehumano.json"
         try:
             documento = montar_documento(macros.perfil, valores_morph, motor.pele, catalogo)
-            salvar_documento(destino, documento, catalogo)
+            salvar_projeto_com_texturas(
+                destino, documento, catalogo, {
+                    "cor": motor.textura_cpu,
+                    "normal": (motor.textura_normal_cpu if motor.normal_ativo
+                               else None),
+                    "rugosidade": (motor.textura_rugosidade_cpu
+                                   if motor.rugosidade_ativa else None),
+                },
+            )
         except (ValueError, OSError) as erro:
             QtWidgets.QMessageBox.warning(janela, "Falha ao salvar", str(erro))
         else:
@@ -359,7 +387,8 @@ def iniciar():
             return
         try:
             documento = carregar_documento(origem, catalogo)
-            aplicar_documento(documento)
+            imagens = carregar_texturas_projeto(origem, documento, ler_imagem_qt)
+            aplicar_documento(documento, imagens)
         except (ValueError, OSError, RuntimeError) as erro:
             QtWidgets.QMessageBox.warning(janela, "Falha ao abrir", str(erro))
         else:
@@ -611,11 +640,33 @@ def iniciar():
                 documento = montar_documento(
                     macros.perfil, valores_morph, motor.pele, catalogo
                 )
-                salvar_documento(destino, documento, catalogo)
+                import numpy as np
+                texturas_antes = {
+                    "cor": motor.textura_cpu.copy(),
+                    "normal": motor.textura_normal_cpu.copy(),
+                    "rugosidade": motor.textura_rugosidade_cpu.copy(),
+                }
+                salvar_projeto_com_texturas(
+                    destino, documento, catalogo, texturas_antes
+                )
+                # Trocar os mapas em memória para verificar o round-trip.
+                cor_alterada = np.full((8, 8, 4), 23, dtype=np.uint8)
+                motor.atualizar_textura(cor_alterada)
+                motor.atualizar_mapa_normal(None)
+                motor.atualizar_mapa_rugosidade(None)
                 controles_macros["muscle"].setValue(20)
                 controles_morph["nose/nose-scale-horiz-decr|incr"].setValue(-40)
                 slider_dispersao.setValue(0)
-                aplicar_documento(carregar_documento(destino, catalogo))
+                restaurado = carregar_documento(destino, catalogo)
+                imagens_restauradas = carregar_texturas_projeto(
+                    destino, restaurado, ler_imagem_qt
+                )
+                aplicar_documento(restaurado, imagens_restauradas)
+                for tipo, pixels_originais in texturas_antes.items():
+                    np.testing.assert_array_equal(
+                        imagens_restauradas[tipo], pixels_originais
+                    )
+                assert motor.normal_ativo and motor.rugosidade_ativa
                 assert abs(motor.pele.dispersao - 0.72) < 1e-6
                 assert slider_dispersao.value() == 72
                 import numpy as np
