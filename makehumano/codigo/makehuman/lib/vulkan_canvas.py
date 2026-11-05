@@ -87,11 +87,14 @@ def criar_canvas_vulkan(canvas_original):
             self._cena.desenhar(
                 G.world, G.cameras, cor_fundo=G.clearColor,
             )
-            if self._cena.frames == 1:
+            if self._cena.objetos_desenhados:
                 caminho = os.environ.get("MAKEHUMANO_VULKAN_FRAME_FILE")
-                if caminho:
+                if caminho and not os.path.exists(caminho):
                     with open(caminho, "w", encoding="utf-8") as saida:
-                        saida.write("vulkan-frame-1\n")
+                        saida.write(
+                            "vulkan-makehuman-original:"
+                            + str(self._cena.objetos_desenhados) + "\n"
+                        )
 
     CanvasVulkan.__name__ = "CanvasVulkan"
     return CanvasVulkan
