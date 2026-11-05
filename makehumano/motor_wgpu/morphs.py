@@ -67,21 +67,35 @@ class Deformador:
         self._alvos: dict[str, tuple[Alvo, float]] = {}
 
     def definir_peso(self, nome: str, alvo: Alvo, peso: float) -> np.ndarray:
-        if not nome:
-            raise ValueError("Nome do alvo não pode ser vazio")
-        peso = float(peso)
-        if not math.isfinite(peso) or not (0.0 <= peso <= 1.0):
-            raise ValueError("Peso deve estar entre 0 e 1")
-        if np.any(alvo.indices >= len(self.malha.posicoes_base)):
-            raise ValueError(f"Target {nome!r} possui índices fora da malha")
-        if alvo.deslocamentos.shape != (alvo.indices.size, 3):
-            raise ValueError("Formato de deslocamentos inválido")
-        if not np.isfinite(alvo.deslocamentos).all():
-            raise ValueError("Deslocamentos inválidos")
-        if peso:
-            self._alvos[nome] = (alvo, peso)
-        else:
-            self._alvos.pop(nome, None)
+        """Mantém compatibilidade com sliders individuais."""
+        return self.definir_pesos({nome: (alvo, peso)})
+
+    def definir_pesos(self, atualizacoes: dict[str, tuple[Alvo, float]]) -> np.ndarray:
+        """Aplica vários pesos atomicamente e reconstrói a malha uma vez.
+
+        Para sliders bidirecionais, atualizar simultaneamente os pesos dos
+        dois targets impede frames intermediários incorretos.
+        """
+        validados = {}
+        for nome, (alvo, peso) in atualizacoes.items():
+            if not nome:
+                raise ValueError("Nome do alvo não pode ser vazio")
+            peso = float(peso)
+            if not math.isfinite(peso) or not (0.0 <= peso <= 1.0):
+                raise ValueError("Peso deve estar entre 0 e 1")
+            if np.any(alvo.indices >= len(self.malha.posicoes_base)):
+                raise ValueError(f"Target {nome!r} possui índices fora da malha")
+            if alvo.deslocamentos.shape != (alvo.indices.size, 3):
+                raise ValueError("Formato de deslocamentos inválido")
+            if not np.isfinite(alvo.deslocamentos).all():
+                raise ValueError("Deslocamentos inválidos")
+            validados[nome] = (alvo, peso)
+
+        for nome, (alvo, peso) in validados.items():
+            if peso:
+                self._alvos[nome] = (alvo, peso)
+            else:
+                self._alvos.pop(nome, None)
         return self.reconstruir()
 
     def restaurar(self) -> np.ndarray:
