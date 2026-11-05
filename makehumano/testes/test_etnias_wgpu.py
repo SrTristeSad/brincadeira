@@ -47,7 +47,8 @@ def instancia_original(metodo, proporcoes=None):
 class TesteEtnias(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.original = metodo_original()
+        # Evita que unittest reatribua 'self' à função de Human ao acessá-la.
+        cls.original = staticmethod(metodo_original())
 
     def comparar(self, perfil, original):
         fatores = perfil.fatores()
