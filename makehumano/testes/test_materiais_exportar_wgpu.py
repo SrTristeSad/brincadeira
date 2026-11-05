@@ -15,9 +15,11 @@ sys.path.insert(0, str(ROOT))
 
 from motor_wgpu.exportar import exportar_obj_com_material
 from motor_wgpu.malha import carregar_obj, caminho_base_obj
-from motor_wgpu.materiais import Pele, textura_neutra
+from motor_wgpu.materiais import (
+    Pele, textura_neutra, mapa_normal_neutro, mapa_rugosidade_neutro,
+)
 from motor_wgpu.materiais_obj import (
-    ASSINATURA_PNG, caminhos_materiais, escrever_png_rgba,
+    ASSINATURA_PNG, caminhos_materiais, caminhos_mapas, escrever_png_rgba,
     texto_mtl, validar_material,
 )
 from motor_wgpu.morphs import Deformador, ler_target, pasta_targets
@@ -91,10 +93,20 @@ class TestarExportacaoMateriais(unittest.TestCase):
             [[140, 80, 70, 255], [160, 100, 90, 128]],
             [[190, 110, 65, 255], [200, 120, 80, 255]],
         ], dtype=np.uint8)
+        mapa_normal = np.array([
+            [[127, 127, 255, 255], [170, 100, 230, 255]],
+            [[110, 190, 230, 255], [127, 127, 255, 255]],
+        ], dtype=np.uint8)
+        mapa_rugosidade = np.array([
+            [[64, 64, 64, 255], [192, 192, 192, 255]],
+            [[128, 128, 128, 255], [255, 255, 255, 255]],
+        ], dtype=np.uint8)
         with tempfile.TemporaryDirectory() as pasta:
             destino = Path(pasta) / "personagem.obj"
             obj, mtl, png = exportar_obj_com_material(
-                destino, m, deformado, pele, pixels
+                destino, m, deformado, pele, pixels,
+                mapa_normal_rgba=mapa_normal,
+                mapa_rugosidade_rgba=mapa_rugosidade,
             )
             self.assertEqual(obj, destino)
             self.assertEqual((mtl.name, png.name),
@@ -107,6 +119,16 @@ class TestarExportacaoMateriais(unittest.TestCase):
             self.assertIn("Kd 0.740000 0.510000 0.350000", texto_mtl_gerado)
             self.assertIn("illum 2", texto_mtl_gerado)
             np.testing.assert_array_equal(decodificar_png_simples(png), pixels)
+            png_normal, png_rugosidade = caminhos_mapas(destino)
+            np.testing.assert_array_equal(
+                decodificar_png_simples(png_normal), mapa_normal
+            )
+            np.testing.assert_array_equal(
+                decodificar_png_simples(png_rugosidade), mapa_rugosidade
+            )
+            # Tangent normal map não deve ser rotulado como mapa de altura/bump
+            # no MTL, pois são representações distintas.
+            self.assertNotIn("map_Bump", texto_mtl_gerado)
 
             reimportado = carregar_obj(obj)
             np.testing.assert_array_equal(reimportado.origens, m.origens)
@@ -125,6 +147,14 @@ class TestarExportacaoMateriais(unittest.TestCase):
                 self.malha.vertices, Pele(cor=(0.3, 0.4, 0.5))
             )
             np.testing.assert_array_equal(decodificar_png_simples(png), textura_neutra())
+            png_normal, png_rugosidade = caminhos_mapas(obj)
+            np.testing.assert_array_equal(
+                decodificar_png_simples(png_normal), mapa_normal_neutro()
+            )
+            np.testing.assert_array_equal(
+                decodificar_png_simples(png_rugosidade),
+                mapa_rugosidade_neutro(),
+            )
             self.assertIn("Kd 0.300000 0.400000 0.500000",
                           mtl.read_text(encoding="utf-8"))
             self.assertTrue(obj.exists())
@@ -133,14 +163,22 @@ class TestarExportacaoMateriais(unittest.TestCase):
         with tempfile.TemporaryDirectory() as pasta:
             destino = Path(pasta) / "pele.obj"
             mtl, png = caminhos_materiais(destino)
-            for arquivo in (destino, mtl, png):
+            outros = caminhos_mapas(destino)
+            for arquivo in (destino, mtl, png, *outros):
                 arquivo.write_bytes(b"arquivo-antigo")
             with self.assertRaisesRegex(ValueError, "RGBA"):
                 exportar_obj_com_material(
                     destino, self.malha, self.malha.vertices,
                     Pele(), np.zeros((2, 2, 3), dtype=np.uint8)
                 )
-            for arquivo in (destino, mtl, png):
+            for arquivo in (destino, mtl, png, *outros):
+                self.assertEqual(arquivo.read_bytes(), b"arquivo-antigo")
+            with self.assertRaisesRegex(ValueError, "RGBA"):
+                exportar_obj_com_material(
+                    destino, self.malha, self.malha.vertices, Pele(),
+                    mapa_normal_rgba=np.zeros((2, 2, 3), dtype=np.uint8),
+                )
+            for arquivo in (destino, mtl, png, *outros):
                 self.assertEqual(arquivo.read_bytes(), b"arquivo-antigo")
 
     def test_nome_sanitizado_e_intervalos(self):
