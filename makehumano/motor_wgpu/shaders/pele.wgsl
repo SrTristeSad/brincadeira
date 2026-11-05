@@ -1,12 +1,12 @@
-// MakeHumano: primeiro material de pele em WGSL.
-// Diffuse + especular GGX (dielétrico), sem subsurface scattering.
+// MakeHumano: material WGSL com GGX e aproximação ARTÍSTICA de dispersão.
+// Dispersão single-pass aproximada: não é SSS físico (sem espessura nem blur).
 // A textura UV, o mapa de normais e a rugosidade podem ser trocados em tempo real.
 
 struct CameraMaterial {
     mvp: mat4x4f,
     model: mat4x4f,
     tint: vec4f,
-    surface: vec4f, // x = rugosidade-base; y = usar normal map
+    surface: vec4f, // x = roughness; y = normal map ativo; z = dispersao
     eye: vec4f,
 };
 
@@ -98,7 +98,19 @@ fn fs_main(in: VertexOut) -> @location(0) vec4f {
     let specular = (distribution * shadow * fresnel) / max(4.0 * nl * nv, 0.001);
     let diffuse = (vec3f(1.0) - fresnel) * albedo / 3.14159265;
 
-    let linear_color = albedo * 0.20 + (diffuse + specular) * nl * 2.25;
+    // Dispersão difusa aproximada: amplia suavemente o lóbulo de iluminação
+    // na borda e aquece a resposta (simulando parte da luz espalhada na pele).
+    // Sem translucência volumétrica, blur, mapa de espessura ou ray tracing.
+    // Intensidade zero reproduz exatamente a iluminação anterior.
+    let ndotl = dot(n, l);
+    let wrapped = max((ndotl + 0.45) / 1.45, 0.0);
+    let espalhamento = max(wrapped - nl, 0.0);
+    let tinta_subsuperficie = vec3f(1.0, 0.46, 0.34);
+    let extra_difuso = (albedo / 3.14159265) * tinta_subsuperficie
+        * espalhamento * 1.2 * clamp(material.surface.z, 0.0, 1.0);
+
+    let linear_color = albedo * 0.20
+        + (diffuse * nl + specular * nl + extra_difuso) * 2.25;
     // Compressão de altas luzes e codificação para saída sRGB aproximada.
     let mapped = linear_color / (vec3f(1.0) + linear_color);
     return vec4f(pow(mapped, vec3f(1.0 / 2.2)), 1.0);
