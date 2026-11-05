@@ -11,7 +11,7 @@ import numpy as np
 import wgpu
 
 from .malha import Malha
-from .mascaras import indices_corpo_visiveis
+from .mascaras import GerenciadorMascaras, indices_corpo_visiveis
 from .materiais import (Pele, textura_neutra, validar_rgba,
                         mapa_normal_neutro, mapa_rugosidade_neutro)
 
@@ -102,6 +102,13 @@ class MotorWgpu:
             usage=wgpu.BufferUsage.INDEX | wgpu.BufferUsage.COPY_DST,
         )
         self.indices_corpo_ativos = int(malha.indices.size)
+        self.mascaras_acessorios = GerenciadorMascaras(
+            len(malha.posicoes_base)
+        )
+        self._mascara_manual = np.zeros(
+            len(malha.posicoes_base), dtype=bool
+        )
+        self._mascara_efetiva = self._mascara_manual.copy()
         self.uniform_buffer = self.device.create_buffer(
             size=176, usage=wgpu.BufferUsage.UNIFORM | wgpu.BufferUsage.COPY_DST
         )
@@ -212,27 +219,52 @@ class MotorWgpu:
         )
         self.canvas.request_draw()
 
-    def atualizar_mascara_corpo(self, deletar_vertices=None):
-        """Atualiza apenas os índices dos triângulos visíveis do corpo.
+    def _sincronizar_mascara_corpo(self):
+        """Une a máscara de diagnóstico às dos acessórios visíveis.
 
-        A máscara é opcional. Nenhum asset de roupa é adicionado aqui:
-        o método prepara a viewport para o 'delete_verts' de proxies
-        legítimos. Não muda posições, UVs ou a geometria de referência.
+        Não reenvia o index buffer quando a máscara efetiva não mudou.
+        O buffer é dimensionado uma única vez para a malha completa, logo
+        qualquer subconjunto de índices cabe na alocação original.
         """
-        if deletar_vertices is None:
-            indices = self.malha.indices
-        else:
-            indices = indices_corpo_visiveis(self.malha, deletar_vertices)
+        combinada = (
+            self._mascara_manual | self.mascaras_acessorios.combinada()
+        )
+        if np.array_equal(combinada, self._mascara_efetiva):
+            return False
+        indices = indices_corpo_visiveis(self.malha, combinada)
         if len(indices):
             self.device.queue.write_buffer(
                 self.index_buffer, 0, np.ascontiguousarray(indices)
             )
         self.indices_corpo_ativos = int(len(indices))
+        self._mascara_efetiva = combinada
         self.canvas.request_draw()
+        return True
+
+    def atualizar_mascara_corpo(self, deletar_vertices=None):
+        """Máscara manual de diagnóstico; soma-se às máscaras dos acessórios.
+
+        None limpa SOMENTE a máscara manual. Acessórios visíveis continuam
+        ocultando as regiões do corpo prescritas por seus próprios .mhclo.
+        """
+        if deletar_vertices is None:
+            mascara = np.zeros(len(self.malha.posicoes_base), dtype=bool)
+        else:
+            mascara = self.mascaras_acessorios._validar_mascara(
+                deletar_vertices
+            )
+        self._mascara_manual = mascara
+        self._sincronizar_mascara_corpo()
+
+    def definir_mascara_acessorio(self, nome: str, deletar_vertices=None):
+        """Troca delete_verts de um acessório já carregado."""
+        self.mascaras_acessorios.definir_mascara(nome, deletar_vertices)
+        self._sincronizar_mascara_corpo()
 
     def adicionar_acessorio(
         self, nome: str, malha: Malha, vertices: np.ndarray,
         textura_rgba, *, rugosidade: float = 0.28,
+        deletar_vertices=None,
     ):
         """Cria uma segunda malha com material e textura próprios.
 
@@ -285,6 +317,9 @@ class MotorWgpu:
                 wgpu.BindGroupEntry(binding=4, resource=rough.create_view()),
             ],
         )
+        # Registra a máscara somente após a criação dos buffers GPU.
+        # Se a máscara for inválida, não publica o acessório no estado ativo.
+        self.mascaras_acessorios.registrar(nome, deletar_vertices)
         self.acessorios[nome] = {
             "malha": malha,
             "vertices": np.ascontiguousarray(vertices.copy()),
@@ -301,6 +336,7 @@ class MotorWgpu:
             "rugosidade": float(rugosidade),
             "visivel": True,
         }
+        self._sincronizar_mascara_corpo()
         self.canvas.request_draw()
 
     def atualizar_acessorio(self, nome: str, vertices: np.ndarray):
@@ -313,7 +349,12 @@ class MotorWgpu:
         self.canvas.request_draw()
 
     def mostrar_acessorio(self, nome: str, visivel: bool):
-        self.acessorios[nome]["visivel"] = bool(visivel)
+        item = self.acessorios[nome]
+        if item["visivel"] == bool(visivel):
+            return
+        item["visivel"] = bool(visivel)
+        self.mascaras_acessorios.definir_visibilidade(nome, visivel)
+        self._sincronizar_mascara_corpo()
         self.canvas.request_draw()
 
     def ajustar_pele(self, *, cor=None, rugosidade=None, dispersao=None):
