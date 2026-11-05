@@ -31,7 +31,6 @@ def main():
         marcador_offscreen = base / "vulkan-offscreen"
         marcador_render = base / "vulkan-render"
         marcador_skin = base / "vulkan-skin"
-        piloto_vulkan = os.environ.get("MAKEHUMANO_VULKAN_PILOT") == "1"
         logfile = base / "startup.log"
         home = base / "home"
         home.mkdir()
@@ -39,13 +38,14 @@ def main():
         ambiente["HOME"] = str(home)
         ambiente["XDG_CONFIG_HOME"] = str(home / ".config")
         ambiente["MAKEHUMANO_SMOKE_READY_FILE"] = str(marker)
-        if piloto_vulkan:
-            ambiente["MAKEHUMANO_VULKAN_FRAME_FILE"] = str(marcador_vulkan)
-            ambiente["MAKEHUMANO_VULKAN_PICK_FILE"] = str(marcador_picking)
-            ambiente["MAKEHUMANO_VULKAN_OFFSCREEN_FILE"] = str(marcador_offscreen)
-            ambiente["MAKEHUMANO_VULKAN_RENDER_FILE"] = str(marcador_render)
-            ambiente["MAKEHUMANO_VULKAN_SKIN_FILE"] = str(marcador_skin)
-            ambiente["WGPU_BACKEND_TYPE"] = "Vulkan"
+        # Vulkan é o único backend; estes marcadores são sempre obrigatórios.
+        ambiente.pop("MAKEHUMANO_VULKAN_PILOT", None)
+        ambiente["MAKEHUMANO_VULKAN_FRAME_FILE"] = str(marcador_vulkan)
+        ambiente["MAKEHUMANO_VULKAN_PICK_FILE"] = str(marcador_picking)
+        ambiente["MAKEHUMANO_VULKAN_OFFSCREEN_FILE"] = str(marcador_offscreen)
+        ambiente["MAKEHUMANO_VULKAN_RENDER_FILE"] = str(marcador_render)
+        ambiente["MAKEHUMANO_VULKAN_SKIN_FILE"] = str(marcador_skin)
+        ambiente["WGPU_BACKEND_TYPE"] = "Vulkan"
         ambiente["LIBGL_ALWAYS_SOFTWARE"] = "1"
         ambiente["QT_X11_NO_MITSHM"] = "1"
 
@@ -60,12 +60,7 @@ def main():
             )
             iniciou = False
             try:
-                # O piloto Vulkan usa menos tempo na CI para identificar
-                # falha no primeiro quadro rapidamente, sem atrasar a
-                # verificação de regressão do caminho original.
-                limite = time.monotonic() + (
-                    45 if piloto_vulkan else TIMEOUT_SECONDS
-                )
+                limite = time.monotonic() + TIMEOUT_SECONDS
                 while time.monotonic() < limite:
                     gui_pronta = (
                         marker.is_file()
@@ -100,12 +95,9 @@ def main():
                         and marcador_skin.read_text(encoding="utf-8").strip()
                         == "vulkan-skin:96x96"
                     )
-                    if gui_pronta and (
-                        not piloto_vulkan or (
-                            quadro_vulkan and picking_valido
-                            and framebuffer_valido and render_valido
-                            and skin_valido
-                        )
+                    if (
+                        gui_pronta and quadro_vulkan and picking_valido
+                        and framebuffer_valido and render_valido and skin_valido
                     ):
                         # Se a aplicação saiu imediatamente após iniciar, não considerar sucesso.
                         time.sleep(1)
@@ -128,7 +120,7 @@ def main():
         print(log_text[-15000:])
         print("--- FIM DO LOG ---")
 
-        if iniciou and piloto_vulkan:
+        if iniciou:
             # Um frame parcial não equivale à viewport renderizada.
             # Exigir ausência de erros do RenderCanvas no processo.
             erros_graficos = (
@@ -146,9 +138,8 @@ def main():
 
         if iniciou:
             print(
-                "SUCESSO: GUI original carregada"
-                + (" com quadro e picking Vulkan originais" if piloto_vulkan else "")
-                + "."
+                "SUCESSO: GUI original carregada com quadro, picking e"
+                " renderização Vulkan."
             )
             return 0
         print(
