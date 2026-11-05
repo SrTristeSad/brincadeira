@@ -3,21 +3,28 @@
 Não utiliza o formato .mhm do MakeHuman original: ele contém regras,
 plugins e referências que esta prévia ainda não reproduz integralmente.
 O documento JSON registra apenas parâmetros controlados nesta janela.
-Versão 2 adiciona dispersão da pele; arquivos da versão 1 são migrados
-na leitura com intensidade 0 para preservar a aparência anterior.
+Versão 2 adicionou dispersão da pele. Versão 3 armazena referências locais
+a três texturas PNG em pasta auxiliar, sem caminhos arbitrários.
 """
 
 import json
 import math
 import os
+import hashlib
+import re
+import struct
 from pathlib import Path
 import tempfile
 
 from .macro import ETNIAS, VALORES_PADRAO
+from .materiais import validar_rgba
+from .materiais_obj import escrever_png_rgba
 
 
 FORMATO = "makehumano-wgpu"
-VERSAO = 2
+VERSAO = 3
+TIPOS_TEXTURAS = ("cor", "normal", "rugosidade")
+MAX_DIMENSAO = 4096
 
 
 def _numero(valor, menor, maior, campo):
@@ -34,7 +41,7 @@ def validar_documento(documento: dict, catalogo) -> dict:
     if not isinstance(documento, dict):
         raise ValueError("O projeto precisa ser um objeto JSON")
     versao_origem = documento.get("versao")
-    if documento.get("formato") != FORMATO or versao_origem not in (1, VERSAO):
+    if documento.get("formato") != FORMATO or versao_origem not in (1, 2, VERSAO):
         raise ValueError("Formato ou versão de projeto desconhecidos")
 
     macros = documento.get("macros")
@@ -81,6 +88,21 @@ def validar_documento(documento: dict, catalogo) -> dict:
     dispersao = (0.0 if versao_origem == 1 else
                  _numero(pele["dispersao"], 0, 1, "dispersão"))
 
+    # Versões anteriores não possuíam imagens associadas ao projeto.
+    imagens = (documento.get("texturas") if versao_origem == VERSAO
+               else {tipo: None for tipo in TIPOS_TEXTURAS})
+    if not isinstance(imagens, dict) or set(imagens) != set(TIPOS_TEXTURAS):
+        raise ValueError("Referências das texturas incompletas")
+    texturas = {}
+    for tipo in TIPOS_TEXTURAS:
+        nome = imagens[tipo]
+        if nome is not None and (
+            not isinstance(nome, str)
+            or re.fullmatch(rf"{tipo}-[0-9a-f]{{20}}\\.png", nome) is None
+        ):
+            raise ValueError(f"Arquivo de textura inválido: {tipo}")
+        texturas[tipo] = nome
+
     return {
         "formato": FORMATO,
         "versao": VERSAO,
@@ -89,6 +111,7 @@ def validar_documento(documento: dict, catalogo) -> dict:
         "modificadores": modificadores,
         "pele": {"cor": rgb, "rugosidade": rugosidade,
                  "dispersao": dispersao},
+        "texturas": texturas,
     }
 
 
@@ -102,6 +125,7 @@ def montar_documento(perfil, modificadores: dict, pele, catalogo) -> dict:
         "modificadores": dict(modificadores),
         "pele": {"cor": list(pele.cor), "rugosidade": pele.rugosidade,
                  "dispersao": pele.dispersao},
+        "texturas": {tipo: None for tipo in TIPOS_TEXTURAS},
     }, catalogo)
 
 
@@ -131,3 +155,86 @@ def carregar_documento(caminho: str | Path, catalogo) -> dict:
         raise ValueError("Projeto maior que 1 MB: formato inesperado")
     texto = origem.read_text(encoding="utf-8")
     return validar_documento(json.loads(texto), catalogo)
+
+
+def pasta_texturas(caminho: str | Path) -> Path:
+    """Pasta portátil ao lado do JSON: projeto.makehumano.json.assets."""
+    return Path(str(Path(caminho)) + ".assets")
+
+
+def _validar_imagem(pixels, tipo):
+    rgba = validar_rgba(pixels)
+    altura, largura = rgba.shape[:2]
+    if altura > MAX_DIMENSAO or largura > MAX_DIMENSAO:
+        raise ValueError(f"Mapa {tipo} maior que {MAX_DIMENSAO} pixels por lado")
+    return rgba.copy()
+
+
+def salvar_projeto_com_texturas(
+    caminho: str | Path, documento: dict, catalogo, imagens: dict,
+) -> Path:
+    """Salva imagens por conteúdo, e publica o JSON somente depois dos PNGs.
+
+    Regravações não excluem PNGs antigos: isso mantém snapshots anteriores
+    válidos e evita substituir imagens usadas por outros projetos/versões.
+    """
+    if not isinstance(imagens, dict) or set(imagens) != set(TIPOS_TEXTURAS):
+        raise ValueError("Texturas esperadas: cor, normal e rugosidade")
+    destino = Path(caminho)
+    doc = validar_documento(documento, catalogo)
+    preparados = {}
+    for tipo in TIPOS_TEXTURAS:
+        pixels = imagens[tipo]
+        if pixels is None:
+            preparados[tipo] = (None, None)
+            continue
+        rgba = _validar_imagem(pixels, tipo)
+        assinatura = struct.pack(">II", rgba.shape[1], rgba.shape[0])
+        digest = hashlib.sha256(assinatura + rgba.tobytes()).hexdigest()[:20]
+        nome = f"{tipo}-{digest}.png"
+        preparados[tipo] = (nome, rgba)
+
+    pasta = pasta_texturas(destino)
+    if any(arr is not None for _, arr in preparados.values()):
+        pasta.mkdir(parents=True, exist_ok=True)
+    for nome, arr in preparados.values():
+        if arr is None:
+            continue
+        temporario = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="wb", dir=pasta, prefix=".textura-",
+                suffix=".tmp", delete=False,
+            ) as arquivo:
+                temporario = Path(arquivo.name)
+            escrever_png_rgba(temporario, arr)
+            os.replace(temporario, pasta / nome)
+        finally:
+            if temporario is not None:
+                temporario.unlink(missing_ok=True)
+
+    doc["texturas"] = {tipo: preparados[tipo][0] for tipo in TIPOS_TEXTURAS}
+    return salvar_documento(destino, doc, catalogo)
+
+
+def carregar_texturas_projeto(caminho: str | Path, documento: dict, leitor):
+    """Carrega as três imagens ANTES de alterar a malha ou a GPU.
+
+    O nome é validado pelo documento v3; não permite caminhos absolutos,
+    diretórios pais ou outros nomes arbitrários. `leitor` carrega RGBA8.
+    """
+    pasta = pasta_texturas(caminho)
+    resultado = {}
+    for tipo, nome in documento["texturas"].items():
+        if nome is None:
+            resultado[tipo] = None
+            continue
+        # Validar também aqui, para não aceitar documentos não validados.
+        if re.fullmatch(rf"{tipo}-[0-9a-f]{{20}}\\.png", nome) is None:
+            raise ValueError(f"Caminho da textura não permitido: {tipo}")
+        arquivo = pasta / nome
+        # Arquivos menores que 512 MB; dimensões de pixels também limitadas.
+        if arquivo.stat().st_size > 512 * 1024 * 1024:
+            raise ValueError("Arquivo de textura muito grande")
+        resultado[tipo] = _validar_imagem(leitor(arquivo), tipo)
+    return resultado
