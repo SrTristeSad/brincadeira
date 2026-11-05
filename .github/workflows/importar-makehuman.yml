@@ -1,0 +1,78 @@
+name: Importar MakeHuman original
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/importar-makehuman.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: makehumano-importacao
+  cancel-in-progress: false
+
+jobs:
+  importar:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout do repositório brincadeira
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - name: Verificar se já existe uma importação
+        shell: bash
+        run: |
+          if [ -e makehumano/codigo ]; then
+            echo "makehumano/codigo já existe. Importação interrompida para não substituir alterações."
+            exit 1
+          fi
+
+      - name: Obter o MakeHuman oficial
+        shell: bash
+        env:
+          GIT_LFS_SKIP_SMUDGE: "1"
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --single-branch --branch master \
+            https://github.com/makehumancommunity/makehuman.git \
+            "$RUNNER_TEMP/makehuman-original"
+          mkdir -p makehumano/codigo
+          git -C "$RUNNER_TEMP/makehuman-original" archive --format=tar HEAD | tar -xf - -C makehumano/codigo
+          REVISAO="$(git -C "$RUNNER_TEMP/makehuman-original" rev-parse HEAD)"
+          printf 'Repositório: %s\nCommit: %s\n' \
+            'https://github.com/makehumancommunity/makehuman.git' "$REVISAO" \
+            > makehumano/codigo/.makehumano-origem.txt
+          echo "Importado commit: $REVISAO"
+
+      - name: Verificar a sintaxe dos arquivos Python
+        id: diagnostico
+        shell: bash
+        run: |
+          set +e
+          python3 makehumano/diagnostico.py > makehumano/DIAGNOSTICO-INICIAL.txt 2>&1
+          resultado=$?
+          set -e
+          cat makehumano/DIAGNOSTICO-INICIAL.txt
+          echo "codigo_saida=$resultado" >> "$GITHUB_OUTPUT"
+
+      - name: Registrar importação no repositório
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- makehumano/codigo makehumano/DIAGNOSTICO-INICIAL.txt
+          git commit -m "chore(makehumano): importar fontes originais e registrar diagnóstico"
+          git push origin HEAD:main
+
+      - name: Conferir resultado do diagnóstico
+        if: steps.diagnostico.outputs.codigo_saida != '0'
+        shell: bash
+        run: |
+          echo "O diagnóstico detectou problemas. Consulte makehumano/DIAGNOSTICO-INICIAL.txt."
+          exit 1
