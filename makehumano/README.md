@@ -48,7 +48,7 @@ python executar.py --noshaders
 
 ## Prévia experimental com wgpu-py / Vulkan
 
-Foi acrescentado um **visualizador independente** em [`motor_wgpu/`](motor_wgpu/README.md). Ele carrega a malha original `base.obj`, mantém as coordenadas UV, possui material WGSL com difuso + reflexão GGX simplificada e permite alterar texturas durante a execução. O painel agora carrega **238 modificadores diretos** das definições oficiais do MakeHuman, agrupados por região do corpo. Os sliders aplicam morph targets positivos e negativos ao vertex buffer Vulkan, recalculando as normais sem alterar UVs. Também existem **oito controles gerais** na prévia — idade, gênero morfológico, peso, musculatura, altura, proporções corporais, volume e firmeza dos seios — que combinam até 564 alvos originais. A sincronização completa dos três controles étnicos e das dependências da GUI principal ainda está pendente.
+Foi acrescentado um **visualizador independente** em [`motor_wgpu/`](motor_wgpu/README.md). Ele carrega a malha original `base.obj`, mantém as coordenadas UV, possui material WGSL com difuso + reflexão GGX simplificada e permite alterar texturas durante a execução. O painel agora carrega **238 modificadores diretos** das definições oficiais do MakeHuman, agrupados por região do corpo. Os sliders aplicam morph targets positivos e negativos ao vertex buffer Vulkan, recalculando as normais sem alterar UVs. Também existem **oito controles gerais** na prévia — idade, gênero morfológico, peso, musculatura, altura, proporções corporais, volume e firmeza dos seios — que combinam até 564 alvos originais. Também foram adicionados os **três parâmetros étnicos interdependentes do MakeHuman**, com normalização comparada à função original `Human._setEthnicVals`. Eles controlam misturas de alvos morfológicos, não identidade étnica. A integração das regras completas de dependência com a GUI principal ainda está pendente.
 
 Execute no diretório `makehumano/`:
 
@@ -77,9 +77,10 @@ O diretório `codigo/` está versionado no GitHub em `brincadeira/makehumano/cod
 10. [x] Criar catálogo de 238 sliders diretos a partir dos arquivos oficiais, incluindo controles bidirecionais e cache de targets.
 11. [ ] Testar visualmente a interface num desktop real e identificar assets externos necessários.
 12. [x] Acrescentar oito macros com interpolação verificada contra `human.py` e aplicação de alvos originais.
-13. [ ] Completar os três controles étnicos, as dependências entre modificadores e a integração à GUI principal.
-14. [ ] Testar exportação, salvamento, carga e materiais.
-15. [ ] Adaptar dependências e interface sem quebrar deformações, arquivos e plugins.
+13. [x] Integrar os três controles étnicos e sua normalização com testes comparativos contra o MakeHuman original.
+14. [ ] Conectar os modificadores à lógica completa de dependências e eventos da GUI principal.
+15. [ ] Testar exportação, salvamento, carga e materiais.
+16. [ ] Adaptar dependências e interface sem quebrar deformações, arquivos e plugins.
 
 ## Licenças e créditos
 
