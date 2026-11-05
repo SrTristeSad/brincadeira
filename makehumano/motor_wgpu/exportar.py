@@ -13,6 +13,10 @@ import tempfile
 import numpy as np
 
 from .malha import Malha
+from .materiais_obj import (
+    NOME_MATERIAL, caminhos_materiais, validar_material,
+    escrever_png_rgba, texto_mtl,
+)
 
 
 def _validar(malha: Malha, vertices: np.ndarray) -> np.ndarray:
@@ -49,7 +53,10 @@ def _validar(malha: Malha, vertices: np.ndarray) -> np.ndarray:
     return dados
 
 
-def exportar_obj(caminho: str | Path, malha: Malha, vertices: np.ndarray) -> Path:
+def exportar_obj(
+    caminho: str | Path, malha: Malha, vertices: np.ndarray,
+    *, arquivo_mtl: str | None = None,
+) -> Path:
     """Escreve OBJ triangulado com v, vt, vn e f; preserva índices MakeHuman.
 
     UVs em memoria usam a convenção wgpu, de origem superior. O formato
@@ -57,6 +64,11 @@ def exportar_obj(caminho: str | Path, malha: Malha, vertices: np.ndarray) -> Pat
     O arquivo é gravado em temporário e substituído atomicamente.
     """
     dados = _validar(malha, vertices)
+    if arquivo_mtl is not None and (
+        not arquivo_mtl or '/' in arquivo_mtl or '\\' in arquivo_mtl
+        or '\n' in arquivo_mtl or '\r' in arquivo_mtl
+    ):
+        raise ValueError('Nome de arquivo MTL inválido')
     destino = Path(caminho)
     if destino.suffix.lower() != ".obj":
         raise ValueError("A exportação precisa de um destino .obj")
@@ -75,6 +87,8 @@ def exportar_obj(caminho: str | Path, malha: Malha, vertices: np.ndarray) -> Pat
             arquivo.write("# MakeHumano - geometria corporal deformada\n")
             arquivo.write("# Faces trianguladas; índices originais preservados\n")
             arquivo.write("# Sem esqueleto, roupas ou textura incorporada\n")
+            if arquivo_mtl is not None:
+                arquivo.write(f"mtllib {arquivo_mtl}\n")
 
             for p in posicoes:
                 arquivo.write("v " + " ".join(format(float(v), formato) for v in p) + "\n")
@@ -87,6 +101,8 @@ def exportar_obj(caminho: str | Path, malha: Malha, vertices: np.ndarray) -> Pat
                 arquivo.write("vn " + " ".join(format(float(v), formato) for v in n) + "\n")
 
             arquivo.write("g body\n")
+            if arquivo_mtl is not None:
+                arquivo.write(f"usemtl {NOME_MATERIAL}\n")
             for tria in malha.indices.reshape(-1, 3):
                 pontos = []
                 for indice in tria:
@@ -102,3 +118,49 @@ def exportar_obj(caminho: str | Path, malha: Malha, vertices: np.ndarray) -> Pat
         if temporario is not None:
             temporario.unlink(missing_ok=True)
     return destino
+
+
+def exportar_obj_com_material(
+    caminho: str | Path, malha: Malha, vertices: np.ndarray,
+    pele, textura_rgba=None,
+) -> tuple[Path, Path, Path]:
+    """Exporta OBJ, MTL e PNG com textura enviada à GPU.
+
+    Os três arquivos são preparados com validação prévia. Substituições são
+    atômicas por arquivo (não existe transação atômica entre três arquivos).
+    OBJ é publicado por último para evitar referências a arquivos ausentes
+    no caso normal de exportações novas.
+    """
+    destino = Path(caminho)
+    if destino.suffix.lower() != ".obj":
+        raise ValueError("A exportação precisa de um destino .obj")
+    _validar(malha, vertices)
+    rgba = validar_material(pele, textura_rgba)
+    mtl, png = caminhos_materiais(destino)
+    texto = texto_mtl(pele, png.name)
+    temporarios = []
+    try:
+        # Primeiro gerar ambos os recursos com nomes temporários.
+        with tempfile.NamedTemporaryFile(
+            mode="wb", dir=destino.parent,
+            prefix=".makehumano-png-", suffix=".tmp", delete=False,
+        ) as arquivo:
+            tmp_png = Path(arquivo.name)
+        temporarios.append(tmp_png)
+        escrever_png_rgba(tmp_png, rgba)
+
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", newline="\n", dir=destino.parent,
+            prefix=".makehumano-mtl-", suffix=".tmp", delete=False,
+        ) as arquivo:
+            tmp_mtl = Path(arquivo.name)
+            temporarios.append(tmp_mtl)
+            arquivo.write(texto)
+
+        os.replace(tmp_png, png)
+        os.replace(tmp_mtl, mtl)
+        exportar_obj(destino, malha, vertices, arquivo_mtl=mtl.name)
+    finally:
+        for temporario in temporarios:
+            temporario.unlink(missing_ok=True)
+    return destino, mtl, png
