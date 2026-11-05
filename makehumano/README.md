@@ -4,11 +4,15 @@
 
 Esta pasta é a área de trabalho para essa migração do [MakeHuman](https://github.com/makehumancommunity/makehuman). O protótipo independente `motor_wgpu/` é **pesquisa técnica prévia, não substitui o MakeHuman e não define novos objetivos**.
 
-**Situação do objetivo principal:** a substituição **integral do motor OpenGL** no MakeHuman original **ainda não foi concluída**. O protótipo paralelo não demonstra essa integração e **não atende à meta de eliminar PyOpenGL, o QOpenGLWidget e os módulos gráficos legados**.
+**Situação do objetivo principal:** o MakeHuman original usa agora o canvas Vulkan
+como padrão, sem variável de piloto e sem instalar PyOpenGL. O smoke da GUI
+verifica renderização da cena real, seleção, framebuffer, máscara alfa e baking
+UV. A paridade visual e funcional do motor ainda não foi alcançada: shaders
+GLSL personalizados, materiais avançados e plugins ainda precisam de migração.
 
-A auditoria inicial identificou OpenGL em `codigo/makehuman/lib/qtui.py`, `glmodule.py`, `shader.py`, `texture.py`, `mh.py`, no plugin `4_rendering_opengl` e na dependência `PyOpenGL` de `codigo/requirements.txt`. Todos os caminhos ativos deverão ser migrados ou retirados **depois** da substituição funcional por Vulkan.
-
-**Integração comprovada até aqui:** o modo piloto `MAKEHUMANO_VULKAN_PILOT=1` renderiza objetos de `G.world` na **janela original** e agora também responde à seleção de FaceGroups por `mh.getPickedColor()`, sem executar `glReadPixels` nessa seleção. O CI abre a GUI real com Vulkan por software e valida o primeiro quadro e um RGB de picking. A implementação de picking é inicial (triângulos projetados na CPU), ainda sem clipping completo. **O modo piloto continua importando módulos legados OpenGL**, portanto a meta de removê-los completamente ainda está pendente.
+O código legado (`glmodule.py`, `shader.py`, `texture.py`) permanece
+no repositório temporariamente, mas não faz parte da inicialização normal.
+Consulte [MIGRACAO-VULKAN.md](MIGRACAO-VULKAN.md) para as pendências técnicas.
 
 > **Estado atual:** fontes originais, malha base, rig, morph targets e outros recursos versionados em `codigo/`; dois erros de sintaxe auxiliares corrigidos; testes de deformação 3D e compatibilidade Python 3.12/3.13 passaram. A sequência de inicialização da GUI passou com Python 3.12 e Xvfb no Linux; aparência visual, interação dos controles e exportação ainda dependem de testes em desktop real.
 
@@ -46,7 +50,7 @@ Para preparar o ambiente, siga `codigo/README.md`. Recomendamos começar com **P
 python -m pip install -r codigo/requirements.txt
 ```
 
-Os recursos necessários ao teste de abertura foram incluídos nesta cópia. Para iniciar em um desktop com suporte a OpenGL, tente:
+Os recursos necessários ao teste de abertura foram incluídos nesta cópia. Para iniciar em um desktop com suporte a Vulkan, execute:
 
 ```bash
 python executar.py --noshaders
@@ -54,31 +58,28 @@ python executar.py --noshaders
 
 **Atenção:** o teste gráfico usa `--noshaders` em um servidor X virtual, portanto **não valida** shaders e aparência final. Malhas, rigs, morph targets e outros recursos **presentes no repositório original** já estão versionados nesta cópia. Recursos **externos** disponibilizados separadamente pelo projeto continuam podendo ser necessários para certas funções. Sintaxe válida não comprova compatibilidade completa com Python, Qt, NumPy ou OpenGL.
 
-## Primeira integração Vulkan na janela original (ainda incompleta)
+## Vulkan como único backend da GUI original
 
-Foi iniciada a migração **dentro do MakeHuman original**. O arquivo
-`codigo/makehuman/lib/vulkan_scene.py` utiliza os objetos renderizáveis reais
-de `G.world`, seus índices de faces filtradas pelo `module3d`, vértices, UVs,
-normais e as matrizes das câmeras originais. O arquivo
-`codigo/makehuman/lib/vulkan_canvas.py` conecta a renderização por Vulkan
-aos mesmos handlers de mouse e ao mesmo layout de `qtui.Frame` original,
-sem criar um aplicativo independente.
+A interface `qtui.py` usa `QRenderWidget` e reaproveita os mesmos eventos,
+objetos da cena (`G.world`), materiais e câmeras do MakeHuman original. O
+renderizador utiliza `wgpu` e força o backend Vulkan. Não existe mais a
+seleção de um canvas OpenGL no fluxo principal.
 
-**Modo de validação exclusivamente para desenvolvedores:**
+Para executar localmente com Python 3.12 e driver Vulkan:
 
 ```bash
-# Requer temporariamente as dependências originais e wgpu/rendercanvas.
-MAKEHUMANO_VULKAN_PILOT=1 python executar.py --noshaders
+python -m pip install -r codigo/requirements.txt
+python executar.py
 ```
 
-O flag liga somente a integração inicial; não é uma opção final de fallback.
-O teste de CI `vulkan-gui-original` tenta abrir a **GUI original** com esse
-canvas e exige pelo menos um objeto real renderizado por Vulkan.
-**Limitações:** picking, transparência, todos os shaders, renderização
-offscreen, parte dos materiais e plugins gráficos ainda não foram migrados.
-Durante a migração, PyOpenGL permanece necessário a partes do aplicativo;
-portanto **OpenGL ainda não foi eliminado e o objetivo não foi concluído**.
-Não usar o modo experimental como editor de produção até haver paridade.
+**Não é necessário definir `MAKEHUMANO_VULKAN_PILOT`.** O smoke test da
+GUI também inicia diretamente em Vulkan e verifica o carregamento de objetos,
+picking, renderização offscreen e rasterização UV.
+
+Esta versão **ainda é de desenvolvimento**: a execução sem PyOpenGL não
+comprova equivalência gráfica dos shaders nem funcionamento de todos os plugins
+e fluxos de edição/exportação. Consultar
+[MIGRACAO-VULKAN.md](MIGRACAO-VULKAN.md) antes de declarar o produto concluído.
 
 ## Histórico do protótipo isolado (fora do escopo de novas funcionalidades)
 
