@@ -1,6 +1,10 @@
-# MakeHumano — modernização experimental do MakeHuman
+# MakeHumano — atualização de Python e migração de OpenGL para Vulkan
 
-Esta pasta é a área de trabalho para atualizar o [MakeHuman](https://github.com/makehumancommunity/makehuman) em **Python**, preservando a lógica e os recursos originais sempre que possível.
+**[Escopo oficial do projeto](ESCOPO.md)** — a única modernização solicitada é atualizar o **MakeHuman original** para Python moderno e trocar o **renderizador OpenGL por Vulkan dentro da interface original**, preservando seu comportamento, ferramentas, arquivos e plugins. **Não criar um editor novo nem adicionar funcionalidades.**
+
+Esta pasta é a área de trabalho para essa migração do [MakeHuman](https://github.com/makehumancommunity/makehuman). O protótipo independente `motor_wgpu/` é **pesquisa técnica prévia, não substitui o MakeHuman e não define novos objetivos**.
+
+**Situação do objetivo principal:** a integração de Vulkan na viewport do MakeHuman original **ainda não foi concluída**. Testes do protótipo paralelo não demonstram essa integração.
 
 > **Estado atual:** fontes originais, malha base, rig, morph targets e outros recursos versionados em `codigo/`; dois erros de sintaxe auxiliares corrigidos; testes de deformação 3D e compatibilidade Python 3.12/3.13 passaram. A sequência de inicialização da GUI passou com Python 3.12 e Xvfb no Linux; aparência visual, interação dos controles e exportação ainda dependem de testes em desktop real.
 
@@ -46,7 +50,11 @@ python executar.py --noshaders
 
 **Atenção:** o teste gráfico usa `--noshaders` em um servidor X virtual, portanto **não valida** shaders e aparência final. Malhas, rigs, morph targets e outros recursos **presentes no repositório original** já estão versionados nesta cópia. Recursos **externos** disponibilizados separadamente pelo projeto continuam podendo ser necessários para certas funções. Sintaxe válida não comprova compatibilidade completa com Python, Qt, NumPy ou OpenGL.
 
-## Prévia experimental com wgpu-py / Vulkan
+## Histórico do protótipo isolado (fora do escopo de novas funcionalidades)
+
+**Apenas referência técnica.** O diretório `motor_wgpu/` foi desenvolvido antes da fixação do escopo. Não é o aplicativo a entregar. Os recursos listados abaixo documentam trabalhos já realizados e **não devem continuar sendo ampliados** sem autorização. A tarefa pendente é adaptar e integrar Vulkan na aplicação MakeHuman existente.
+
+### Prévia experimental com wgpu-py / Vulkan
 
 Foi acrescentado um **visualizador independente** em [`motor_wgpu/`](motor_wgpu/README.md). Ele carrega a malha original `base.obj`, mantém as coordenadas UV, possui material WGSL com difuso + reflexão GGX simplificada, além de **dispersão de pele aproximada** com intensidade ajustável, e permite alterar texturas difusas, mapas de normais em espaço tangente e mapas de rugosidade durante a execução. O painel agora carrega **238 modificadores diretos** das definições oficiais do MakeHuman, agrupados por região do corpo. Os sliders aplicam morph targets positivos e negativos ao vertex buffer Vulkan, recalculando as normais sem alterar UVs. Também existem **oito controles gerais** na prévia — idade, gênero morfológico, peso, musculatura, altura, proporções corporais, volume e firmeza dos seios — que combinam até 564 alvos originais. Também foram adicionados os **três parâmetros étnicos interdependentes do MakeHuman**, com normalização comparada à função original `Human._setEthnicVals`. Eles controlam misturas de alvos morfológicos, não identidade étnica. A integração das regras completas de dependência com a GUI principal ainda está pendente.
 
@@ -63,7 +71,17 @@ O parâmetro `--backend vulkan` obriga o uso de Vulkan. O modo automático tenta
 
 O diretório `codigo/` está versionado no GitHub em `brincadeira/makehumano/codigo/`. Assim, as modificações feitas nos arquivos originais aparecem como diferenças auditáveis. Use commits pequenos e execute os testes antes de alterar a lógica de modelagem.
 
-## Objetivo das próximas alterações
+## Marcos históricos (não constituem o escopo atual)
+
+Os itens abaixo registram trabalho realizado e propostas antigas, inclusive tarefas do visualizador isolado que **não são mais prioridades nem autorização de implementação**. O trabalho futuro deve seguir o [escopo oficial](ESCOPO.md): Python moderno e Vulkan na janela **original** do MakeHuman. Os itens em aberto nesta lista não autorizam novas funcionalidades.
+
+### Prioridades reais restantes
+
+1. [ ] Concluir a modernização das dependências e da inicialização do MakeHuman original para Python moderno, com regressões verificadas.
+2. [ ] Substituir o caminho de renderização OpenGL da viewport original por Vulkan, mantendo sua interface, entrada e atualização.
+3. [ ] Verificar a compatibilidade das funcionalidades originais e resolver regressões diretamente relacionadas à migração.
+
+### Registro de alterações anteriores
 
 1. [x] Importar o código original com proveniência e licenças.
 2. [x] Corrigir os dois erros de sintaxe encontrados em scripts auxiliares legados.
@@ -94,8 +112,8 @@ O diretório `codigo/` está versionado no GitHub em `brincadeira/makehumano/cod
 27. [x] Carregar manualmente peças externas `.mhclo` com OBJ, textura opcional e controles de visibilidade/remoção, seguindo morphs e máscaras do corpo.
 28. [x] Ler materiais `.mhmat` parcialmente, com textura difusa automática, tonalidade RGB e rugosidade aproximada por peça, preservando opção manual.
 29. [x] Persistir acessórios externos em projetos JSON v4, com cópias verificáveis de `.mhclo`, OBJ e PNG, material/visibilidade e compatibilidade com v1–v3.
-30. [ ] Validar roupas reais e arquivos `.mhm` históricos; avançar para oclusão entre camadas, rig e poses.
-31. [ ] Adaptar dependências e interface sem quebrar deformações, arquivos e plugins.
+30. [ ] ~~Validar roupas reais e arquivos `.mhm` históricos; avançar para oclusão entre camadas, rig e poses.~~ Fora do escopo atual; não executar sem nova autorização.
+31. [ ] Integrar o backend Vulkan à interface original sem quebrar suas funcionalidades (parte do escopo oficial).
 
 ## Licenças e créditos
 
