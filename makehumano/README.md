@@ -48,7 +48,7 @@ python executar.py --noshaders
 
 ## Prévia experimental com wgpu-py / Vulkan
 
-Foi acrescentado um **visualizador independente** em [`motor_wgpu/`](motor_wgpu/README.md). Ele carrega a malha original `base.obj`, mantém as coordenadas UV e possui material WGSL com difuso + reflexão GGX simplificada, ajuste de rugosidade/tonalidade e substituição de textura durante a execução.
+Foi acrescentado um **visualizador independente** em [`motor_wgpu/`](motor_wgpu/README.md). Ele carrega a malha original `base.obj`, mantém as coordenadas UV, possui material WGSL com difuso + reflexão GGX simplificada e permite alterar texturas durante a execução. Quatro sliders de demonstração aplicam **morph targets oficiais MakeHuman** ao vertex buffer Vulkan, com atualização de normais e opção de restaurar a malha original.
 
 Execute no diretório `makehumano/`:
 
@@ -57,7 +57,7 @@ python -m pip install -r motor_wgpu/requirements.txt
 python -m motor_wgpu.app
 ```
 
-O parâmetro `--backend vulkan` obriga o uso de Vulkan. O modo automático tenta escolher a API que funcione na máquina. Os testes em GitHub Actions verificam o processamento da malha e a criação de quadros com Vulkan por software (Mesa/Lavapipe). **Isto ainda não substitui a viewport principal**, nem inclui subsurface scattering, picking, ligação aos morph targets ou revisão visual completa em uma GPU física.
+O parâmetro `--backend vulkan` obriga o uso de Vulkan. O modo automático tenta escolher a API que funcione na máquina. Os testes em GitHub Actions verificam o processamento da malha e a criação de quadros com Vulkan por software (Mesa/Lavapipe). **Isto ainda não substitui a viewport principal** nem integra o sistema completo de modificadores anatômicos; também faltam subsurface scattering, picking e revisão visual em uma GPU física.
 
 ## Como salvar as atualizações neste repositório
 
@@ -72,9 +72,12 @@ O diretório `codigo/` está versionado no GitHub em `brincadeira/makehumano/cod
 5. [x] Restaurar malha base, esqueleto, targets e assets ignorados pela primeira importação.
 6. [x] Corrigir o uso binário de `numpy.fromstring()` para `numpy.frombuffer()` ao carregar texturas Qt com NumPy 2+.
 7. [x] Executar a abertura gráfica com Xvfb no Linux: inicialização, plugins e morph targets concluídos no Python 3.12.
-8. [ ] Testar visualmente a interface num desktop real e identificar assets externos necessários.
-9. [ ] Testar exportação, salvamento, carga, materiais e interação com sliders.
-10. [ ] Adaptar dependências e interface sem quebrar deformações, arquivos e plugins.
+8. [x] Criar visualizador wgpu independente com Vulkan, textura dinâmica e quatro `.target` originais com sliders.
+9. [x] Validar deformação, costuras UV, restauração e renderização de novos vértices no backend Vulkan por software.
+10. [ ] Testar visualmente a interface num desktop real e identificar assets externos necessários.
+11. [ ] Integrar o sistema completo de modificadores à nova viewport, sem duplicar as regras da aplicação.
+12. [ ] Testar exportação, salvamento, carga e materiais.
+13. [ ] Adaptar dependências e interface sem quebrar deformações, arquivos e plugins.
 
 ## Licenças e créditos
 
