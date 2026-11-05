@@ -8,6 +8,8 @@ Esta pasta é a área de trabalho para essa migração do [MakeHuman](https://gi
 
 A auditoria inicial identificou OpenGL em `codigo/makehuman/lib/qtui.py`, `glmodule.py`, `shader.py`, `texture.py`, `mh.py`, no plugin `4_rendering_opengl` e na dependência `PyOpenGL` de `codigo/requirements.txt`. Todos os caminhos ativos deverão ser migrados ou retirados **depois** da substituição funcional por Vulkan.
 
+**Integração comprovada até aqui:** o modo piloto `MAKEHUMANO_VULKAN_PILOT=1` renderiza objetos de `G.world` na **janela original** e agora também responde à seleção de FaceGroups por `mh.getPickedColor()`, sem executar `glReadPixels` nessa seleção. O CI abre a GUI real com Vulkan por software e valida o primeiro quadro e um RGB de picking. A implementação de picking é inicial (triângulos projetados na CPU), ainda sem clipping completo. **O modo piloto continua importando módulos legados OpenGL**, portanto a meta de removê-los completamente ainda está pendente.
+
 > **Estado atual:** fontes originais, malha base, rig, morph targets e outros recursos versionados em `codigo/`; dois erros de sintaxe auxiliares corrigidos; testes de deformação 3D e compatibilidade Python 3.12/3.13 passaram. A sequência de inicialização da GUI passou com Python 3.12 e Xvfb no Linux; aparência visual, interação dos controles e exportação ainda dependem de testes em desktop real.
 
 ## O que já existe
@@ -108,6 +110,7 @@ Os itens abaixo registram trabalho realizado e propostas antigas, inclusive tare
 1. [ ] Concluir a modernização das dependências e da inicialização do MakeHuman original para Python moderno, com regressões verificadas.
 2. [ ] Substituir **inteiramente** o motor OpenGL por Vulkan na interface original: canvas, texturas, shaders, picking, buffers, renderização offscreen e plugins, sem backend OpenGL residual.
 3. [ ] Verificar a compatibilidade das funcionalidades originais; remover `PyOpenGL`, `QOpenGLWidget` e os módulos gráficos obsoletos após validar o motor Vulkan.
+4. [x] Integrar primeiro picking sem `glReadPixels` ao `mh.getPickedColor` da GUI original em modo Vulkan piloto, com smoke gráfico e testes CPU.
 
 ### Registro de alterações anteriores
 
