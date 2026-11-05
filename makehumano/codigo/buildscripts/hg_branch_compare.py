@@ -134,70 +134,7 @@ if __name__ == '__main__':
     if args.get('graft', False):
         import subprocess
 
-    try:
-        # Try if cwd is buildscripts/ folder
-        c = hglib.open('../')
-    except:
-        # Try whether we are in hg root folder
-        c = hglib.open('.')
-
-    # Difference in changesets between branches
-    cDiff = c.log("ancestors(%s) and not ancestors(%s)" % (sourceBranch, targetBranch))
-
-    # Filter out already grafted commits
-    stdOut = c.rawcommand(cmdbuilder('log', debug=True, b=targetBranch))
-    grafted = []
-    r = re.compile('.*source=([a-zA-Z0-9]*)')
-    for outL in stdOut.split('\n'):
-        if outL.strip().startswith('extra') and ' source=' in outL:
-            sourceRev = r.match(outL).groups()[0]
-            grafted.append(sourceRev)
-
-    # Filtered result
-    # Also filter out merge commits (which are skipped by graft anyway)
-    return [cs for cs in cDiff if (cs.node not in grafted and \
-                                   cs.node[:12] not in excludes and \
-                                   not isMergeCommit(c, cs) )]
-
-
-def formatChangeset(cs):
-    return """changeset:   %s
-revision:    %s
-user:        %s
-date:        %s
-description:
-%s""" % (cs.node[:12], cs.rev, cs.author, cs.date, cs.desc)
-
-
-
-def _parse_args():
-    if len(sys.argv) < 2:
-        return dict()
-
-    import argparse    # requires python >= 2.7
-    parser = argparse.ArgumentParser()
-
-    # optional arguments
-    parser.add_argument("--graft", action="store_true", help="Generate graft command for merging remaining changesets")
-    parser.add_argument("--sourceBranch", default="default", nargs='?', help="Branch to pick commits from")
-    parser.add_argument("--targetBranch", default="stable", nargs='?', help="Branch to merge commits to")
-
-    argOptions = vars(parser.parse_args())
-    return argOptions
-
-
-if __name__ == '__main__':
-    import sys
-    args = _parse_args()
-
-    sourceBranch=args.get("sourceBranch", "default")
-    targetBranch=args.get("targetBranch", "stable")
-
-    result = compare(sourceBranch, targetBranch)
-
-    if args.get('graft', False):
-        import subprocess
-        print('To graft %s changesets from %s to %s, execute:' % (len(result), sourceBranch, targetBranch))
+        # O resultado já foi calculado por compare() acima.\n        print('To graft %s changesets from %s to %s, execute:' % (len(result), sourceBranch, targetBranch))
         print('hg update %s' % targetBranch)
         revs = [r.node for r in result]
         dargs = [item for pair in zip(len(revs)*['-D'], revs) for item in pair]
