@@ -45,6 +45,7 @@ def iniciar():
     from .gpu import MotorWgpu
     from .morphs import Deformador, ler_target, pasta_targets
     from .modificadores import carregar_catalogo, NOMES_GRUPOS
+    from .macro import ControladorMacros, VALORES_PADRAO, ROTULOS
 
     malha = carregar_obj(caminho_base_obj())
     print(
@@ -89,6 +90,11 @@ def iniciar():
     motor = MotorWgpu(tela, malha)
     print(f"Adaptador gráfico: {motor.adapter.info}", flush=True)
     deformador = Deformador(malha)
+    macros = ControladorMacros(deformador)
+    # O personagem original é inicializado com macrovariáveis padrão;
+    # precisamos aplicá-las antes dos modificadores locais.
+    motor.atualizar_vertices(macros.atualizar())
+    print(f"Macrovariáveis: {len(macros.arquivos)} targets no catálogo", flush=True)
 
     controle("Rotação horizontal", -180, 180, 0,
              lambda valor: motor.ajustar_camera(angulo=valor * 3.14159265 / 180))
@@ -109,6 +115,24 @@ def iniciar():
         botao = QtWidgets.QPushButton(nome)
         botao.clicked.connect(lambda _checked=False, cor=rgb: motor.ajustar_pele(cor=cor))
         coluna.addWidget(botao)
+
+    coluna.addWidget(QtWidgets.QLabel("<b>Parâmetros gerais</b>"))
+    coluna.addWidget(QtWidgets.QLabel(
+        "Macros MakeHuman: idade, peso, musculatura, altura e proporções."
+    ))
+    controles_macros = {}
+    for chave, padrao in VALORES_PADRAO.items():
+        coluna.addWidget(QtWidgets.QLabel(ROTULOS[chave]))
+        barra = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        barra.setRange(0, 100)
+        barra.setValue(round(padrao * 100))
+        barra.valueChanged.connect(
+            lambda valor, nome=chave: motor.atualizar_vertices(
+                macros.definir(nome, valor / 100.0)
+            )
+        )
+        coluna.addWidget(barra)
+        controles_macros[chave] = barra
 
     coluna.addWidget(QtWidgets.QLabel("<b>Modificadores MakeHuman</b>"))
     coluna.addWidget(QtWidgets.QLabel(
@@ -186,7 +210,13 @@ def iniciar():
             slider.blockSignals(True)
             slider.setValue(0)
             slider.blockSignals(False)
-        motor.atualizar_vertices(deformador.restaurar())
+        for chave, slider in controles_macros.items():
+            slider.blockSignals(True)
+            slider.setValue(round(VALORES_PADRAO[chave] * 100))
+            slider.blockSignals(False)
+        deformador.restaurar()
+        # O MakeHuman padrão possui os macros iniciais ativos.
+        motor.atualizar_vertices(macros.restaurar())
 
     botao_restaurar = QtWidgets.QPushButton("Restaurar todas as deformações")
     botao_restaurar.clicked.connect(restaurar_morphs)
@@ -233,7 +263,7 @@ def iniciar():
         def terminar_smoke():
             print(f"Quadros desenhados: {motor.frames}", flush=True)
             # Um quadro inicial e outros após atualizar textura e geometria.
-            aplicacao.exit(0 if motor.frames >= 4 else 2)
+            aplicacao.exit(0 if motor.frames >= 7 else 2)
 
         def deformar_smoke():
             chave = "nose/nose-scale-horiz-decr|incr"
@@ -244,11 +274,23 @@ def iniciar():
             chave = "nose/nose-scale-horiz-decr|incr"
             controles_morph[chave].setValue(-35)
             print("Direção negativa do modificador aplicada ao Vulkan", flush=True)
+        
+        def macro_smoke():
+            controles_macros["muscle"].setValue(75)
+            controles_macros["weight"].setValue(65)
+            print("Musculatura e peso combinados no Vulkan", flush=True)
+
+        def restaurar_smoke():
+            controles_macros["muscle"].setValue(50)
+            controles_macros["weight"].setValue(50)
+            print("Macrovariáveis restauradas aos valores padrão", flush=True)
 
         QtCore.QTimer.singleShot(800, atualizar_smoke)
         QtCore.QTimer.singleShot(2000, deformar_smoke)
         QtCore.QTimer.singleShot(4500, deformar_negativo_smoke)
-        QtCore.QTimer.singleShot(10000, terminar_smoke)
+        QtCore.QTimer.singleShot(6400, macro_smoke)
+        QtCore.QTimer.singleShot(9000, restaurar_smoke)
+        QtCore.QTimer.singleShot(13500, terminar_smoke)
 
     return aplicacao.exec_()
 
