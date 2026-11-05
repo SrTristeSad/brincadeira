@@ -1,10 +1,12 @@
 # MakeHumano — atualização de Python e migração de OpenGL para Vulkan
 
-**[Escopo oficial do projeto](ESCOPO.md)** — a única modernização solicitada é atualizar o **MakeHuman original** para Python moderno e trocar o **renderizador OpenGL por Vulkan dentro da interface original**, preservando seu comportamento, ferramentas, arquivos e plugins. **Não criar um editor novo nem adicionar funcionalidades.**
+**[Escopo oficial do projeto](ESCOPO.md)** — a única modernização solicitada é atualizar o **MakeHuman original** para Python moderno e **remover completamente o motor OpenGL, substituindo-o por Vulkan em toda a aplicação original**. Vulkan será **o único motor gráfico**, sem fallback OpenGL no produto final. Preservar comportamento, ferramentas, arquivos e plugins; **não criar outro editor nem adicionar funcionalidades**.
 
 Esta pasta é a área de trabalho para essa migração do [MakeHuman](https://github.com/makehumancommunity/makehuman). O protótipo independente `motor_wgpu/` é **pesquisa técnica prévia, não substitui o MakeHuman e não define novos objetivos**.
 
-**Situação do objetivo principal:** a integração de Vulkan na viewport do MakeHuman original **ainda não foi concluída**. Testes do protótipo paralelo não demonstram essa integração.
+**Situação do objetivo principal:** a substituição **integral do motor OpenGL** no MakeHuman original **ainda não foi concluída**. O protótipo paralelo não demonstra essa integração e **não atende à meta de eliminar PyOpenGL, o QOpenGLWidget e os módulos gráficos legados**.
+
+A auditoria inicial identificou OpenGL em `codigo/makehuman/lib/qtui.py`, `glmodule.py`, `shader.py`, `texture.py`, `mh.py`, no plugin `4_rendering_opengl` e na dependência `PyOpenGL` de `codigo/requirements.txt`. Todos os caminhos ativos deverão ser migrados ou retirados **depois** da substituição funcional por Vulkan.
 
 > **Estado atual:** fontes originais, malha base, rig, morph targets e outros recursos versionados em `codigo/`; dois erros de sintaxe auxiliares corrigidos; testes de deformação 3D e compatibilidade Python 3.12/3.13 passaram. A sequência de inicialização da GUI passou com Python 3.12 e Xvfb no Linux; aparência visual, interação dos controles e exportação ainda dependem de testes em desktop real.
 
@@ -78,8 +80,8 @@ Os itens abaixo registram trabalho realizado e propostas antigas, inclusive tare
 ### Prioridades reais restantes
 
 1. [ ] Concluir a modernização das dependências e da inicialização do MakeHuman original para Python moderno, com regressões verificadas.
-2. [ ] Substituir o caminho de renderização OpenGL da viewport original por Vulkan, mantendo sua interface, entrada e atualização.
-3. [ ] Verificar a compatibilidade das funcionalidades originais e resolver regressões diretamente relacionadas à migração.
+2. [ ] Substituir **inteiramente** o motor OpenGL por Vulkan na interface original: canvas, texturas, shaders, picking, buffers, renderização offscreen e plugins, sem backend OpenGL residual.
+3. [ ] Verificar a compatibilidade das funcionalidades originais; remover `PyOpenGL`, `QOpenGLWidget` e os módulos gráficos obsoletos após validar o motor Vulkan.
 
 ### Registro de alterações anteriores
 
