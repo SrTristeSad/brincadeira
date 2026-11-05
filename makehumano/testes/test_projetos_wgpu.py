@@ -137,6 +137,18 @@ class TestarProjetos(unittest.TestCase):
             self.assertTrue(all(v is None for v in resultado["texturas"].values()))
             self.assertAlmostEqual(resultado["pele"]["dispersao"], 0.68)
 
+    def test_projeto_v3_preserva_texturas_e_adiciona_acessorios_vazios(self):
+        legado = self.exemplo()
+        legado["versao"] = 3
+        legado.pop("acessorios")
+        with tempfile.TemporaryDirectory() as pasta:
+            arquivo = Path(pasta) / "legado.makehumano.json"
+            arquivo.write_text(json.dumps(legado), encoding="utf-8")
+            atualizado = carregar_documento(arquivo, self.catalogo)
+            self.assertEqual(atualizado["versao"], VERSAO)
+            self.assertEqual(atualizado["texturas"], legado["texturas"])
+            self.assertEqual(atualizado["acessorios"], [])
+
     def test_roundtrip_de_imagens_png_gera_pasta_portatil(self):
         documento = self.exemplo()
         cor = np.array([
@@ -230,7 +242,7 @@ class TestarProjetos(unittest.TestCase):
 
     def test_documento_usa_identificadores_oficiais_sem_caminhos_externos(self):
         projeto = self.exemplo()
-        self.assertEqual(set(projeto), {"formato", "versao", "macros", "etnias", "modificadores", "pele", "texturas"})
+        self.assertEqual(set(projeto), {"formato", "versao", "macros", "etnias", "modificadores", "pele", "texturas", "acessorios"})
         self.assertEqual(len(projeto["modificadores"]), 2)
         self.assertTrue(all("data/targets" not in chave for chave in projeto["modificadores"]))
 
