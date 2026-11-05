@@ -15,6 +15,8 @@ import numpy as np
 RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "codigo" / "makehuman" / "lib"))
 
+from vulkan_capture import recortar_captura_rgb
+
 from vulkan_scene import (
     CenaVulkan, preparar_malha_original, matriz_wgpu, assinatura_textura,
     parametros_material_vulkan,
@@ -223,6 +225,36 @@ class TestarMaterialOriginalNoShaderVulkan(unittest.TestCase):
         cor, flags = parametros_material_vulkan(obj)
         np.testing.assert_array_equal(cor, [1, 1, 1, 1])
         np.testing.assert_array_equal(flags[:2], [0, 1])
+
+
+class TestarCapturaDaViewportOriginal(unittest.TestCase):
+    def setUp(self):
+        self.pixels = np.arange(4 * 5 * 3, dtype=np.uint8).reshape(4, 5, 3)
+
+    def test_recorte_interno_em_coordenadas_qt(self):
+        recorte = recortar_captura_rgb(self.pixels, 1, 1, 3, 2)
+        np.testing.assert_array_equal(recorte, self.pixels[1:3, 1:4])
+        self.assertTrue(recorte.flags.c_contiguous)
+
+    def test_captura_parcial_mantem_tamanho_e_cinza_externo(self):
+        recorte = recortar_captura_rgb(self.pixels, -1, -1, 3, 3)
+        self.assertEqual(recorte.shape, (3, 3, 3))
+        self.assertTrue(np.all(recorte[0] == 127))
+        self.assertTrue(np.all(recorte[:, 0] == 127))
+        np.testing.assert_array_equal(recorte[1:, 1:], self.pixels[:2, :2])
+
+    def test_captura_totalmente_fora_da_viewport(self):
+        recorte = recortar_captura_rgb(self.pixels, 100, 100, 2, 2)
+        self.assertEqual(recorte.shape, (2, 2, 3))
+        self.assertTrue(np.all(recorte == 127))
+
+    def test_valida_dimensoes_e_formato(self):
+        with self.assertRaises(RuntimeError):
+            recortar_captura_rgb(self.pixels, 0, 0, 0, 5)
+        with self.assertRaises(ValueError):
+            recortar_captura_rgb(self.pixels[:, :, :2], 0, 0, 1, 1)
+        with self.assertRaises(ValueError):
+            recortar_captura_rgb(self.pixels.astype(np.float32), 0, 0, 1, 1)
 
 
 if __name__ == "__main__":
