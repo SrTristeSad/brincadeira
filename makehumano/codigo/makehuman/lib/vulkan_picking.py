@@ -35,8 +35,8 @@ def _segmentos_faces(face, start, count):
     return np.asarray(tris[ok], dtype=np.int64)
 
 
-def selecionar_cor(mundo, cameras, x, y, largura, altura):
-    """Retorna RGB da FaceGroup visível sob pixel Qt (origem superior).
+def _selecionar_cor_e_profundidade(mundo, cameras, x, y, largura, altura):
+    """Calcula grupo visível e profundidade do pixel via cena original.
 
     O pipeline de seleção original desenha só objetos .pickable, com sua
     própria matriz de câmera e grupos de face. A prioridade da cena é
@@ -44,9 +44,9 @@ def selecionar_cor(mundo, cameras, x, y, largura, altura):
     """
     if (x is None or y is None or largura <= 0 or altura <= 0
             or not (0 <= x < largura and 0 <= y < altura)):
-        return COR_VAZIA
+        return COR_VAZIA, 1.0
     if mundo is None or cameras is None:
-        return COR_VAZIA
+        return COR_VAZIA, 1.0
 
     px, py = float(x) + 0.5, float(y) + 0.5
     melhor_z = float("inf")
@@ -113,4 +113,20 @@ def selecionar_cor(mundo, cameras, x, y, largura, altura):
             if menor < melhor_z:
                 melhor_z = menor
                 resultado = tuple(int(v) for v in obj.clrid(i))
-    return resultado
+    return resultado, (melhor_z if np.isfinite(melhor_z) else 1.0)
+
+
+def selecionar_cor(mundo, cameras, x, y, largura, altura):
+    """RGB do grupo selecionado, compatível com mh.getPickedColor()."""
+    cor, _ = _selecionar_cor_e_profundidade(
+        mundo, cameras, x, y, largura, altura,
+    )
+    return cor
+
+
+def selecionar_profundidade(mundo, cameras, x, y, largura, altura):
+    """Z do pixel [0,1] para o contrato camera.convertToWorld3D()."""
+    _, z = _selecionar_cor_e_profundidade(
+        mundo, cameras, x, y, largura, altura,
+    )
+    return z
