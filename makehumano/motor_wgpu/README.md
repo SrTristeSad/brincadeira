@@ -1,6 +1,6 @@
 # Motor WGPU experimental — histórico técnico (não é o produto final)
 
-**[Escopo oficial do MakeHumano](../ESCOPO.md):** atualizar o Python do MakeHuman original e trocar sua viewport OpenGL por Vulkan **na própria interface original**, preservando todas as funcionalidades existentes. Não criar novos recursos nem manter um editor paralelo como produto.
+**[Escopo oficial do MakeHumano](../ESCOPO.md):** atualizar o Python do MakeHuman original e **substituir completamente seu motor gráfico OpenGL por Vulkan**, em toda a aplicação original, sem OpenGL residual nem fallback como produto final. Preservar suas funcionalidades. Não criar novos recursos nem entregar um editor paralelo.
 
 **Estado:** este módulo é apenas um **protótipo isolado, pré-existente à definição do escopo**. A interface original em PyQt5/OpenGL não foi substituída. Suas funcionalidades abaixo são registradas para consulta e eventual reaproveitamento na migração, **não são tarefas de desenvolvimento autorizadas**.
 
