@@ -1,18 +1,20 @@
 // MakeHumano: primeiro material de pele em WGSL.
 // Diffuse + especular GGX (dielétrico), sem subsurface scattering.
-// A textura UV e a tonalidade podem ser trocadas sem recriar o renderizador.
+// A textura UV, o mapa de normais e a rugosidade podem ser trocados em tempo real.
 
 struct CameraMaterial {
     mvp: mat4x4f,
     model: mat4x4f,
     tint: vec4f,
-    surface: vec4f, // x = roughness
+    surface: vec4f, // x = rugosidade-base; y = usar normal map
     eye: vec4f,
 };
 
 @group(0) @binding(0) var<uniform> material: CameraMaterial;
 @group(0) @binding(1) var color_map: texture_2d<f32>;
 @group(0) @binding(2) var color_sampler: sampler;
+@group(0) @binding(3) var normal_map: texture_2d<f32>;
+@group(0) @binding(4) var roughness_map: texture_2d<f32>;
 
 struct VertexIn {
     @location(0) position: vec3f,
@@ -40,7 +42,31 @@ fn vs_main(in: VertexIn) -> VertexOut {
 
 @fragment
 fn fs_main(in: VertexOut) -> @location(0) vec4f {
-    let n = normalize(in.world_normal);
+    var n = normalize(in.world_normal);
+
+    // Base tangente calculada a partir das derivadas de posição e UV.
+    // Não altera a topologia nem os buffers de vértices do MakeHuman.
+    // Os mapas de normais seguem a convenção OpenGL (+Y).
+    let dp_x = dpdx(in.world_position);
+    let dp_y = dpdy(in.world_position);
+    let duv_x = dpdx(in.uv);
+    let duv_y = dpdy(in.uv);
+    let determinante = duv_x.x * duv_y.y - duv_x.y * duv_y.x;
+    if (material.surface.y > 0.5 && abs(determinante) > 0.000001) {
+        let sinal = select(-1.0, 1.0, determinante >= 0.0);
+        let tangente_raw = (dp_x * duv_y.y - dp_y * duv_x.y) * sinal;
+        let tangente = tangente_raw - n * dot(n, tangente_raw);
+        if (dot(tangente, tangente) > 0.00000001) {
+            let t = normalize(tangente);
+            let b = normalize(cross(n, t)) * sinal;
+            let normal_ts = normalize(
+                textureSample(normal_map, color_sampler, in.uv).xyz * 2.0
+                - vec3f(1.0)
+            );
+            n = normalize(t * normal_ts.x + b * normal_ts.y + n * normal_ts.z);
+        }
+    }
+
     let l = normalize(vec3f(0.35, 0.8, 0.55));
     let v = normalize(material.eye.xyz - in.world_position);
     let h = normalize(l + v);
@@ -53,7 +79,12 @@ fn fs_main(in: VertexOut) -> @location(0) vec4f {
     let tex_srgb = textureSample(color_map, color_sampler, in.uv).rgb;
     let albedo = pow(tex_srgb * material.tint.rgb, vec3f(2.2));
 
-    let roughness = clamp(material.surface.x, 0.05, 1.0);
+    // O mapa de rugosidade utiliza o canal R em espaço linear.
+    // Branco = fator 1; por isso a ausência do mapa preserva o slider.
+    let roughness = clamp(
+        material.surface.x * textureSample(roughness_map, color_sampler, in.uv).r,
+        0.05, 1.0
+    );
     let a = roughness * roughness;
     let a2 = a * a;
     let denom = nh * nh * (a2 - 1.0) + 1.0;
