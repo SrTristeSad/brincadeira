@@ -16,7 +16,10 @@ RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "codigo" / "makehuman" / "lib"))
 
 from vulkan_capture import recortar_captura_rgb
-from vulkan_offscreen import bytes_por_linha_alinhados, decodificar_buffer_rgb
+from vulkan_offscreen import (
+    bytes_por_linha_alinhados, decodificar_buffer_rgb,
+    decodificar_buffer_rgba, mascarar_alfa_rgba,
+)
 
 from vulkan_scene import (
     CenaVulkan, preparar_malha_original, matriz_wgpu, assinatura_textura,
@@ -350,6 +353,38 @@ class TestarProjecaoOffscreenVulkan(unittest.TestCase):
         with self.assertRaises(ValueError):
             matriz_wgpu(camera, objeto_original(),
                         tamanho_origem=(640, 480), tamanho_destino=(0, 480))
+
+
+class TestarAlfaDeRenderizacaoVulkan(unittest.TestCase):
+    def test_rgba_com_padding_preserva_alfa(self):
+        raw = bytearray(256)
+        raw[:8] = bytes((10, 20, 30, 0, 40, 50, 60, 200))
+        rgba = decodificar_buffer_rgba(raw, 2, 1, "rgba8unorm")
+        self.assertEqual(rgba.shape, (1, 2, 4))
+        np.testing.assert_array_equal(rgba[0, 0], [10, 20, 30, 0])
+        np.testing.assert_array_equal(rgba[0, 1], [40, 50, 60, 200])
+
+    def test_bgra_preserva_alfa_na_conversao(self):
+        raw = bytearray(256)
+        raw[:4] = bytes((30, 20, 10, 155))
+        rgba = decodificar_buffer_rgba(raw, 1, 1, "bgra8unorm-srgb")
+        np.testing.assert_array_equal(rgba[0, 0], [10, 20, 30, 155])
+
+    def test_mascara_conserva_cobertura_sem_cor(self):
+        pixels = np.array([[[200, 25, 10, 0], [1, 2, 3, 128],
+                            [255, 255, 255, 255]]], dtype=np.uint8)
+        mascara = mascarar_alfa_rgba(pixels)
+        self.assertEqual(mascara.shape, (1, 3, 3))
+        np.testing.assert_array_equal(mascara[0, :, 0], [0, 128, 255])
+        np.testing.assert_array_equal(mascara[0, :, 0], mascara[0, :, 1])
+        np.testing.assert_array_equal(mascara[0, :, 0], mascara[0, :, 2])
+        self.assertTrue(mascara.flags.c_contiguous)
+
+    def test_mascara_rejeita_dados_invalidos(self):
+        with self.assertRaises(ValueError):
+            mascarar_alfa_rgba(np.zeros((1, 2, 3), dtype=np.uint8))
+        with self.assertRaises(ValueError):
+            mascarar_alfa_rgba(np.zeros((1, 2, 4), dtype=np.float32))
 
 
 if __name__ == "__main__":
