@@ -250,7 +250,7 @@ class MotorWgpu:
         if deletar_vertices is None:
             mascara = np.zeros(len(self.malha.posicoes_base), dtype=bool)
         else:
-            mascara = self.mascaras_acessorios._validar_mascara(
+            mascara = self.mascaras_acessorios.validar_mascara(
                 deletar_vertices
             )
         self._mascara_manual = mascara
@@ -354,6 +354,15 @@ class MotorWgpu:
             return
         item["visivel"] = bool(visivel)
         self.mascaras_acessorios.definir_visibilidade(nome, visivel)
+        self._sincronizar_mascara_corpo()
+        self.canvas.request_draw()
+
+    def remover_acessorio(self, nome: str):
+        """Remove malha e máscara juntas; volta a exibir o corpo necessário."""
+        if nome not in self.acessorios:
+            raise KeyError(nome)
+        del self.acessorios[nome]
+        self.mascaras_acessorios.remover(nome)
         self._sincronizar_mascara_corpo()
         self.canvas.request_draw()
 
