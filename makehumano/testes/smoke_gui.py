@@ -52,7 +52,12 @@ def main():
             )
             iniciou = False
             try:
-                limite = time.monotonic() + TIMEOUT_SECONDS
+                # O piloto Vulkan usa menos tempo na CI para identificar
+                # falha no primeiro quadro rapidamente, sem atrasar a
+                # verificação de regressão do caminho original.
+                limite = time.monotonic() + (
+                    45 if piloto_vulkan else TIMEOUT_SECONDS
+                )
                 while time.monotonic() < limite:
                     gui_pronta = (
                         marker.is_file()
