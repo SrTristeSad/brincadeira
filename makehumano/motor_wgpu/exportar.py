@@ -13,8 +13,9 @@ import tempfile
 import numpy as np
 
 from .malha import Malha
+from .materiais import (mapa_normal_neutro, mapa_rugosidade_neutro)
 from .materiais_obj import (
-    NOME_MATERIAL, caminhos_materiais, validar_material,
+    NOME_MATERIAL, caminhos_materiais, caminhos_mapas, validar_material,
     escrever_png_rgba, texto_mtl,
 )
 
@@ -122,9 +123,10 @@ def exportar_obj(
 
 def exportar_obj_com_material(
     caminho: str | Path, malha: Malha, vertices: np.ndarray,
-    pele, textura_rgba=None,
+    pele, textura_rgba=None, *,
+    mapa_normal_rgba=None, mapa_rugosidade_rgba=None,
 ) -> tuple[Path, Path, Path]:
-    """Exporta OBJ, MTL e PNG com textura enviada à GPU.
+    """Exporta OBJ, MTL, PNG difuso e mapas auxiliares de normal/rugosidade.
 
     Os três arquivos são preparados com validação prévia. Substituições são
     atômicas por arquivo (não existe transação atômica entre três arquivos).
@@ -136,7 +138,15 @@ def exportar_obj_com_material(
         raise ValueError("A exportação precisa de um destino .obj")
     _validar(malha, vertices)
     rgba = validar_material(pele, textura_rgba)
+    normal = validar_material(
+        pele, mapa_normal_neutro() if mapa_normal_rgba is None else mapa_normal_rgba
+    )
+    rugosidade = validar_material(
+        pele, mapa_rugosidade_neutro()
+        if mapa_rugosidade_rgba is None else mapa_rugosidade_rgba
+    )
     mtl, png = caminhos_materiais(destino)
+    png_normal, png_rugosidade = caminhos_mapas(destino)
     texto = texto_mtl(pele, png.name)
     temporarios = []
     try:
@@ -149,6 +159,21 @@ def exportar_obj_com_material(
         temporarios.append(tmp_png)
         escrever_png_rgba(tmp_png, rgba)
 
+        # Mapas PBR acompanham o OBJ como arquivos auxiliares. O MTL clássico
+        # só referencia o mapa difuso; não rotulamos normais como altura/bump.
+        extras = []
+        for destino_mapa, pixels_mapa in (
+            (png_normal, normal), (png_rugosidade, rugosidade)
+        ):
+            with tempfile.NamedTemporaryFile(
+                mode="wb", dir=destino.parent,
+                prefix=".makehumano-mapa-", suffix=".tmp", delete=False,
+            ) as arquivo:
+                temporario_mapa = Path(arquivo.name)
+            temporarios.append(temporario_mapa)
+            escrever_png_rgba(temporario_mapa, pixels_mapa)
+            extras.append((temporario_mapa, destino_mapa))
+
         with tempfile.NamedTemporaryFile(
             mode="w", encoding="utf-8", newline="\n", dir=destino.parent,
             prefix=".makehumano-mtl-", suffix=".tmp", delete=False,
@@ -158,6 +183,8 @@ def exportar_obj_com_material(
             arquivo.write(texto)
 
         os.replace(tmp_png, png)
+        for origem_mapa, destino_mapa in extras:
+            os.replace(origem_mapa, destino_mapa)
         os.replace(tmp_mtl, mtl)
         exportar_obj(destino, malha, vertices, arquivo_mtl=mtl.name)
     finally:
