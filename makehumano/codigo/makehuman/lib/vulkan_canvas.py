@@ -397,36 +397,39 @@ def criar_canvas_vulkan(canvas_original):
                     imagem_pele = Image(
                         mh.getSysDataPath("litspheres/skinmat_caucasian.png")
                     )
+                    imagem_pele_alternativa = Image(
+                        mh.getSysDataPath("litspheres/skinmat_african.png")
+                    )
 
                     class MaterialLitSphereSmoke:
                         shader = "data/shaders/glsl/litsphere"
-                        shaderParameters = {
-                            "litsphereTexture": imagem_pele,
-                            "AdditiveShading": 0.0,
-                        }
                         shaderConfig = {
                             "diffuse": False, "vertexColors": False,
                             "normal": False,
                         }
 
-                        def __init__(self, original):
+                        def __init__(self, original, imagem):
                             self.original = original
+                            self.shaderParameters = {
+                                "litsphereTexture": imagem,
+                                "AdditiveShading": 0.0,
+                            }
 
                         def __getattr__(self, nome):
                             return getattr(self.original, nome)
 
                     class ObjetoLitSphereSmoke:
-                        def __init__(self, original):
+                        def __init__(self, original, imagem):
                             self.original = original
                             self.material = MaterialLitSphereSmoke(
-                                original.material
+                                original.material, imagem,
                             )
 
                         def __getattr__(self, nome):
                             return getattr(self.original, nome)
 
                     rgba = self._cena.capturar_framebuffer(
-                        [ObjetoLitSphereSmoke(corpo)], G.cameras,
+                        [ObjetoLitSphereSmoke(corpo, imagem_pele)], G.cameras,
                         160, 120, incluir_alfa=True,
                         cor_fundo=(0, 0, 0, 0),
                     )
@@ -437,14 +440,38 @@ def criar_canvas_vulkan(canvas_original):
                         raise RuntimeError(
                             "LitSphere: nenhum pixel de pele renderizado"
                         )
+                    alternativo = self._cena.capturar_framebuffer(
+                        [
+                            ObjetoLitSphereSmoke(
+                                corpo, imagem_pele_alternativa,
+                            )
+                        ],
+                        G.cameras, 160, 120, incluir_alfa=True,
+                        cor_fundo=(0, 0, 0, 0),
+                    )
+                    mascara = (rgba[:, :, 3] > 0) & (
+                        alternativo[:, :, 3] > 0
+                    )
+                    diferentes = int(np.count_nonzero(
+                        mascara & np.any(
+                            rgba[:, :, :3] != alternativo[:, :, :3],
+                            axis=2,
+                        )
+                    ))
+                    if not diferentes:
+                        raise RuntimeError(
+                            "LitSphere: trocar a textura não mudou os pixels"
+                        )
                     with open(litsphere_marker, "w", encoding="utf-8") as saida:
                         saida.write(
                             "vulkan-litsphere:160x120:"
-                            + str(cobertura) + "\n"
+                            + str(cobertura) + ":"
+                            + str(diferentes) + "\n"
                         )
                     print(
                         "MAKEHUMANO_VULKAN: LitSphere WGSL cobertura="
-                        + str(cobertura), flush=True,
+                        + str(cobertura) + ", cores diferentes="
+                        + str(diferentes), flush=True,
                     )
                 caminho = os.environ.get("MAKEHUMANO_VULKAN_FRAME_FILE")
                 if caminho and not os.path.exists(caminho):
