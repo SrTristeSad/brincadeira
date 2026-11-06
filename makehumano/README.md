@@ -10,8 +10,12 @@ verifica renderização da cena real, seleção, framebuffer, máscara alfa e ba
 UV. A paridade visual e funcional do motor ainda não foi alcançada: shaders
 GLSL personalizados, materiais avançados e plugins ainda precisam de migração.
 
-O código legado (`glmodule.py`, `shader.py`, `texture.py`) permanece
-no repositório temporariamente, mas não faz parte da inicialização normal.
+`lib/glmodule.py` (renderizador OpenGL obsoleto) foi removido da branch
+experimental. Os imports históricos `shader.py` e `texture.py` continuam
+como encaminhamentos ao backend Vulkan; os antigos métodos imediatos
+`Object3D.draw/pick` falham explicitamente, pois a cena/picking agora
+têm APIs próprias. A remoção precisa passar pela CI e não comprova paridade
+com plugins GLSL externos.
 Consulte [MIGRACAO-VULKAN.md](MIGRACAO-VULKAN.md) para as pendências técnicas.
 
 > **Estado atual:** fontes originais, malha base, rig, morph targets e outros recursos versionados em `codigo/`; dois erros de sintaxe auxiliares corrigidos; testes de deformação 3D e compatibilidade Python 3.12/3.13 passaram. A sequência de inicialização da GUI passou com Python 3.12 e Xvfb no Linux; aparência visual, interação dos controles e exportação ainda dependem de testes em desktop real.
