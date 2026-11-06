@@ -253,3 +253,7 @@ recurso. Imagens em memória têm identidade separada do arquivo de origem,
 evita-se assim misturar versões de Image e de arquivos. O workflow executa
 a regressão de cópias de trabalho no sistema alvo antes de empacotar; a
 verificação de separadores Windows roda no runner Windows.
+
+A chave resolve aliases reais de arquivo, acompanhando Material.getFilePath:
+nomes curtos 8.3, junctions e links simbólicos não devem criar uma segunda
+cópia de trabalho da mesma textura.

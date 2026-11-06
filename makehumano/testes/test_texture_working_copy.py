@@ -81,6 +81,34 @@ class TextureWorkingCopy(unittest.TestCase):
             self.assertEqual(int(getTexture(source).data[0, 0].sum()), 0)
             self.assertEqual(int(getTexture(path).data[0, 0].sum()), 1020)
 
+    def test_material_resolved_path_and_original_path_reload_same_texture(self):
+        from material import Material
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)/"texture.png"
+            Image(data=np.full((4, 4, 4), 255, np.uint8)).save(str(path))
+            material = Material()
+            material.diffuseTexture = str(path)
+            texture = getTexture(material.diffuseTexture)
+            self.assertIs(getTexture(path), texture)
+            texture.loadSubImage(Image(data=np.zeros((1, 1, 4), np.uint8)), 0, 0)
+            reloadTexture(path)
+            self.assertEqual(int(getTexture(material.diffuseTexture).data[0, 0].sum()), 1020)
+
+    def test_file_alias_shares_working_copy_and_reload(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)/"texture.png"
+            alias = Path(directory)/"alias.png"
+            Image(data=np.full((4, 4, 4), 255, np.uint8)).save(str(path))
+            try:
+                alias.symlink_to(path)
+            except OSError as exc:
+                self.skipTest(f"Symlink indisponível: {exc}")
+            texture = getTexture(path)
+            self.assertIs(getTexture(alias), texture)
+            texture.loadSubImage(Image(data=np.zeros((1, 1, 4), np.uint8)), 0, 0)
+            reloadTexture(alias)
+            self.assertEqual(int(getTexture(path).data[0, 0].sum()), 1020)
+
     @unittest.skipUnless(os.name == "nt", "Separadores equivalentes no Windows")
     def test_windows_slashes_share_cache_and_reload(self):
         with tempfile.TemporaryDirectory() as directory:

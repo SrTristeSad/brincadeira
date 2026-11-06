@@ -113,8 +113,16 @@ def validar_projecao_original(cena, cameras, mundo, directory):
         if destination.read_bytes() != original_bytes:
             raise RuntimeError("Projeção sobrescreveu o arquivo de origem da textura")
         reloadTexture(str(destination))
-        if not np.array_equal(before, viewport()):
-            raise RuntimeError("Recarregar textura não descartou a cópia pintada em memória")
+        reloaded = viewport()
+        if not np.array_equal(before, reloaded):
+            from vulkan_texture import chave_arquivo
+            Image(data=before).save(str(path / "projection-reload-before.png"))
+            Image(data=reloaded).save(str(path / "projection-reload-after.png"))
+            differences = int(np.count_nonzero(np.any(before != reloaded, axis=2)))
+            cpu_white = bool(np.all(mesh.object3d.textureTex.data == 255))
+            raise RuntimeError(f"Recarga de textura: {differences} pixels diferentes; "
+                               f"CPU branca={cpu_white}; origem={chave_arquivo(destination)}; "
+                               f"material={chave_arquivo(material.diffuseTexture)}")
         material.displacementMapTexture = Image(data=np.full((4, 4, 4), 255, np.uint8))
         material.displacementMapIntensity = .5
         displaced = mapImageGL(source, mesh, (0., 0.), (float(G.windowWidth), float(G.windowHeight)))

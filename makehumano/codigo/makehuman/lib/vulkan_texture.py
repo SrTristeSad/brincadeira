@@ -21,7 +21,9 @@ _textureCache = {}
 
 def chave_arquivo(path):
     """Mesma chave para caminhos relativos/absolutos e barras no Windows."""
-    return os.path.normcase(os.path.abspath(os.fspath(path)))
+    # Material.getFilePath resolve aliases, inclusive nomes 8.3 no Windows.
+    # Usar a mesma resolução para permitir recarga pelo caminho original.
+    return os.path.normcase(os.path.realpath(os.fspath(path)))
 
 
 class Texture:
