@@ -26,8 +26,10 @@
 | Iluminação `.mhscene` | Até oito luzes pontuais, ambiente e reflexo Blinn-Phong | Aproximação; falta atenuação/foco/especular de cena |
 | Shader xray original (.mhmat) | WGSL nativo com `edgefalloff`, `intensity`, cor ambiente e alfa de contorno | Execução GPU validada; comparar imagem |
 | Shader LitSphere (pele padrão) | WGSL usa normal em espaço de câmera, textura de LitSphere original e `AdditiveShading`; `autoBlendSkin` usa `EthnicSkinBlender` original | Captura GPU e testes de parâmetros; equivalência visual pendente |
-| Seleção do shader no editor de materiais | Presets xray e LitSphere restaurados, com parâmetros editáveis | Smoke da GUI; validar interações manualmente |
-| Shaders GLSL restantes | `phong`, `toon`, `normalmap`, `skin` ainda sem equivalentes integrais | **Pendente** |
+| Shader Phong original | WGSL usa o primeiro ponto de luz da cena, ambiente, difusa, especular e emissão do material original | Port da base; falta AO e comparação visual |
+| Shader Toon original | WGSL reproduz limiar da silhueta e faixas de luz por `smoothstep` com sete parâmetros do GLSL | Port da base; testar equivalência visual |
+| Seleção do shader no editor de materiais | Presets xray, LitSphere, Phong e Toon listados; parâmetros dos três primeiros com controles dedicados quando aplicável e sete ajustes Toon | Smoke da GUI; validar interações manualmente |
+| Shaders GLSL restantes | `normalmap`, `skin` ainda sem equivalentes integrais | **Pendente** |
 | Shaders GLSL arbitrários | `vulkan_shader.Shader.supported()` permanece falso; nenhum compilador GLSL genérico | **Pendente** |
 
 ## Arquitetura
@@ -62,7 +64,7 @@ python -m unittest discover -s makehumano/testes -p 'test_*wgpu.py' -v
 
 ## Pendências que impedem o lançamento
 
-- Converter os quatro presets GLSL restantes (`phong`, `toon`, `normalmap`, `skin`) e seus uniforms/atributos para WGSL. Xray e LitSphere já têm ports nativos, mas GLSL arbitrário ainda não é executável.
+- Completar os dois presets GLSL restantes (`normalmap`, `skin`) e seus uniforms/atributos para WGSL; `phong` já possui base (falta AO) e `toon` já possui o modelo de faixas nativo. GLSL arbitrário continua sem compilação.
 - Concluir a equivalência de transparência e ordenação de superfícies translúcidas, especialmente materiais sobrepostos; variantes de culling/depthless já foram adicionadas.
 - Reproduzir atenuação/especular/foco das luzes de cena, outros comportamentos avançados de materiais. A transformação de normais já usa inversa-transposta do modelo.
 - Criar testes comparativos de imagens, incluindo reflexos, alfa, normal maps e culling, porque o smoke só verifica inicialização e integridade básica.
