@@ -29,7 +29,7 @@ jobs:
           cache: pip
           cache-dependency-path: makehumano/codigo/requirements.txt
 
-      - name: Instalar dependências originais
+      - name: Instalar dependências Vulkan do MakeHuman original
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r makehumano/codigo/requirements.txt
@@ -38,7 +38,8 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
-          python -c "import numpy; import OpenGL.GL; from PyQt5 import QtCore, QtWidgets; print('NumPy, PyOpenGL e PyQt5: importações OK')"
+          python -c "import numpy, wgpu, rendercanvas; from PyQt5 import QtCore, QtWidgets; print('NumPy, Vulkan/wgpu e PyQt5: importações OK')"
+          python -c "import importlib.util; assert importlib.util.find_spec('OpenGL') is None"
 
       - name: Conferir sintaxe de todos os módulos
         run: python makehumano/diagnostico.py

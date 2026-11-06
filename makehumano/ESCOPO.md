@@ -71,9 +71,12 @@ Salvo nova autorização explícita do criador, **não desenvolver**:
 - Foram feitos ajustes e testes iniciais de compatibilidade com Python moderno,
   mas a compatibilidade completa do aplicativo precisa ser verificada.
 - O antigo editor Vulkan independente foi removido da árvore ativa por decisão
-  do criador. Seu histórico permanece no Git. A integração Vulkan piloto da
-  janela original está em `codigo/makehuman/lib/vulkan_*.py` e **ainda não
-  substitui** integralmente o motor OpenGL.
+  do criador. Seu histórico permanece no Git.
+- A implementação atual usa Vulkan como backend da janela original e não
+  requer PyOpenGL. Isso ainda **não comprova equivalência funcional**:
+  shaders GLSL personalizados, plugins externos, seleção e transparência
+  complexa, além de operações legadas como `Object3D.draw/pick`, exigem
+  migração ou validação adicional. O trabalho permanece em desenvolvimento.
 - Auditoria inicial encontrou dependências diretas em `lib/qtui.py`
   (`QOpenGLWidget`), `lib/glmodule.py`, `lib/shader.py`,
   `lib/texture.py`, `lib/mh.py`, shaders GLSL, no plugin

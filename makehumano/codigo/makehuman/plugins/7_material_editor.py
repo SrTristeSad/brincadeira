@@ -40,7 +40,7 @@ import os
 import gui3d
 import gui
 import log
-import shader
+import vulkan_shader as shader
 import numpy as np
 import material
 import mh
@@ -87,8 +87,8 @@ class MaterialEditorTaskView(gui3d.TaskView):
         self.descrLbl.setSizePolicy(gui.QtWidgets.QSizePolicy.Ignored, gui.QtWidgets.QSizePolicy.Preferred)
         self.descrLbl.setWordWrap(True)
 
-        if not shader.Shader.supported():
-            log.notice('Shaders not supported')
+        if not shader.Shader.supported() and not shader.PRESETS_NATIVOS:
+            log.notice('Shaders GLSL ainda não migrados')
             self.shaderList.setEnabled(False)
             self.shaderList.hide()
             self.paramBox.hide()
@@ -223,6 +223,18 @@ class MaterialEditorTaskView(gui3d.TaskView):
         @w10e.mhEvent
         def onActivate(event):
             mat.depthless = w10e.value
+
+        self.castShadowsValue = self.materialBox.addWidget(TruthValue("Cast shadows", mat.castShadows))
+        @self.castShadowsValue.mhEvent
+        def onActivate(event):
+            mat.castShadows = self.castShadowsValue.value
+            mh.redraw()
+
+        self.receiveShadowsValue = self.materialBox.addWidget(TruthValue("Receive shadows", mat.receiveShadows))
+        @self.receiveShadowsValue.mhEvent
+        def onActivate(event):
+            mat.receiveShadows = self.receiveShadowsValue.value
+            mh.redraw()
 
         w10f = self.materialBox.addWidget(TruthValue("Auto ethnic skin", mat.autoBlendSkin))
         @w10f.mhEvent
@@ -375,6 +387,10 @@ class MaterialEditorTaskView(gui3d.TaskView):
                 continue
             shaders.add(name)
 
+        if not shader.Shader.supported():
+            # Listar só os presets que possuem WGSL nativo real.
+            shaders.intersection_update(shader.PRESETS_NATIVOS)
+
         self.shaderList.clear()
         firstItem = self.shaderList.addItem('[None]', data = '')
         if mat.shader:
@@ -390,8 +406,10 @@ class MaterialEditorTaskView(gui3d.TaskView):
                 path = str(item.getUserData())
 
         if mat.shader and not selectedShader:
-            # Custom shader selected (not in shader path): add it
-            item = self.shaderList.addItem(shaderName, data = mat.shader)
+            # Preset legado mantido no material, mas ainda indisponível em WGSL.
+            item = self.shaderList.addItem(
+                '[Pendente WGSL] ' + shaderName, data = mat.shader,
+            )
             item.setChecked(True)
         elif selectedShader:
             selectedShader.setChecked(True)
@@ -480,6 +498,41 @@ class MaterialEditorTaskView(gui3d.TaskView):
 
         sh = self.getSelectedShader()
         if not sh:
+            # Parâmetros nativos visíveis no MESMO editor de materiais.
+            modo, controles, _ = shader.configuracao_shader_nativo(mat)
+            if modo in (1, 2, 4):
+                if modo == 1:
+                    campos = (
+                        ("edgefalloff", controles[1]),
+                        ("intensity", controles[2]),
+                    )
+                elif modo == 2:
+                    campos = (("AdditiveShading", controles[0]),)
+                else:
+                    extras = shader.parametros_extras_shader_nativo(mat)
+                    campos = (
+                        ("silhouetteThreshold", controles[0]),
+                        ("shininess", controles[1]),
+                        ("ambientIntensity", controles[2]),
+                        ("specularIntensity", controles[3]),
+                        ("diffuseIntensity", extras[0]),
+                        ("specular_th", extras[1]),
+                        ("diffuse_th", extras[2]),
+                    )
+                for nome, valor in campos:
+                    widget = self.paramBox.addWidget(
+                        ScalarValue(nome, valor),
+                    )
+
+                    def registrar_ativacao(widget_atual, parametro):
+                        @widget_atual.mhEvent
+                        def onActivate(event):
+                            mat.setShaderParameter(
+                                parametro, widget_atual.value,
+                            )
+                            mh.redraw()
+
+                    registrar_ativacao(widget, nome)
             return
 
         uniforms = sh.getUniforms()
@@ -518,7 +571,7 @@ class MaterialEditorTaskView(gui3d.TaskView):
                 str (obj.mesh.vertsPerFaceForExport) + " vertices per face.\n" +
                 "Author: " + author + "\nLicense: " + license + "\n\nFile: " + filename )
 
-        if shader.Shader.supported():
+        if shader.Shader.supported() or shader.PRESETS_NATIVOS:
             self.listShaders(obj.material)
             self.listUniforms(obj.material)
         self.updateShaderConfig(obj.material)
@@ -534,7 +587,9 @@ class MaterialEditorTaskView(gui3d.TaskView):
     def onShow(self, arg):
         super(MaterialEditorTaskView, self).onShow(arg)
         if not shader.Shader.supported():
-            gui3d.app.statusPersist('Shaders not supported by OpenGL')
+            gui3d.app.statusPersist(
+                'GLSL personalizado pendente; preset xray disponível em Vulkan'
+            )
 
         self.reloadMaterial()
 

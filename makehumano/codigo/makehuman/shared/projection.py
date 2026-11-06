@@ -122,16 +122,10 @@ def RasterizeTriangles(dst, coords, shader):
         progress.step()
 
 def getCamera(mesh):
-    ex, ey, ez = G.app.modelCamera.eye
-    eye = np.matrix([ex,ey,ez,1]).T
-    fx, fy, fz = G.app.modelCamera.focus
-    focus = np.matrix([fx,fy,fz,1]).T
-    transform = mesh.transform.I
-    eye = v4to3(transform * eye)
-    focus = v4to3(transform * focus)
-    camera = vnormalize(eye - focus)
-    # log.debug('%s %s %s', eye, focus, camera)
-    return camera
+    # Usar a mesma transformação do render original, incluindo a órbita.
+    # module3d.Object3D não expõe mais o antigo atributo mesh.transform.
+    from projection_math import direcao_camera
+    return direcao_camera(mesh, G.app.modelCamera)
 
 def getFaces(mesh):
     group_mask = np.ones(len(mesh._faceGroups), dtype=bool)
@@ -221,7 +215,8 @@ def mapImageGL(srcImg, mesh, leftTop, rightBottom):
     texmat = matrix.scale((1/(right - left), 1/(top - bottom), 1)) * matrix.translate((-left, -bottom, 0)) * texmat
     texmat = np.asarray(texmat)
 
-    texco = mesh.r_coord
+    from vulkan_displacement import posicoes_render
+    texco = posicoes_render(mesh.object3d)
 
     alpha = np.sum(mesh.r_vnorm * camera[None,:], axis=-1)
     alpha = np.maximum(alpha, 0)
@@ -565,16 +560,9 @@ def mapUVSoft(mesh):
 
     log.debug("mapUV: begin setup")
 
-    fuvs = mesh.fuvs[faces]
+    from projection_topology import arestas_uv
+    edges = arestas_uv(mesh.fuvs[faces])
     del faces
-    edges = np.array([fuvs, np.roll(fuvs, 1, axis=-1)]).transpose([1,2,0]).reshape((-1,2))
-    del fuvs
-    edges = np.where((edges[:,0] < edges[:,1])[:,None], edges, edges[:,::-1])
-    ec = edges[:,0] + (edges[:,1] << 16)
-    del edges
-    ec = np.unique(ec)
-    edges = np.array([ec & 0xFFFF, ec >> 16]).transpose()
-    del ec
     edges = mesh.texco[edges] * (W, H)
     progress(0.05)
 
@@ -615,15 +603,8 @@ def mapUVGL(mesh):
 
     log.debug("mapUVGL: begin setup")
 
-    fuvs = mesh.index
-    edges = np.array([fuvs, np.roll(fuvs, 1, axis=-1)]).transpose([1,2,0]).reshape((-1,2))
-    del fuvs
-    edges = np.where((edges[:,0] < edges[:,1])[:,None], edges, edges[:,::-1])
-    ec = edges[:,0] + (edges[:,1] << 16)
-    del edges
-    ec = np.unique(ec)
-    edges = np.array([ec & 0xFFFF, ec >> 16]).transpose()
-    del ec
+    from projection_topology import arestas_uv
+    edges = arestas_uv(mesh.index)
 
     log.debug("mapUVGL: begin render")
 
@@ -639,18 +620,9 @@ def mapUVGL(mesh):
     return dstImg.convert(3)
 
 def mapUV(mesh):
-    """
-    Project the UV map topology of the selected human mesh onto a texture.
-    Uses OpenGL hardware acceleration if the necessary OGL features are
-    available, otherwise uses a slower software rasterizer.
-    """
-    if mh.hasRenderSkin():
-        try:
-            return mapUVGL(mesh)
-        except Exception as e:
-            log.debug(e)
-            log.debug("Hardware skin rendering failed, falling back to software render.")
-            return mapUVSoft(mesh)
-    else:
-        return mapUVSoft(mesh)
+    """Exporta a topologia UV pelo backend Vulkan ativo.
 
+    Os nomes GL históricos são preservados para plugins; erros de GPU devem
+    chegar ao chamador, sem produzir silenciosamente um resultado por CPU.
+    """
+    return mapUVGL(mesh)

@@ -10,7 +10,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "codigo" / "makehuman" / "lib"))
 
-from vulkan_picking import selecionar_cor
+from vulkan_picking import selecionar_cor, selecionar_profundidade
 
 
 def camera():
@@ -121,6 +121,88 @@ class TestarPickingOriginal(unittest.TestCase):
         self.assertEqual(
             selecionar_cor([original], [cam], 50, 50, 100, 100),
             (255, 0, 0),
+        )
+
+
+    def test_recorte_near_mantem_parte_visivel_e_culling(self):
+        """Um vértice atrás da câmera não deve descartar a face inteira."""
+        original = objeto(
+            "atravessa_near", indices=[[0, 1, 2]],
+            grupos=[(0, 1)], cores=[(12, 34, 56)],
+        )
+        original.verts = np.array([
+            [-0.7, -0.7, -1.4], [0.7, -0.7, 0.4],
+            [0.0, 0.8, 0.4],
+        ], dtype=np.float32)
+        cam = camera()
+        projecao = np.eye(4, dtype=np.float32)
+        projecao[3, 2] = 1.0  # w = z+1; um vértice tem w negativo
+        cam.getMatrices = lambda _eye: (
+            projecao, np.eye(4, dtype=np.float32)
+        )
+        self.assertEqual(
+            selecionar_cor([original], [cam], 55, 55, 100, 100),
+            (12, 34, 56),
+        )
+        profundidade = selecionar_profundidade(
+            [original], [cam], 55, 55, 100, 100,
+        )
+        self.assertGreaterEqual(profundidade, 0.0)
+        self.assertLess(profundidade, 1.0)
+        original.cull = -1
+        self.assertEqual(
+            selecionar_cor([original], [cam], 55, 55, 100, 100),
+            (0, 0, 0),
+        )
+
+    def test_recorte_descarta_near_far(self):
+        original = objeto("fora_da_camera")
+        for z in (-3.0, 3.0):
+            with self.subTest(z=z):
+                original.verts[:, 2] = z
+                self.assertEqual(
+                    selecionar_cor([original], [camera()], 50, 50, 100, 100),
+                    (0, 0, 0),
+                )
+                self.assertEqual(
+                    selecionar_profundidade([original], [camera()], 50, 50, 100, 100),
+                    1.0,
+                )
+
+    def test_recorte_lateral_mantem_triangulo_visivel(self):
+        original = objeto(
+            "atravessa_lateral", indices=[[0, 1, 2]],
+            grupos=[(0, 1)], cores=[(7, 11, 13)],
+        )
+        original.verts = np.array([
+            [-2.5, -0.8, 0.4], [0.8, -0.8, 0.4],
+            [0.0, 0.8, 0.4],
+        ], dtype=np.float32)
+        self.assertEqual(
+            selecionar_cor([original], [camera()], 50, 50, 100, 100),
+            (7, 11, 13),
+        )
+
+
+class TestarProfundidadeSemOpenGL(unittest.TestCase):
+    def test_profundidade_usa_o_objeto_visivel_mais_perto(self):
+        perto = objeto("perto", z=0.15)
+        longe = objeto("longe", z=0.65)
+        z = selecionar_profundidade(
+            [perto, longe], [camera()], 50, 50, 100, 100,
+        )
+        self.assertAlmostEqual(z, (0.15 + 1) / 2, places=5)
+
+    def test_fundo_sem_objetos_retorna_profundidade_maxima(self):
+        self.assertEqual(
+            selecionar_profundidade([], [camera()], 25, 25, 100, 100),
+            1.0,
+        )
+        self.assertEqual(
+            selecionar_profundidade(
+                [objeto("fora")], [camera()], -1, 25, 100, 100,
+            ),
+            1.0,
         )
 
 

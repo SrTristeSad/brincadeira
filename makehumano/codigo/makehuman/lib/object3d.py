@@ -41,12 +41,12 @@ from core import G
 
 class Object3D(object):
     """
-    Represents an object renderable by OpenGL (glmodule)
+    Adapta a malha original do MakeHuman para a cena Vulkan.
     """
     def __init__(self, parent):
         """
-        Initialize an OpenGL object for the specified parent mesh.
-        Parent should be an object of type module3d.Object3D.
+        Cria um adaptador de renderização Vulkan para a malha original.
+        Parent deve ser module3d.Object3D.
         """
         self.parent = parent
         self._texturePath = None
@@ -282,12 +282,19 @@ class Object3D(object):
         return self.parent._faceGroups[idx].color
 
     def draw(self, *args, **kwargs):
-        import glmodule
-        return glmodule.drawMesh(self, *args, **kwargs)
+        """API imediata OpenGL aposentada; desenho Vulkan é por cena."""
+        raise NotImplementedError(
+            "Object3D.draw() era desenho imediato OpenGL. "
+            "No backend Vulkan, use mh.redraw() para atualizar a cena "
+            "ou CenaVulkan.desenhar() dentro do renderizador."
+        )
 
     def pick(self, *args, **kwargs):
-        import glmodule
-        return glmodule.pickMesh(self, *args, **kwargs)
+        """API antiga de pass de picking; seleção é serviço de cena Vulkan."""
+        raise NotImplementedError(
+            "Object3D.pick() dependia de um pass OpenGL. "
+            "Para selecionar na viewport Vulkan, use mh.getPickedColor()."
+        )
 
     def sortFaces(self):
         import numpy as np
@@ -319,6 +326,12 @@ class Object3D(object):
     @property
     def texture(self):
         return self.object.texture
+
+    @property
+    def textureTex(self):
+        """Texture CPU original, compartilhada pela viewport e projeção UV."""
+        from texture import getTexture
+        return getTexture(self.texture)
 
     @classmethod
     def attach(cls, mesh):

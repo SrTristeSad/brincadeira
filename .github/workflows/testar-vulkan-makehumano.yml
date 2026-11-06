@@ -1,13 +1,13 @@
-name: MakeHumano — regressões do Vulkan na interface original
+name: MakeHumano original - Vulkan
 
 on:
   push:
     paths:
-      - "makehumano/codigo/makehuman/lib/vulkan_*.py"
-      - "makehumano/codigo/makehuman/lib/qtui.py"
-      - "makehumano/testes/smoke_gui.py"
-      - "makehumano/testes/test_vulkan_*.py"
-      - "makehumano/requirements-vulkan-piloto.txt"
+      - "makehumano/**"
+      - ".github/workflows/testar-vulkan-makehumano.yml"
+  pull_request:
+    paths:
+      - "makehumano/**"
       - ".github/workflows/testar-vulkan-makehumano.yml"
   workflow_dispatch:
 
@@ -15,21 +15,6 @@ permissions:
   contents: read
 
 jobs:
-  cpu-original:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 12
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: makehumano/codigo/requirements.txt
-      - name: Instalar NumPy
-        run: python -m pip install "numpy>=2,<3"
-      - name: Testar geometria e picking do Vulkan integrado ao MakeHuman original
-        run: python -m unittest discover -s makehumano/testes -p 'test_vulkan_*.py' -v
-
   vulkan-gui-original:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -39,8 +24,8 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: makehumano/requirements-vulkan-piloto.txt
-      - name: Instalar ambiente Vulkan de software e bibliotecas Qt
+          cache-dependency-path: makehumano/codigo/requirements.txt
+      - name: Instalar Qt, X11 e Vulkan por software
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
@@ -50,13 +35,44 @@ jobs:
             libxcb-randr0 libxcb-render-util0 libxcb-xinput0 \
             libxcb-util1 libxcb-shape0 libxcb-xfixes0 \
             libxcb-sync1 libx11-xcb1 libfontconfig1
-      - name: Instalar dependências do piloto na janela original
+      - name: Instalar dependências do MakeHuman Vulkan original
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r makehumano/requirements-vulkan-piloto.txt
-      - name: Renderizar a aplicação original via Vulkan
+          python -m pip install -r makehumano/codigo/requirements.txt
+          python -c "import importlib.util; assert importlib.util.find_spec('OpenGL') is None"
+      - name: Abrir MakeHuman ORIGINAL e desenhar G.world via Vulkan
         env:
-          MAKEHUMANO_VULKAN_PILOT: "1"
+          WGPU_BACKEND_TYPE: Vulkan
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          QT_X11_NO_MITSHM: "1"
+        run: |
+          xvfb-run -a -s "-screen 0 1280x800x24" \
+            python -u makehumano/testes/smoke_gui.py
+
+  vulkan-gui-sem-opengl:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Instalar ambiente Vulkan sem biblioteca OpenGL Python
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            xvfb xauth libvulkan1 mesa-vulkan-drivers libglu1-mesa \
+            libxkbcommon-x11-0 libxcb-xinerama0 libxcb-cursor0 \
+            libxcb-keysyms1 libxcb-icccm4 libxcb-image0 \
+            libxcb-randr0 libxcb-render-util0 libxcb-xinput0 \
+            libxcb-util1 libxcb-shape0 libxcb-xfixes0 \
+            libxcb-sync1 libx11-xcb1 libfontconfig1
+          python -m pip install "numpy>=2,<3" PyQt5 "wgpu>=0.32,<0.33" \
+            "rendercanvas>=2.7,<3"
+      - name: Assegurar que PyOpenGL não está instalado
+        run: python -c "import importlib.util; assert importlib.util.find_spec('OpenGL') is None"
+      - name: Abrir MakeHuman original em Vulkan sem PyOpenGL
+        env:
           WGPU_BACKEND_TYPE: Vulkan
           LIBGL_ALWAYS_SOFTWARE: "1"
           QT_X11_NO_MITSHM: "1"

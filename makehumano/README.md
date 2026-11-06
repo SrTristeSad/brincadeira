@@ -1,77 +1,57 @@
-# MakeHumano — modernização do MakeHuman
+# MakeHumano — modernização do MakeHuman original
 
-Este diretório contém o trabalho de **modernização do MakeHuman original**. O objetivo é atualizar a compatibilidade com Python e suas dependências e substituir **integralmente o motor OpenGL por Vulkan**, preservando a interface e as funcionalidades existentes. Não se trata de criar outro editor.
+O projeto moderniza **o MakeHuman existente**, preservando sua janela e ferramentas. As metas são compatibilidade com Python moderno e substituição completa de OpenGL por Vulkan. Não há editor ou visualizador separado.
 
-**Referência para qualquer alteração:** [ESCOPO.md](ESCOPO.md).
+**Escopo e critérios de conclusão:** [ESCOPO.md](ESCOPO.md).
 
-## Estado atual
+## Estado da integração
 
-A migração **não está concluída**. A aplicação original continua dependendo de componentes OpenGL em parte do caminho de execução. Há uma integração Vulkan **piloto** na janela original, ativada por `MAKEHUMANO_VULKAN_PILOT=1`: ela renderiza objetos de `G.world` e possui seleção inicial de FaceGroups pelo contrato `mh.getPickedColor()`, sem `glReadPixels` nessa seleção. O picking do piloto é calculado na CPU e ainda tem limitações.
+O backend **Vulkan é o padrão** na janela original, via `wgpu` e `rendercanvas`, sem chave `MAKEHUMANO_VULKAN_PILOT` e sem dependência de `PyOpenGL`. O módulo legado `lib/glmodule.py` foi retirado; `shader.py` e `texture.py` encaminham as APIs compatíveis à infraestrutura Vulkan. A seleção das FaceGroups, canvas, buffers, texturas, renderização offscreen, UV baking, materiais, sombras e parte do fluxo de animação/exportação possuem implementações e testes.
 
-Ainda faltam migração e validação da infraestrutura gráfica completa (materiais, transparência, shaders, recursos offscreen, plugins, seleção e equivalência visual). Só depois de demonstrar a equivalência será seguro eliminar `PyOpenGL`, `QOpenGLWidget` e os demais componentes OpenGL legados.
+**Ainda é uma versão de desenvolvimento.** A migração não comprova paridade visual ou funcional completa. Shaders GLSL personalizados não são executados diretamente; os métodos legados `Object3D.draw/pick` não têm substitutos equivalentes; transparência complexa, roupas e cabelos externos, plugins de terceiros e drivers Vulkan de GPUs físicas exigem validação.
 
-## Organização
+Consulte [MIGRACAO-VULKAN.md](MIGRACAO-VULKAN.md) e [AUDITORIA-VERIFICADA-2026-11-06.md](AUDITORIA-VERIFICADA-2026-11-06.md) para detalhes técnicos e limitações. A auditoria registra a revisão de desenvolvimento de origem e os limites dos testes, não uma certificação de produto final.
+
+## Pastas e arquivos
 
 | Caminho | Função |
 | --- | --- |
-| `codigo/` | Cópia versionada do MakeHuman original, com recursos, licenças e alterações em desenvolvimento. **Não excluir** arquivos originais sem verificar dependências. |
-| `testes/` | Testes de regressão da modelagem e da integração Vulkan na janela original, além do smoke test gráfico. |
-| `diagnostico.py` | Verifica dependências disponíveis e sintaxe dos arquivos Python. |
-| `executar.py` | Inicia a aplicação original presente em `codigo/makehuman/`. |
-| `importar_original.py` | Ferramenta de reimportação do upstream, **não necessária para uso normal desta cópia**. |
-| `requirements-vulkan-piloto.txt` | Dependências adicionais do Vulkan piloto na interface original. |
-| `ESCOPO.md` | Objetivos, limites e critérios de conclusão do projeto. |
+| `codigo/` | Fontes e recursos originais modificados, com créditos e licenças. |
+| `codigo/makehuman/lib/vulkan_*.py` | Infraestrutura Vulkan usada pela GUI original. |
+| `testes/` | Regressões e smokes do MakeHuman original. |
+| `diagnostico.py` | Verificação de sintaxe e dependências Python. |
+| `executar.py` | Inicia a aplicação original. |
+| `importar_original.py` | Reimportação opcional do upstream. **Não executar numa cópia modificada sem backup/revisão.** |
+| `empacotamento/` | Recursos usados na geração dos pacotes portáteis de teste. |
 
-## Executar a aplicação original
+O antigo `motor_wgpu/` separado foi removido por decisão do criador. Nenhuma dependência ou teste ativo exige esse editor. Seu histórico permanece no Git.
 
-Use preferencialmente Python **3.12** para reproduzir o ambiente do smoke test em CI. Uma parte dos testes também é executada com Python 3.13, mas isso não comprova compatibilidade completa da interface.
+## Execução
 
-Na pasta `makehumano/`:
+Use preferencialmente Python 3.12 em Windows ou Linux com Qt e driver Vulkan:
 
 ```bash
+cd makehumano
 python -m pip install -r codigo/requirements.txt
 python diagnostico.py
-python executar.py --noshaders
+python executar.py
 ```
 
-A execução comum ainda utiliza OpenGL durante a migração e requer ambiente gráfico com as bibliotecas Qt e drivers apropriados. O parâmetro `--noshaders` facilita o teste inicial, mas **não representa a renderização final**.
-
-Para experimentar a integração Vulkan na **janela original**, instale as dependências adicionais do próprio piloto. Exemplo de shell Linux/macOS:
-
-```bash
-python -m pip install -r requirements-vulkan-piloto.txt
-MAKEHUMANO_VULKAN_PILOT=1 WGPU_BACKEND_TYPE=Vulkan python executar.py --noshaders
-```
-
-Esse modo é **experimental**; ele ainda necessita de dependências legadas e não deve ser tratado como substituição concluída do OpenGL.
-
-## Testes
-
-Com as dependências adequadas instaladas, execute na pasta `makehumano/`:
+Para verificar os testes Python:
 
 ```bash
 python -m unittest discover -s testes -p "test_*.py" -v
 ```
 
-O teste gráfico da GUI precisa de ambiente com suporte a Qt e renderização; o CI utiliza Xvfb e renderização por software. Os workflows ficam na raiz do repositório, em `.github/workflows/`:
+Os testes gráficos precisam de uma sessão de GUI e dispositivo Vulkan. O GitHub Actions usa Xvfb e Lavapipe como driver Vulkan por software. Consulte `testes/smoke_gui.py` e os workflows:
 
-- `testar-makehumano.yml`: Python 3.12/3.13, sintaxe e regressões.
-- `smoke-gui-makehumano.yml`: abertura da interface original.
-- `testar-vulkan-makehumano.yml`: testes do Vulkan conectado à GUI original, sem editor independente.
+- `.github/workflows/testar-makehumano.yml`: Python 3.12/3.13, sintaxe e regressões.
+- `.github/workflows/testar-vulkan-makehumano.yml`: GUI original com Vulkan, inclusive sem PyOpenGL.
+- `.github/workflows/smoke-gui-makehumano.yml`: abertura e funcionalidades da GUI original.
+- `.github/workflows/empacotar-makehumano.yml`: criação e validação de ZIPs de teste para Windows e Linux.
 
-**Atenção à reimportação:** `codigo/` já está versionado e contém alterações próprias. Executar `python importar_original.py --atualizar` troca a cópia de trabalho por outra do upstream e move a anterior para um backup local. Não use esse comando para atualizar uma instalação existente sem primeiro revisar suas alterações.
+Os pacotes portáteis e suas limitações estão em [PORTATIL.md](PORTATIL.md). Testes em CI não substituem testes reais em hardware e plugins externos.
 
-## Próximas etapas dentro do escopo
+## Licenças
 
-1. Completar a compatibilidade da aplicação original com Python moderno e suas dependências.
-2. Migrar todos os caminhos gráficos da janela e dos plugins originais para Vulkan.
-3. Comprovar equivalência funcional e visual com testes de regressão.
-4. Remover o motor OpenGL **somente após** a substituição e a validação.
-
-O editor experimental independente foi removido da árvore ativa. Seu histórico continua disponível nos commits antigos do Git. O trabalho futuro é exclusivamente na aplicação original.
-
-## Licenças e proveniência
-
-As informações da revisão upstream ficam em `codigo/.makehumano-origem.txt`. Os avisos e licenças originais estão em `codigo/LICENSE.md`, `codigo/LICENSE.CODE.md` e `codigo/LICENSE.ASSETS.md`. Eles devem ser preservados.
-
-Este trabalho experimental **não é uma versão oficial do MakeHuman**.
+A revisão original importada está identificada em `codigo/.makehumano-origem.txt`. Preservar os avisos de `codigo/LICENSE.md`, `codigo/LICENSE.CODE.md` e `codigo/LICENSE.ASSETS.md`. Este projeto **não é uma versão oficial do MakeHuman**.

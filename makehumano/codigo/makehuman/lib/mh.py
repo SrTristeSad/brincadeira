@@ -40,25 +40,51 @@ from core import G
 from getpath import getPath, getDataPath, getSysDataPath, getSysPath, getRelativePath
 from makehuman import getVersion, getVersionStr, getBasemeshVersion, getShortVersion, isRelease, isBuild, getVersionDigitsStr, getCopyrightMessage, getAssetLicense, getThirdPartyLicenses, getSoftwareLicense, getCredits
 
-from glmodule import grabScreen, hasRenderSkin, renderSkin, hasRenderToRenderbuffer, renderToBuffer, renderAlphaMask
-from glmodule import getPickedColor as _getPickedColorOpenGL
+from image import Image
+from vulkan_texture import Texture, getTexture, reloadTextures
+from vulkan_shader import Shader
+
+
+def _canvas_vulkan():
+    """Obtém o canvas definitivo do MakeHuman original."""
+    canvas = getattr(G, "canvas", None)
+    if canvas is None or not callable(getattr(canvas, "renderToBuffer", None)):
+        raise RuntimeError("Canvas Vulkan do MakeHuman ainda não foi inicializado")
+    return canvas
+
+
+def hasRenderToRenderbuffer():
+    """O backend Vulkan implementa framebuffers de resolução independente."""
+    return True
+
+
+def hasRenderSkin():
+    """O backend Vulkan possui rasterização de malhas UV."""
+    return True
+
+
+def renderToBuffer(width, height, productionRender=True):
+    return _canvas_vulkan().renderToBuffer(width, height, productionRender)
+
+
+def renderAlphaMask(width, height, productionRender=True):
+    return _canvas_vulkan().renderAlphaMask(width, height, productionRender)
+
+
+def renderSkin(*args, **kwargs):
+    return _canvas_vulkan().renderSkin(*args, **kwargs)
+
+
+def grabScreen(x, y, width, height, filename=None, productionRender=False):
+    return _canvas_vulkan().grabScreen(
+        x, y, width, height, filename, productionRender,
+    )
 
 
 def getPickedColor(x=None, y=None):
-    """Interface original de seleção, roteada para o canvas Vulkan piloto.
+    return _canvas_vulkan().getPickedColor(x, y)
 
-    A migração final substituirá as demais APIs do glmodule. Enquanto
-    isso, esta função evita glReadPixels e os efeitos colaterais da
-    picking buffer GL durante a interação na viewport Vulkan.
-    """
-    canvas = getattr(G, "canvas", None)
-    if canvas is not None and hasattr(canvas, "getPickedColor"):
-        return canvas.getPickedColor(x, y)
-    return _getPickedColorOpenGL(x, y)
 
-from image import Image
-from texture import Texture, getTexture, reloadTextures
-from shader import Shader
 from camera import Camera, OrbitalCamera
 
 from qtui import Keys, Buttons, Modifiers, Application

@@ -435,13 +435,15 @@ class BVH():
                     jointToBoneIdx[joint.name] = -1
 
             for fIdx in range(animationTrack.nFrames):
-                offset = fIdx * animationTrack.nBones
+                # BVH stores local pose transforms, never skinning matrices
+                # baked for the viewport and the current rest skeleton.
+                frame = animationTrack.getAtFramePos(fIdx, noBake=True)
                 for jIdx,joint in enumerate(nonEndJoints):
                     bIdx = jointToBoneIdx[joint.name]
                     if bIdx < 0:
                         poseMat = np.identity(4, dtype=np.float32)
                     else:
-                        poseMat = animationTrack.data[offset + bIdx]
+                        poseMat = frame[bIdx]
 
                     if len(joint.channels) == 6:
                         # Add transformation

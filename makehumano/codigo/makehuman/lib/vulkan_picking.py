@@ -4,16 +4,67 @@ A fase piloto usa interseção de triângulos projetados na CPU. O resultado
 mantém o contrato mh.getPickedColor() -> RGB de clrid(group), que a lógica
 original de gui3d/selection.py já utiliza. Nenhuma nova ferramenta é criada.
 
-Limitado a triângulos/quads, sem clipping de primitivas que cruzam near plane.
-Não é substituto definitivo do picking da GPU; a paridade será testada.
+Limitado a triângulos/quads, com clipping homogêneo dos seis planos Vulkan.
+Ainda não substitui picking de GPU; a paridade será testada.
 """
 
 import numpy as np
 
 from vulkan_scene import matriz_wgpu
+from vulkan_displacement import posicoes_render
 
 
 COR_VAZIA = (0, 0, 0)
+
+# Volume de clip Vulkan: -w <= x,y <= w e 0 <= z <= w.
+# A última restrição evita divisão por zero perto do olho da câmera.
+_PLANOS_CLIP = np.asarray([
+    [1, 0, 0, 1], [-1, 0, 0, 1],
+    [0, 1, 0, 1], [0, -1, 0, 1],
+    [0, 0, 1, 0], [0, 0, -1, 1],
+    [0, 0, 0, 1],
+], dtype=np.float64)
+_LIMITES_CLIP = np.asarray([0, 0, 0, 0, 0, 0, 1e-6], dtype=np.float64)
+
+
+def _recortar_triangulo(vertices):
+    """Sutherland-Hodgman no espaço homogêneo; retorna leque triangular."""
+    poligono = list(vertices)
+    for plano, limite in zip(_PLANOS_CLIP, _LIMITES_CLIP):
+        if not poligono:
+            break
+        novo = []
+        anterior = poligono[-1]
+        distancia_anterior = float(anterior @ plano - limite)
+        for atual in poligono:
+            distancia_atual = float(atual @ plano - limite)
+            dentro_anterior = distancia_anterior >= 0
+            dentro_atual = distancia_atual >= 0
+            if dentro_anterior != dentro_atual:
+                t = distancia_anterior / (distancia_anterior - distancia_atual)
+                novo.append(anterior + t * (atual - anterior))
+            if dentro_atual:
+                novo.append(atual)
+            anterior = atual
+            distancia_anterior = distancia_atual
+        poligono = novo
+    return [np.stack((poligono[0], poligono[i], poligono[i + 1]))
+            for i in range(1, len(poligono) - 1)]
+
+
+def _triangulos_visiveis(clip, indices):
+    """Mantém faces interiores vetorizadas e recorta apenas as de borda."""
+    vertices = np.asarray(clip[indices], dtype=np.float64)
+    dentro = np.all(
+        vertices @ _PLANOS_CLIP.T >= _LIMITES_CLIP, axis=(1, 2)
+    )
+    if np.all(dentro):
+        return vertices
+    recortados = [trio for tri in vertices[~dentro]
+                  for trio in _recortar_triangulo(tri)]
+    if recortados:
+        return np.concatenate((vertices[dentro], np.stack(recortados)), axis=0)
+    return vertices[dentro]
 
 
 def _segmentos_faces(face, start, count):
@@ -35,8 +86,8 @@ def _segmentos_faces(face, start, count):
     return np.asarray(tris[ok], dtype=np.int64)
 
 
-def selecionar_cor(mundo, cameras, x, y, largura, altura):
-    """Retorna RGB da FaceGroup visível sob pixel Qt (origem superior).
+def _selecionar_cor_e_profundidade(mundo, cameras, x, y, largura, altura):
+    """Calcula grupo visível e profundidade do pixel via cena original.
 
     O pipeline de seleção original desenha só objetos .pickable, com sua
     própria matriz de câmera e grupos de face. A prioridade da cena é
@@ -44,9 +95,9 @@ def selecionar_cor(mundo, cameras, x, y, largura, altura):
     """
     if (x is None or y is None or largura <= 0 or altura <= 0
             or not (0 <= x < largura and 0 <= y < altura)):
-        return COR_VAZIA
+        return COR_VAZIA, 1.0
     if mundo is None or cameras is None:
-        return COR_VAZIA
+        return COR_VAZIA, 1.0
 
     px, py = float(x) + 0.5, float(y) + 0.5
     melhor_z = float("inf")
@@ -54,7 +105,7 @@ def selecionar_cor(mundo, cameras, x, y, largura, altura):
     for obj in sorted(mundo, key=lambda item: item.priority):
         if not obj.visibility or not obj.pickable:
             continue
-        coords = np.asarray(obj.verts, dtype=np.float32)
+        coords = posicoes_render(obj)
         if coords.ndim != 2 or coords.shape[1] != 3 or not len(coords):
             continue
         face = np.asarray(obj.primitives)
@@ -65,23 +116,20 @@ def selecionar_cor(mundo, cameras, x, y, largura, altura):
             coords, np.ones((len(coords), 1), dtype=np.float32),
         ), axis=1)
         clip = vertices @ mvp.T
-        valido = clip[:, 3] > 1e-6
-        pontos = np.zeros((len(coords), 3), dtype=np.float32)
-        pontos[valido] = clip[valido, :3] / clip[valido, 3:4]
-        pontos[:, 0] = (pontos[:, 0] * 0.5 + 0.5) * largura
-        pontos[:, 1] = (0.5 - pontos[:, 1] * 0.5) * altura
-
         for i, (inicio, quantidade) in enumerate(obj.groups):
             tri = _segmentos_faces(face, inicio, quantidade)
             if not len(tri):
                 continue
             if np.any(tri < 0) or np.any(tri >= len(coords)):
                 raise ValueError("Índice de face fora da malha do MakeHuman")
-            # Não usar pontos atrás da câmera ou antes do plano próximo.
-            tri = tri[np.all(valido[tri], axis=1)]
-            if not len(tri):
+            # Recortar antes da divisão por w mantém a parte visível
+            # mesmo quando um vértice passa pelo plano próximo.
+            p = _triangulos_visiveis(clip, tri)
+            if not len(p):
                 continue
-            p = pontos[tri]
+            p = p[:, :, :3] / p[:, :, 3:4]
+            p[:, :, 0] = (p[:, :, 0] * 0.5 + 0.5) * largura
+            p[:, :, 1] = (0.5 - p[:, :, 1] * 0.5) * altura
             ax, ay = p[:, 0, 0], p[:, 0, 1]
             bx, by = p[:, 1, 0], p[:, 1, 1]
             cx, cy = p[:, 2, 0], p[:, 2, 1]
@@ -113,4 +161,20 @@ def selecionar_cor(mundo, cameras, x, y, largura, altura):
             if menor < melhor_z:
                 melhor_z = menor
                 resultado = tuple(int(v) for v in obj.clrid(i))
-    return resultado
+    return resultado, (melhor_z if np.isfinite(melhor_z) else 1.0)
+
+
+def selecionar_cor(mundo, cameras, x, y, largura, altura):
+    """RGB do grupo selecionado, compatível com mh.getPickedColor()."""
+    cor, _ = _selecionar_cor_e_profundidade(
+        mundo, cameras, x, y, largura, altura,
+    )
+    return cor
+
+
+def selecionar_profundidade(mundo, cameras, x, y, largura, altura):
+    """Z do pixel [0,1] para o contrato camera.convertToWorld3D()."""
+    _, z = _selecionar_cor_e_profundidade(
+        mundo, cameras, x, y, largura, altura,
+    )
+    return z

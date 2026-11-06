@@ -41,7 +41,7 @@ import numpy as np
 
 import events3d
 from core import G
-import glmodule as gl
+
 import matrix
 
 class Camera(events3d.EventHandler):
@@ -340,7 +340,11 @@ class Camera(events3d.EventHandler):
 
     def convertToWorld2D(self, sx, sy, obj = None):
         "Convert 2D (x, y) screen coordinates to OpenGL world coordinates."
-        sz = gl.queryDepth(sx, sy)
+        from vulkan_picking import selecionar_profundidade
+        sz = selecionar_profundidade(
+            G.world, G.cameras, sx, sy,
+            G.windowWidth, G.windowHeight,
+        )
         return self.convertToWorld3D(sx, sy, sz, obj)
 
     def convertToWorld3D(self, sx, sy, sz, obj = None):

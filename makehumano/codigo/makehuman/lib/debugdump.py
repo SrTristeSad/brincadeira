@@ -150,19 +150,33 @@ class DebugDump(object):
         self.close()
 
     def appendGL(self):
-        import OpenGL
+        """Compatibilidade do nome histórico: diagnostica o backend Vulkan.
+
+        Não tenta importar PyOpenGL, nem cria um dispositivo Vulkan
+        enquanto a janela ainda está inicializando.
+        """
         self.open()
-        self.write("PYOPENGL.VERSION: %s", OpenGL.__version__)
-        
+        self.write("RENDERER.BACKEND: %s", "Vulkan")
+        canvas = getattr(G, "canvas", None)
+        cena = getattr(canvas, "_cena", None)
+        adapter = getattr(cena, "adapter", None)
+        info = getattr(adapter, "info", None)
+        self.write(
+            "VULKAN.ADAPTER: %s",
+            str(info) if info is not None else "ainda não inicializado",
+        )
+
+        args = getattr(G, "args", {}) or {}
+        settings = getattr(G, "preStartupSettings", {}) or {}
         noshaders = "not set"
-        if G.args.get('noshaders', False):
+        if args.get("noshaders", False):
             noshaders = "set via command line"
-        if G.preStartupSettings["noShaders"]:
+        if settings.get("noShaders", False):
             noshaders = "set via setting"
         self.write("NOSHADERS: %s", noshaders)
-        
+
         nosamplebuffers = "not set"
-        if G.preStartupSettings["noSampleBuffers"]:
+        if settings.get("noSampleBuffers", False):
             nosamplebuffers = "set via setting"
         self.write("NOSAMPLEBUFFERS: %s", nosamplebuffers)
 

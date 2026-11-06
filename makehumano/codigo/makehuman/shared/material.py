@@ -170,7 +170,7 @@ class Color(object):
 _shaderConfigDefines = ['DIFFUSE', 'BUMPMAP', 'NORMALMAP', 'DISPLACEMENT', 'SPECULARMAP', 'VERTEX_COLOR', 'TRANSPARENCYMAP', 'AOMAP']
 
 # Protected shader parameters that are set exclusively by means of material properties (configureShading())
-_materialShaderParams = ['diffuse', 'ambient', 'specular', 'emissive', 'diffuseTexture', 'bumpmapTexture', 'bumpmapIntensity', 'normalmapTexture', 'normalmapIntensity', 'displacementmapTexture', 'displacementmapTexture', 'specularmapTexture', 'specularmapIntensity', 'transparencymapTexture', 'transparencymapIntensity', 'aomapTexture', 'aomapIntensity']
+_materialShaderParams = ['diffuse', 'ambient', 'specular', 'emissive', 'diffuseTexture', 'bumpmapTexture', 'bumpmapIntensity', 'normalmapTexture', 'normalmapIntensity', 'displacementmapTexture', 'displacementmapIntensity', 'specularmapTexture', 'specularmapIntensity', 'transparencymapTexture', 'transparencymapIntensity', 'aomapTexture', 'aomapIntensity']
 
 # Generic list of the names of texture members of material (append "Texture" to get the member name)
 textureTypes = ["diffuse", "bumpMap", "normalMap", "displacementMap", "specularMap", "transparencyMap", "aoMap"]
@@ -457,7 +457,15 @@ class Material(object):
                     # TODO remove this, use None for setting default UV map
                     self._uvMap = None
             elif words[0] == "shaderParam":
-                if len(words) > 3:
+                if words[1] == "displacementmapIntensity":
+                    # Older versions accidentally serialized this material
+                    # property as a custom uniform. Preserve its effective
+                    # value, then save only the canonical material field.
+                    if len(words) != 3:
+                        raise ValueError("displacementmapIntensity must be scalar")
+                    self.displacementMapIntensity = max(0., min(1., float(words[2])))
+                    self._shaderParameters.pop("displacementmapIntensity", None)
+                elif len(words) > 3:
                     self.setShaderParameter(words[1], words[2:])
                 else:
                     self.setShaderParameter(words[1], words[2])

@@ -42,9 +42,10 @@ import re
 import log
 from core import G
 
-from PyQt5 import QtCore, QtGui, QtOpenGL, QtWidgets
+from PyQt5 import QtCore, QtGui, QtWidgets
 
-import glmodule as gl
+# O editor original usa exclusivamente o backend Vulkan em desenvolvimento.
+# Nenhum contexto OpenGL deve ser criado por esta camada Qt.
 import events3d
 import qtgui
 import eventqueue
@@ -175,33 +176,8 @@ g_mouse_pos = None
 gg_mouse_pos = None
 g_mousewheel_t = None
 
-class Canvas(QtWidgets.QOpenGLWidget):
-    def __init__(self, parent, app):
-        self.app = app
-        self.blockRedraw = False
-        format = QtGui.QSurfaceFormat()
-        format.setAlphaBufferSize(8)
-        format.setDepthBufferSize(24)
-        format.setSwapBehavior(QtGui.QSurfaceFormat.DoubleBuffer)
-        #if not G.preStartupSettings["noSampleBuffers"]:
-        #    format.setSamples(4)
-        format.setSamples(0)
-        super(Canvas, self).__init__(parent)
-        self.setFormat(format)
-        self.create()
-
-    def create(self):
-        G.canvas = self
-        self.setFocusPolicy(QtCore.Qt.TabFocus)
-        self.setFocus()
-        self.setAutoFillBackground(False)
-        self.setAttribute(QtCore.Qt.WA_NativeWindow)
-        self.setAttribute(QtCore.Qt.WA_NoSystemBackground, False)
-        self.setAttribute(QtCore.Qt.WA_OpaquePaintEvent)
-        self.setAttribute(QtCore.Qt.WA_KeyCompression, False)
-        self.setMouseTracking(True)
-        self.setMinimumHeight(5)
-        self.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Ignored)
+class CanvasEvents:
+    """Handlers de eventos da interface original, independentes do backend."""
 
     def getMousePos(self):
         """
@@ -297,29 +273,9 @@ class Canvas(QtWidgets.QOpenGLWidget):
         if buttons:
             self.update()
 
-    def initializeGL(self):
-        gl.OnInit()
-
-    def paintGL(self):
-        if self.blockRedraw:
-            self.app.logger_redraw.debug('paintGL (blocked)')
-            return
-        self.app.logger_redraw.debug('paintGL')
-        gl.renderToCanvas()
-
-    def resizeGL(self, w, h):
-        G.windowHeight = h
-        G.windowWidth = w
-        gl.reshape(w, h)
-        G.app.callEvent('onResizedCallback', events3d.ResizeEvent(w, h, False))
-
-# Primeira integração experimental na janela ORIGINAL, sem criar um editor
-# paralelo. O modo é temporário até que todos os recursos glmodule estejam
-# migrados; só a versão final removerá o backend OpenGL de vez.
-if os.environ.get("MAKEHUMANO_VULKAN_PILOT") == "1":
-    from vulkan_canvas import criar_canvas_vulkan
-    Canvas = criar_canvas_vulkan(Canvas)
-
+# Eventos originais reaproveitados pelo QRenderWidget Vulkan.
+from vulkan_canvas import criar_canvas_vulkan
+Canvas = criar_canvas_vulkan(CanvasEvents)
 
 class VLayout(QtWidgets.QLayout):
     def __init__(self, parent = None):
@@ -742,9 +698,9 @@ class Application(QtWidgets.QApplication, events3d.EventHandler):
         self.OnInit()
         self.callAsync(self.started)
         self.messages.start()
-        self.exec_()
-        if os.environ.get("MAKEHUMANO_VULKAN_PILOT") != "1":
-            gl.OnExit()
+        exit_code = self.exec_()
+        self.messages.stop()
+        return exit_code
 
     def stop(self):
         log.notice("ABOUT TO STOP APPLICATION")

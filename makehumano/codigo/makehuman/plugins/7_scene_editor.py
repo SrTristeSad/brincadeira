@@ -174,7 +174,7 @@ class LightSceneItem(SceneItem):
 
         @self.size.mhEvent
         def onChange(value):
-            self.light.attenuation = value[0]
+            self.light.areaLightSize = value[0]
 
         @self.samples.mhEvent
         def onChange(value):

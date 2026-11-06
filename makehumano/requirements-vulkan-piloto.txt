@@ -1,5 +1,0 @@
-# Dependências adicionais do piloto Vulkan na interface ORIGINAL do MakeHuman.
-# Durante a migração ainda são necessárias as dependências legadas do aplicativo.
--r codigo/requirements.txt
-wgpu>=0.32,<0.33
-rendercanvas>=2.7,<3

@@ -1,0 +1,287 @@
+name: MakeHumano - ZIP portátil de testes
+
+on:
+  push:
+    paths:
+      - ".github/workflows/empacotar-makehumano.yml"
+      - "makehumano/codigo/**"
+      - "makehumano/empacotamento/**"
+      - "makehumano/testes/smoke_gui.py"
+      - "makehumano/codigo/requirements.txt"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  portatil:
+    name: ZIP portátil ${{ matrix.nome }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            nome: Windows
+          - os: ubuntu-24.04
+            nome: Linux
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: makehumano/codigo/requirements.txt
+
+      - name: Instalar bibliotecas e empacotador
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r makehumano/codigo/requirements.txt "pyinstaller>=6.10,<7"
+
+      - name: Verificar edição e recarga de texturas no sistema alvo
+        run: python -m unittest discover -s makehumano/testes -p "test_texture_working_copy.py" -v
+
+      - name: Construir executável com dependências incluídas
+        shell: bash
+        run: |
+          # O entrypoint original carrega mhmain dinamicamente após
+          # set_sys_path(); sem --paths/hidden-import o PyInstaller só
+          # analisa a tela de licença e omite cProfile e dependências.
+          python -m PyInstaller --noconfirm --clean --onedir --console \
+            --name MakeHumano \
+            --paths makehumano/codigo/makehuman/lib \
+            --paths makehumano/codigo/makehuman/core \
+            --paths makehumano/codigo/makehuman/shared \
+            --paths makehumano/codigo/makehuman/apps \
+            --paths makehumano/codigo/makehuman/apps/gui \
+            --paths makehumano/codigo/makehuman/plugins \
+            --additional-hooks-dir makehumano/empacotamento/hooks \
+            --exclude-module OpenGL \
+            --exclude-module IPython \
+            --hidden-import mhmain \
+            --hidden-import cProfile \
+            --collect-all PyQt5 \
+            --collect-all numpy \
+            --collect-all wgpu \
+            --collect-all rendercanvas \
+            --hidden-import PyQt5.QtWidgets \
+            --hidden-import PyQt5.QtCore \
+            --hidden-import PyQt5.QtGui \
+            --hidden-import PyQt5.QtSvg \
+            --hidden-import wgpu.backends.wgpu_native \
+            --hidden-import rendercanvas.qt \
+            makehumano/codigo/makehuman/makehuman.py
+
+      - name: Copiar recursos originais, plugins, targets e modelos
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os
+          import shutil
+          from pathlib import Path
+
+          origem = Path("makehumano/codigo/makehuman")
+          destino = Path("dist/MakeHumano")
+          assert (destino / ("MakeHumano.exe" if os.name == "nt" else "MakeHumano")).exists()
+          for item in origem.iterdir():
+              if item.name in {"__pycache__", ".git"}:
+                  continue
+              alvo = destino / item.name
+              if item.is_dir():
+                  shutil.copytree(item, alvo, dirs_exist_ok=True,
+                                  ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+              elif item.is_file():
+                  shutil.copy2(item, alvo)
+          exigidos = ("data", "plugins", "lib", "apps", "shared", "core")
+          for nome in exigidos:
+              assert (destino / nome).is_dir(), f"Recurso obrigatório ausente: {nome}"
+          print("Recursos copiados:", ", ".join(exigidos))
+          PY
+
+      - name: Criar iniciadores e instruções
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          pasta = Path("dist/MakeHumano")
+          (pasta / "LEIA-ME.txt").write_text(
+              "MAKEHUMANO - TESTE VULKAN (NAO E VERSAO FINAL)\n\n"
+              "WINDOWS: clique duas vezes em Iniciar-MakeHumano.bat.\n"
+              "LINUX: execute ./Iniciar-MakeHumano.sh em um terminal.\n\n"
+              "O Python e as bibliotecas Python estao inclusos no pacote.\n"
+              "Ainda e necessario ter drivers de video com Vulkan.\n"
+              "Alguns plugins, shaders e funcoes de edicao podem apresentar falhas.\n"
+              "Codigo original baseado no MakeHuman (AGPLv3).\n",
+              encoding="utf-8",
+          )
+          (pasta / "Iniciar-MakeHumano.bat").write_text(
+              '@echo off\r\ncd /d "%~dp0"\r\n'
+              'set WGPU_BACKEND_TYPE=Vulkan\r\n'
+              'set "MAKEHUMANO_PORTABLE_ERROR_LOG=%~dp0MakeHumano-erro.txt"\r\n'
+              'set MAKEHUMANO_CONSOLE_LOG=1\r\n'
+              '"%~dp0MakeHumano.exe" %* > "%~dp0MakeHumano-inicializacao.txt" 2>&1\r\n'
+              'if errorlevel 1 (\r\n'
+              'echo.\r\n'
+              'echo Erro ao abrir MakeHumano.\r\n'
+              'if exist "%~dp0MakeHumano-erro.txt" type "%~dp0MakeHumano-erro.txt"\r\n'
+              'echo Envie MakeHumano-erro.txt e MakeHumano-inicializacao.txt ao relatar o problema.\r\n'
+              'pause\r\n'
+              ')\r\n',
+              encoding="utf-8",
+          )
+          script = pasta / "Iniciar-MakeHumano.sh"
+          script.write_text(
+              '#!/usr/bin/env sh\n'
+              'cd "$(dirname "$0")" || exit 1\n'
+              'export WGPU_BACKEND_TYPE=Vulkan\n'
+              'exec ./MakeHumano "$@"\n',
+              encoding="utf-8",
+          )
+          script.chmod(0o755)
+          PY
+
+      - name: Testar importações reais da GUI portátil no Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $pasta = (Resolve-Path "dist/MakeHumano").Path
+          $env:MAKEHUMANO_PORTABLE_SELFTEST = "1"
+          $env:MAKEHUMANO_PORTABLE_SELFTEST_FILE = Join-Path $pasta "autoteste.ok"
+          $env:MAKEHUMANO_PORTABLE_ERROR_LOG = Join-Path $pasta "MakeHumano-erro.txt"
+          $exe = Join-Path $pasta "MakeHumano.exe"
+          $processo = Start-Process -FilePath $exe -WorkingDirectory $pasta -PassThru
+          if (!$processo.WaitForExit(60000)) {
+            $processo.Kill()
+            throw "Autoteste de importação excedeu 60 segundos"
+          }
+          if ($processo.ExitCode -ne 0) {
+            if (Test-Path $env:MAKEHUMANO_PORTABLE_ERROR_LOG) {
+              Get-Content $env:MAKEHUMANO_PORTABLE_ERROR_LOG
+            }
+            throw "GUI portátil não conseguiu importar mhmain: $($processo.ExitCode)"
+          }
+          if (!(Test-Path $env:MAKEHUMANO_PORTABLE_SELFTEST_FILE)) {
+            throw "A GUI portátil não chegou ao import de mhmain"
+          }
+          if ((Get-Content $env:MAKEHUMANO_PORTABLE_SELFTEST_FILE -Raw).Trim() -ne "imports-ok") {
+            throw "Autoteste portátil inválido"
+          }
+          Remove-Item $env:MAKEHUMANO_PORTABLE_SELFTEST_FILE
+          Remove-Item $env:MAKEHUMANO_PORTABLE_ERROR_LOG -ErrorAction SilentlyContinue
+          Write-Output "As importações reais da GUI portátil passaram."
+
+      - name: Testar importações reais da GUI portátil no Linux
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          cd dist/MakeHumano
+          export MAKEHUMANO_PORTABLE_SELFTEST=1
+          export MAKEHUMANO_PORTABLE_SELFTEST_FILE="$(pwd)/autoteste.ok"
+          export MAKEHUMANO_PORTABLE_ERROR_LOG="$(pwd)/MakeHumano-erro.txt"
+          timeout 60 ./MakeHumano
+          test "$(cat autoteste.ok)" = "imports-ok"
+          rm -f autoteste.ok MakeHumano-erro.txt
+          test -x ./Iniciar-MakeHumano.sh
+
+      # Lavapipe é apenas o driver Vulkan da CI; não é distribuído no ZIP.
+      - name: Instalar driver Vulkan de software para testar a GUI Windows
+        if: runner.os == 'Windows'
+        id: mesa
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          install: mingw-w64-x86_64-mesa
+
+      - name: Preparar Lavapipe MSVC para renderização Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP "makehumano-mesa-msvc.7z"
+          Invoke-WebRequest -Uri "https://github.com/pal1000/mesa-dist-win/releases/download/26.2.6/mesa3d-26.2.6-release-msvc.7z" -OutFile $archive
+          $expected = "B2E00615FEABA45942343C265CC8C5F576142CA682C1AC6661922D4B72492877"
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash -ne $expected) { throw "Hash Mesa MSVC inválido" }
+          & "C:\Program Files\7-Zip\7z.exe" x $archive "-o$env:RUNNER_TEMP\makehumano-mesa-msvc" -y | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "Falha ao extrair Mesa MSVC" }
+
+      - name: Abrir GUI congelada e exercitar ferramentas no Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $mesa = "${{ steps.mesa.outputs.msys2-location }}\mingw64"
+          $env:PATH = "$mesa\bin;$env:PATH"
+          # Usar o driver MSVC estático no mesmo ABI do Python/Qt; o
+          # Lavapipe MinGW do MSYS2 apresentou heap corruption no render.
+          $driver = Join-Path $env:RUNNER_TEMP "makehumano-mesa-msvc\x64"
+          $env:VK_DRIVER_FILES = "$driver\lvp_icd.x86_64.json"
+          $env:MAKEHUMANO_VULKAN_LOADER = "$mesa\bin\vulkan-1.dll"
+          $env:VK_LOADER_DEBUG = "error,warn"
+          $env:PYTHONUTF8 = "1"
+          $env:MAKEHUMANO_VULKAN_DEBUG = "1"
+          # Runners Windows são elevados: o loader ignora VK_DRIVER_FILES
+          # nesse caso. Registrar o ICD só nesta VM de CI (DWORD 0 = ativo).
+          $driverRegistry = "HKLM:\SOFTWARE\Khronos\Vulkan\Drivers"
+          if (!(Test-Path $env:VK_DRIVER_FILES)) { throw "Manifesto Lavapipe ausente" }
+          New-Item -Path $driverRegistry -Force | Out-Null
+          New-ItemProperty -Path $driverRegistry -Name $env:VK_DRIVER_FILES -PropertyType DWord -Value 0 -Force | Out-Null
+          try {
+            Remove-Item Env:MAKEHUMANO_PORTABLE_SELFTEST -ErrorAction SilentlyContinue
+            python makehumano/testes/diagnostico_vulkan_windows.py
+            if ($LASTEXITCODE -ne 0) { throw "Driver Vulkan de teste não funciona fora do pacote" }
+            python makehumano/testes/smoke_gui.py --log-dir source-windows-logs
+            if ($LASTEXITCODE -ne 0) { throw "Falha na GUI Windows fora do pacote" }
+            python makehumano/testes/smoke_startup_failure.py dist/MakeHumano/MakeHumano.exe
+            if ($LASTEXITCODE -ne 0) { throw "Falha na regressão de runtime Vulkan ausente" }
+            python makehumano/testes/smoke_gui.py --executable dist/MakeHumano/MakeHumano.exe --log-dir portable-logs
+            if ($LASTEXITCODE -ne 0) { throw "Falha no smoke da GUI Windows" }
+            python makehumano/testes/compare_portable_frames.py source-windows-logs portable-logs
+            if ($LASTEXITCODE -ne 0) { throw "Render Windows difere entre fontes e pacote" }
+            python makehumano/testes/smoke_gui.py --executable dist/MakeHumano/MakeHumano.exe --multisampling --log-dir portable-msaa-logs
+            if ($LASTEXITCODE -ne 0) { throw "Falha na GUI Windows com --multisampling" }
+          } finally {
+            Remove-ItemProperty -Path $driverRegistry -Name $env:VK_DRIVER_FILES -ErrorAction SilentlyContinue
+          }
+
+      - name: Verificar GUI congelada e ferramentas no Linux
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            xvfb xauth libvulkan1 mesa-vulkan-drivers libglu1-mesa \
+            libxkbcommon-x11-0 libxcb-xinerama0 libxcb-cursor0 \
+            libxcb-keysyms1 libxcb-icccm4 libxcb-image0 \
+            libxcb-randr0 libxcb-render-util0 libxcb-xinput0 \
+            libxcb-util1 libxcb-shape0 libxcb-xfixes0 \
+            libxcb-sync1 libx11-xcb1 libfontconfig1
+          xvfb-run -a -s "-screen 0 1280x800x24" \
+            python makehumano/testes/smoke_gui.py \
+              --executable dist/MakeHumano/MakeHumano --log-dir portable-logs
+          xvfb-run -a -s "-screen 0 1280x800x24" \
+            python makehumano/testes/smoke_gui.py \
+              --executable dist/MakeHumano/MakeHumano --multisampling --log-dir portable-msaa-logs
+
+      - name: Preservar diagnóstico da GUI e análise PyInstaller
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Diagnostico-portatil-${{ matrix.nome }}
+          path: |
+            portable-logs/
+            portable-msaa-logs/
+            source-windows-logs/
+            build/MakeHumano/warn-MakeHumano.txt
+            dist/MakeHumano/MakeHumano-erro.txt
+          retention-days: 14
+
+      - name: Disponibilizar o ZIP portátil
+        uses: actions/upload-artifact@v4
+        with:
+          name: MakeHumano-${{ matrix.nome }}-Vulkan-portatil
+          path: dist/MakeHumano/
+          if-no-files-found: error
+          compression-level: 6
+          retention-days: 30

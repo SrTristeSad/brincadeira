@@ -174,6 +174,12 @@ def get_platform_paths():
         stderr_filename = os.path.join(home, "makehuman-error.txt")
 
 def redirect_standard_streams():
+    # O smoke e o iniciador portátil precisam capturar também erros Qt/wgpu.
+    if os.environ.get("MAKEHUMANO_CONSOLE_LOG") == "1":
+        for stream in (sys.stdout, sys.stderr):
+            if hasattr(stream, "reconfigure"):
+                stream.reconfigure(encoding="utf-8", errors="replace")
+        return
     import locale
     encoding = locale.getpreferredencoding()
     if stdout_filename:
@@ -395,13 +401,15 @@ Homepage: %s""" % (self.author, self.license, self.copyright, self.homepage)
     def toNumpyString(self):
         def _packStringDict(stringDict):
             import numpy as np
-            text = ''
+            text = b''
             index = []
             for key,value in list(stringDict.items()):
+                key = key.encode('utf-8')
+                value = value.encode('utf-8')
                 index.append(len(key))
                 index.append(len(value))
                 text += key + value
-            text = np.fromstring(text, dtype='S1')
+            text = np.frombuffer(text, dtype='S1')
             index = np.array(index, dtype=np.uint32)
             return np.array([text, index], dtype=object)
 
@@ -415,8 +423,8 @@ Homepage: %s""" % (self.author, self.license, self.copyright, self.homepage)
                 l_key = index[i]
                 l_val = index[i+1]
 
-                key = str(text[last:last+l_key].tostring(), 'utf8')
-                val = str(text[last+l_key:last+l_key+l_val].tostring(), 'utf8')
+                key = str(text[last:last+l_key].tobytes(), 'utf8')
+                val = str(text[last+l_key:last+l_key+l_val].tobytes(), 'utf8')
                 stringDict[key] = val
 
                 last += (l_key + l_val)
@@ -573,7 +581,30 @@ def getCredits(richtext=False):
     text = _wordwrap(text)
     return( _block(text))
 
+def install_portable_error_handler():
+    """Registrar falhas de inicialização mesmo abrindo o .exe diretamente."""
+    error_path = os.environ.get("MAKEHUMANO_PORTABLE_ERROR_LOG")
+    if not error_path and isBuild():
+        error_path = os.path.join(getCwd(), "MakeHumano-erro.txt")
+    if not error_path:
+        return
+    previous_hook = sys.excepthook
+
+    def report(exc_type, exc_value, exc_traceback):
+        import traceback
+        try:
+            with open(error_path, "a", encoding="utf-8") as output:
+                traceback.print_exception(exc_type, exc_value, exc_traceback, file=output)
+        except OSError:
+            # Não esconder o erro original se o diretório não for gravável.
+            pass
+        previous_hook(exc_type, exc_value, exc_traceback)
+
+    sys.excepthook = report
+
+
 def main():
+    install_portable_error_handler()
     print(getCopyrightMessage(short=True) + "\n")
 
     try:
@@ -591,7 +622,7 @@ def main():
         import traceback
         bt = traceback.format_exc()
         print(bt, file=sys.stderr)
-        return
+        raise
 
     # Pass release info to debug dump using environment variables
     os.environ['MH_FROZEN'] = "Yes" if isBuild() else "No"
@@ -607,15 +638,25 @@ def main():
         # Suppress runtime errors
         numpy.seterr(all = 'ignore')
 
-    # Here pyQt and PyOpenGL will be imported
+    # A GUI original usa Qt e Vulkan. No empacotamento portátil,
+    # verificar também o carregamento de mhmain e suas dependências:
+    # --license termina antes dessa etapa e não detecta módulos ausentes.
     from mhmain import MHApplication
+    if os.environ.get("MAKEHUMANO_PORTABLE_SELFTEST") == "1":
+        marcador = os.environ.get("MAKEHUMANO_PORTABLE_SELFTEST_FILE")
+        if marcador:
+            with open(marcador, "w", encoding="utf-8") as arquivo:
+                arquivo.write("imports-ok\n")
+        print("MAKEHUMANO_PORTABLE: importação da GUI OK", flush=True)
+        return
     application = MHApplication()
-    application.run()
+    exit_code = application.run()
 
     #import cProfile
     #cProfile.run('application.run()')
 
     close_standard_streams()
+    return exit_code
 
 if __name__ == '__main__':
-    main()
+    raise SystemExit(main())

@@ -113,8 +113,6 @@ class SceneObject(object):
     def __getattr__(self, attr):
         if attr in object.__getattribute__(self, "_attributes"):
             return object.__getattribute__(self, "_" + attr)
-        elif hasattr(self, attr):
-            return object.__getattribute__(self, attr)
         else:
             raise AttributeError(
                 '"%s" type scene objects do not have any "%s" attribute.'
@@ -143,12 +141,13 @@ class SceneObject(object):
         for attr in self._attributes:
             pickle.dump(getattr(self, "_" + attr), hfile, protocol=2)
 
-    def load(self, hfile):
+    def load(self, hfile, filever=None):
+        if filever is None:
+            filever = self._scene.filever
         for attr in self._attributes:
 
             # Check if attribute exists in the file by checking
             # the compatibility of their versions
-            filever = self._scene.filever
             supported = False
             for verlim in self._attrver[attr]:
                 if checkVersions((verlim[0], filever, verlim[1])):
@@ -207,7 +206,7 @@ class Scene(object):
         try:
             hfile = open(path, 'rb')
         except IOError as e:
-            log.warning('Could not load %s: %s', path, e[1])
+            log.warning('Could not load %s: %s', path, e)
             return False
         except Exception as e:
             log.error('Failed to load scene file %s\nError: %s',
@@ -221,16 +220,16 @@ class Scene(object):
                     (mhscene_minversion, filever, mhscene_version),
                     FileVersionException)
 
-                # TODO: Save current state in temporary buffer
-                # before loading, for reverting in case of error
-                self.filever = filever
-                self.environment.load(hfile)
+                # Read into temporary objects so a truncated scene cannot
+                # replace the current lights or ambient settings partially.
+                environment = Environment(self)
+                environment.load(hfile, filever)
                 nlig = pickle.load(hfile)
-                self.lights = []
+                lights = []
                 for i in range(nlig):
                     light = Light(self)
-                    light.load(hfile)
-                    self.lights.append(light)
+                    light.load(hfile, filever)
+                    lights.append(light)
             except FileVersionException as e:
                 log.warning('%s: %s', path, e)
                 hfile.close()
@@ -238,15 +237,13 @@ class Scene(object):
             except Exception as e:
                 log.error('Failed to load scene file %s\nError: %s\n',
                     path, repr(e), exc_info=True)
-                # TODO: Revert to buffered saved state here instead
-                if path != self.path:
-                    self.load(self.path)
-                else:
-                    self.close()
                 hfile.close()
                 return False
             hfile.close()
 
+        self.filever = filever
+        self.environment = environment
+        self.lights = lights
         self.file.loaded(path)
         return True
 
@@ -257,7 +254,7 @@ class Scene(object):
         try:
             hfile = open(path, 'wb')
         except IOError as e:
-            log.warning('Could not save %s: %s', path, e[1])
+            log.warning('Could not save %s: %s', path, e)
             return False
         except Exception as e:
             log.error('Failed to save scene file %s\nError: %s\n',

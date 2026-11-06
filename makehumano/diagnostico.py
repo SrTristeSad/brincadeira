@@ -7,7 +7,7 @@ import sys
 
 BASE = Path(__file__).resolve().parent
 CODIGO = BASE / "codigo"
-DEPENDENCIAS = ("numpy", "PyQt5", "PyOpenGL")
+DEPENDENCIAS = ("numpy", "PyQt5", "wgpu", "rendercanvas")
 
 
 def examinar_sintaxe(pasta):
@@ -25,7 +25,7 @@ def examinar_sintaxe(pasta):
 
 def main():
     print(f"Python: {sys.version.split()[0]} ({sys.executable})")
-    print("Dependências documentadas pelo projeto original:")
+    print("Dependências do backend Vulkan do MakeHuman original:")
     ausentes = []
     for pacote in DEPENDENCIAS:
         try:
@@ -36,7 +36,7 @@ def main():
         else:
             print(f"  {pacote}: {versao}")
     if ausentes:
-        print("Instalação conforme o upstream: python -m pip install -r codigo/requirements.txt")
+        print("Instalação Vulkan: python -m pip install -r codigo/requirements.txt")
 
     entrada = CODIGO / "makehuman" / "makehuman.py"
     if not entrada.is_file():

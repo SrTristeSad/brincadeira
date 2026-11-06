@@ -818,9 +818,14 @@ class MHApplication(gui3d.Application, mh.Application):
         self.splash.close()
         self.splash = None
             
-        if (not self.args.get('noshaders', False) or G.preStartupSettings["noShaders"]) and \
-          ( not mh.Shader.supported() or mh.Shader.glslVersion() < (1,20) ):
-            self.prompt('Warning', 'GLSL shaders have been disabled or are not supported.\nOnly simple shading will be available.', 'Ok', None, None, None, 'glslWarning')
+        # Vulkan é o backend padrão. Shader.supported() descreve apenas
+        # compilação GLSL arbitrária, não os seis presets WGSL já portados.
+        # Não bloquear a janela com o aviso OpenGL obsoleto.
+        if not mh.Shader.supported():
+            log.message(
+                "Vulkan: presets WGSL nativos disponíveis; "
+                "shaders GLSL personalizados continuam sem suporte."
+            )
 
         # Restore main window size and position
         geometry = self.getSetting('windowGeometry')
@@ -834,6 +839,12 @@ class MHApplication(gui3d.Application, mh.Application):
         # Teste de integração opcional: sinalizar apenas após terminar a
         # inicialização da interface, dos plugins e dos morph targets.
         # Não altera o comportamento em execuções normais.
+        functional_file = os.environ.get("MAKEHUMANO_SMOKE_FUNCTIONAL_FILE")
+        if functional_file:
+            from portable_smoke import check_original_tools
+            check_original_tools(self, functional_file)
+        self._startup_complete = True
+        G.canvas.request_redraw()
         ready_file = os.environ.get("MAKEHUMANO_SMOKE_READY_FILE")
         if ready_file:
             with open(ready_file, "w", encoding="utf-8") as marker:
@@ -1381,8 +1392,10 @@ class MHApplication(gui3d.Application, mh.Application):
             return
 
         if event.objectWasChanged:
-            from glmodule import setSceneLighting
-            setSceneLighting(self.scene)
+            canvas = getattr(G, "canvas", None)
+            atualizar = getattr(canvas, "atualizar_iluminacao", None)
+            if callable(atualizar):
+                atualizar(self.scene)
 
         for category in self.categories.values():
             self.callEventHandlers('onSceneChanged', event)
@@ -1810,7 +1823,7 @@ class MHApplication(gui3d.Application, mh.Application):
             self.switchCategory(tab.name)
 
     def run(self):
-        self.start()
+        return self.start()
 
     def addExporter(self, exporter):
         self.getCategory('Files').getTaskByName('Export').addExporter(exporter)
