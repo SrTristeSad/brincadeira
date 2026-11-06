@@ -607,8 +607,26 @@ def main():
         # Suppress runtime errors
         numpy.seterr(all = 'ignore')
 
-    # Here pyQt and PyOpenGL will be imported
-    from mhmain import MHApplication
+    # A GUI original usa Qt e Vulkan. No empacotamento portátil,
+    # verificar também o carregamento de mhmain e suas dependências:
+    # --license termina antes dessa etapa e não detecta módulos ausentes.
+    try:
+        from mhmain import MHApplication
+    except Exception:
+        import traceback
+        erro = traceback.format_exc()
+        arquivo_erro = os.environ.get("MAKEHUMANO_PORTABLE_ERROR_LOG")
+        if arquivo_erro:
+            with open(arquivo_erro, "w", encoding="utf-8") as arquivo:
+                arquivo.write(erro)
+        raise
+    if os.environ.get("MAKEHUMANO_PORTABLE_SELFTEST") == "1":
+        marcador = os.environ.get("MAKEHUMANO_PORTABLE_SELFTEST_FILE")
+        if marcador:
+            with open(marcador, "w", encoding="utf-8") as arquivo:
+                arquivo.write("imports-ok\n")
+        print("MAKEHUMANO_PORTABLE: importação da GUI OK", flush=True)
+        return
     application = MHApplication()
     application.run()
 
