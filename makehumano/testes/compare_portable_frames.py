@@ -21,6 +21,8 @@ FRAMES = (
     "msaa-off", "msaa-4x", "alpha-to-coverage", "alpha-blend-msaa",
     "rig-rest", "rig-tpose",
     "proxy-eyes-high", "proxy-eyes-deformed",
+    "reference-phong-ambient", "reference-skin-ambient", "reference-normalmap-ambient",
+    "reference-litsphere-ao-white", "reference-litsphere-ao-black", "reference-litsphere-ao-grey",
     "shadow-off", "shadow-point", "shadow-area",
     "shadow-cutout", "shadow-opacity", "shadow-layers",
     "uv-map",

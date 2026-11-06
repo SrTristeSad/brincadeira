@@ -1062,6 +1062,8 @@ def criar_canvas_vulkan(canvas_original):
                 caminho = os.environ.get("MAKEHUMANO_VULKAN_FRAME_FILE")
                 if caminho and not os.path.exists(caminho):
                     from pathlib import Path
+                    from vulkan_smoke_shader_reference import validar_referencias_shader
+                    validar_referencias_shader(self._cena, G.cameras, G.world, Path(caminho).parent)
                     from vulkan_smoke_shadows import validar_sombras
                     validar_sombras(self._cena, G.cameras, G.world, Path(caminho).parent)
                     from vulkan_smoke_displacement import validar_displacement
