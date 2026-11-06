@@ -315,6 +315,64 @@ def criar_canvas_vulkan(canvas_original):
                     with open(skin_marker, "w", encoding="utf-8") as saida:
                         saida.write("vulkan-skin:96x96\n")
                     print("MAKEHUMANO_VULKAN: renderSkin UV OK", flush=True)
+                xray_marker = os.environ.get("MAKEHUMANO_VULKAN_XRAY_FILE")
+                if xray_marker and not os.path.exists(xray_marker):
+                    # Renderizar o shader xray com um wrapper local: o material
+                    # e a malha do usuário NÃO são modificados pelo smoke.
+                    candidatos = [
+                        objeto for objeto in G.world
+                        if objeto.visibility and objeto.solid
+                        and len(objeto.primitives) > 100
+                    ]
+                    if candidatos:
+                        base = max(candidatos, key=lambda o: len(o.primitives))
+
+                        class MaterialXraySmoke:
+                            shader = "data/shaders/glsl/xray"
+                            shaderParameters = {
+                                "edgefalloff": 1.0, "intensity": 0.7,
+                            }
+                            shaderConfig = {
+                                "diffuse": False, "vertexColors": False,
+                            }
+                            transparent = True
+
+                            def __init__(self, original):
+                                self.original = original
+
+                            def __getattr__(self, nome):
+                                return getattr(self.original, nome)
+
+                        class ObjetoXraySmoke:
+                            def __init__(self, original):
+                                self.original = original
+                                self.material = MaterialXraySmoke(
+                                    original.material,
+                                )
+
+                            def __getattr__(self, nome):
+                                return getattr(self.original, nome)
+
+                        pixels = self._cena.capturar_framebuffer(
+                            [ObjetoXraySmoke(base)], G.cameras,
+                            160, 120, incluir_alfa=True,
+                            cor_fundo=(0, 0, 0, 0),
+                        )
+                        if pixels.shape != (120, 160, 4):
+                            raise RuntimeError("Shader xray: tamanho RGBA inválido")
+                        import numpy as np
+                        cobertura = np.count_nonzero(pixels[:, :, 3])
+                        if not cobertura:
+                            raise RuntimeError("Shader xray não gerou cobertura")
+                        with open(xray_marker, "w", encoding="utf-8") as saida:
+                            saida.write(
+                                "vulkan-xray:160x120:"
+                                + str(int(cobertura)) + "\n"
+                            )
+                        print(
+                            "MAKEHUMANO_VULKAN: xray WGSL, pixels="
+                            + str(cobertura), flush=True,
+                        )
                 caminho = os.environ.get("MAKEHUMANO_VULKAN_FRAME_FILE")
                 if caminho and not os.path.exists(caminho):
                     with open(caminho, "w", encoding="utf-8") as saida:
