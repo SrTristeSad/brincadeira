@@ -205,6 +205,12 @@ def main():
                     "FALHA: a viewport Vulkan gerou erros no log da GUI.",
                     file=sys.stderr,
                 )
+                # O traceback pode estar antes da cauda do log (plugins
+                # geram muitas linhas). Exibir o contexto exato da falha.
+                for error in erros_graficos:
+                    position = log_text.find(error)
+                    if position >= 0:
+                        print(log_text[max(0, position - 200):position + 3000])
                 iniciou = False
 
         if iniciou:
