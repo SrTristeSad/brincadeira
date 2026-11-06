@@ -124,6 +124,7 @@ local function confirmNew()
         return
     end
     app.doc = doc
+    app.layerScroll = 0
     app.modal = nil
     resetView()
     app.status = "Nova tela criada. Exporte seu trabalho para salvar."
@@ -280,8 +281,9 @@ local function drawLayersPanel(px, py, pw)
         function(v) active.opacity = math.floor(v + .5) / 100 end)
     local availableRows = math.floor((lg.getHeight() - 56 - (py + 187)) / 73)
     local count = math.min(#app.doc.layers, math.max(1, availableRows))
+    local offset = clamp(app.layerScroll or 0, 0, math.max(0, #app.doc.layers - count))
     for row = 1, count do
-        local i = #app.doc.layers - row + 1
+        local i = #app.doc.layers - offset - row + 1
         local layer = app.doc.layers[i]
         local y = py + 177 + (row - 1) * 73
         color(i == app.doc.active and C.hover or C.top_button)
@@ -299,7 +301,7 @@ local function drawLayersPanel(px, py, pw)
             function() layer.visible = not layer.visible end)
     end
     if #app.doc.layers > count then
-        text("Mostrando as camadas superiores", px + 18,
+        text("Roda do mouse aqui para ver outras camadas", px + 18,
             lg.getHeight() - 96, pw - 36, "center", app.tiny, C.soft)
     end
 end
@@ -352,6 +354,7 @@ function love.load()
     app.large = lg.newFont(20)
     app.doc = Document.new(1200, 800)
     app.tool, app.panel = "brush", "brush"
+    app.layerScroll = 0
     app.color = {.12, .16, .22}
     app.size, app.opacity = 16, 1
     app.status = "Protótipo raster. Arraste PNG/JPEG para abrir; Ctrl+S exporta PNG."
@@ -422,6 +425,13 @@ end
 function love.wheelmoved(dx, dy)
     if app.modal or dy == 0 then return end
     local mx, my = love.mouse.getPosition()
+    if app.panel == "layers" and mx >= lg.getWidth() - PANEL_WIDTH and my > 205 then
+        local availableRows = math.floor((lg.getHeight() - 56 - (62 + 187)) / 73)
+        local count = math.min(#app.doc.layers, math.max(1, availableRows))
+        app.layerScroll = clamp((app.layerScroll or 0) - (dy > 0 and 1 or -1),
+            0, math.max(0, #app.doc.layers - count))
+        return
+    end
     if not isInViewport(mx, my) then return end
     local px, py = documentPoint(mx, my, false)
     local nextZoom = clamp(app.zoom * (dy > 0 and 1.12 or 1 / 1.12), .10, 5)
@@ -488,6 +498,7 @@ function love.filedropped(file)
         return
     end
     app.doc, app.modal = doc, nil
+    app.layerScroll = 0
     app.panel = "layers"
     resetView()
     app.status = "Imagem importada. A tela anterior foi substituida."
