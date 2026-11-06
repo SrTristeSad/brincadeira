@@ -1,6 +1,7 @@
 """Dados de cobertura originais para os raios de sombra WGSL.
 
-RGBA8 é empacotado sem redimensionar; o shader interpola os mesmos texels
+Alfa8 e somas RGB uint16 são empacotados sem redimensionar ou quantização
+adicional; o shader interpola os mesmos texels
 com clamp-to-edge, filtro bilinear e origem superior usados pelo renderer.
 """
 import os
@@ -33,14 +34,25 @@ class PixelsSombra:
                 and min(data.shape[:2]) > 0 and data.shape[2] in (1, 2, 3, 4)
                 and (data.shape[2] in (1, 3) or np.all(data[:, :, -1] == 255))):
             return (0, 0, 0, 0)
-        key = id(resource)
+        key = (id(resource), bool(alpha_only))
         if key in self.descriptors:
             return self.descriptors[key]
         rgba = pixels_textura_rgba(data)
         height, width = rgba.shape[:2]
-        descriptor = (self.count, width, height, 0)
-        self.chunks.append(rgba.view('<u4').reshape(-1))
-        self.count += width*height
+        if alpha_only:
+            values = np.ascontiguousarray(rgba[:, :, 3]).reshape(-1)
+            values = np.pad(values, (0, (-len(values)) % 4))
+            kind = 1
+        else:
+            # sum(R,G,B) is an exact integer 0..765. Keeping it avoids
+            # quantizing luminance to an 8-bit average before filtering.
+            values = rgba[:, :, :3].sum(axis=2, dtype=np.uint16).astype('<u2').reshape(-1)
+            values = np.pad(values, (0, (-len(values)) % 2))
+            kind = 2
+        words = values.view('<u4')
+        descriptor = (self.count, width, height, kind)
+        self.chunks.append(words)
+        self.count += len(words)
         self.descriptors[key] = descriptor
         return descriptor
 
@@ -92,14 +104,18 @@ struct ShadowSurface {
 @group(0) @binding(12) var<storage, read> shadow_surfaces: array<ShadowSurface>;
 @group(0) @binding(13) var<storage, read> shadow_pixels: array<u32>;
 
-fn shadow_texel(descriptor: vec4<u32>, coordinate: vec2<i32>) -> vec4<f32> {
+fn shadow_texel(descriptor: vec4<u32>, coordinate: vec2<i32>) -> f32 {
     let pixel = clamp(coordinate, vec2<i32>(0), vec2<i32>(descriptor.yz) - vec2<i32>(1));
-    let word = shadow_pixels[descriptor.x + u32(pixel.y) * descriptor.y + u32(pixel.x)];
-    return vec4<f32>(f32(word & 255u), f32((word >> 8u) & 255u),
-                     f32((word >> 16u) & 255u), f32((word >> 24u) & 255u)) / 255.0;
+    let index = u32(pixel.y)*descriptor.y + u32(pixel.x);
+    if (descriptor.w == 1u) {
+        let word = shadow_pixels[descriptor.x + index/4u];
+        return f32((word >> ((index%4u)*8u)) & 255u)/255.0;
+    }
+    let word = shadow_pixels[descriptor.x + index/2u];
+    return f32((word >> ((index%2u)*16u)) & 65535u)/765.0;
 }
-fn shadow_sample(descriptor: vec4<u32>, uv: vec2<f32>) -> vec4<f32> {
-    if (descriptor.y == 0u) { return vec4<f32>(1.0); }
+fn shadow_sample(descriptor: vec4<u32>, uv: vec2<f32>) -> f32 {
+    if (descriptor.y == 0u) { return 1.0; }
     let coordinate = clamp(vec2<f32>(uv.x, 1.0-uv.y), vec2<f32>(0.0), vec2<f32>(1.0))
                      * vec2<f32>(descriptor.yz) - vec2<f32>(0.5);
     let lower = vec2<i32>(floor(coordinate));
@@ -112,8 +128,8 @@ fn shadow_alpha(index: u32, barycentric: vec3<f32>) -> f32 {
     let surface = shadow_surfaces[index];
     let uv = surface.uv01.xy * barycentric.x + surface.uv01.zw * barycentric.y
              + surface.uv2_opacity.xy * barycentric.z;
-    let diffuse = shadow_sample(surface.diffuse, uv).a;
-    let transparency = dot(shadow_sample(surface.transparency, uv).rgb, vec3<f32>(1.0/3.0));
+    let diffuse = shadow_sample(surface.diffuse, uv);
+    let transparency = shadow_sample(surface.transparency, uv);
     let vertex = dot(surface.vertex_alpha.xyz, barycentric);
     return clamp(diffuse * surface.uv2_opacity.z * vertex
                  * (1.0 - surface.uv2_opacity.w * transparency), 0.0, 1.0);

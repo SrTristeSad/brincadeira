@@ -14,22 +14,35 @@ from vulkan_texture import getTexture, reloadTexture
 
 
 class ShadowAlpha(unittest.TestCase):
-    def test_rgba_bytes_and_descriptors_preserve_odd_width_and_deduplicate(self):
+    def test_packed_channels_preserve_odd_width_and_deduplicate_each_role(self):
         data = np.arange(24, dtype=np.uint8).reshape(2, 3, 4)
         resource = SimpleNamespace(data=data)
         pixels = PixelsSombra()
-        descriptor = pixels.registrar(resource)
-        self.assertEqual(descriptor, (1, 3, 2, 0))
-        self.assertEqual(pixels.registrar(resource), descriptor)
-        self.assertEqual(len(pixels.pixels()), 7)
-        np.testing.assert_array_equal(pixels.pixels()[1:].view(np.uint8).reshape(2, 3, 4), data)
+        alpha = pixels.registrar(resource, alpha_only=True)
+        self.assertEqual(alpha, (1, 3, 2, 1))
+        self.assertEqual(pixels.registrar(resource, alpha_only=True), alpha)
+        self.assertEqual(len(pixels.pixels()), 3)
+        np.testing.assert_array_equal(pixels.pixels()[1:].view(np.uint8)[:6], data[:, :, 3].reshape(-1))
+        luminance = pixels.registrar(resource)
+        self.assertEqual(luminance, (3, 3, 2, 2))
+        self.assertEqual(pixels.registrar(resource), luminance)
+        np.testing.assert_array_equal(pixels.pixels()[3:].view('<u2'), data[:, :, :3].sum(axis=2).reshape(-1))
         self.assertEqual(SURFACE_DTYPE.itemsize, 80)
+
+    def test_odd_texel_counts_pad_words_without_modifying_texels(self):
+        resource = SimpleNamespace(data=np.array([[[1, 2, 3, 5], [255, 255, 255, 128], [255, 0, 0, 0]]], np.uint8))
+        pixels = PixelsSombra()
+        alpha = pixels.registrar(resource, alpha_only=True)
+        luminance = pixels.registrar(resource)
+        words = pixels.pixels()
+        np.testing.assert_array_equal(words[alpha[0]:alpha[0]+1].view(np.uint8), [5, 128, 0, 0])
+        np.testing.assert_array_equal(words[luminance[0]:].view('<u2'), [6, 765, 255, 0])
 
     def test_luminance_alpha_and_opaque_rgb(self):
         pixels = PixelsSombra()
         la = SimpleNamespace(data=np.array([[[40, 128]]], np.uint8))
         descriptor = pixels.registrar(la, alpha_only=True)
-        np.testing.assert_array_equal(pixels.pixels()[descriptor[0]:].view(np.uint8), [40, 40, 40, 128])
+        self.assertEqual(int(pixels.pixels()[descriptor[0]] & 255), 128)
         rgb = SimpleNamespace(data=np.full((3, 7, 3), 63, np.uint8))
         self.assertEqual(pixels.registrar(rgb, alpha_only=True), (0, 0, 0, 0))
         self.assertNotEqual(pixels.registrar(rgb), (0, 0, 0, 0))
@@ -46,7 +59,7 @@ class ShadowAlpha(unittest.TestCase):
             texture.loadImage(Image(data=data))
             painted = PixelsSombra()
             descriptor = painted.registrar(path, alpha_only=True)
-            self.assertTrue(np.all(painted.pixels()[descriptor[0]:] >> 24 == 0))
+            self.assertTrue(np.all(painted.pixels()[descriptor[0]:].view(np.uint8)[:15] == 0))
             reloadTexture(path)
             restored = PixelsSombra()
             self.assertEqual(restored.registrar(path, alpha_only=True), (0, 0, 0, 0))
