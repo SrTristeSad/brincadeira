@@ -76,11 +76,17 @@ O teste de CI `vulkan-gui-original` tenta abrir a **GUI original** com esse
 canvas e exige pelo menos um objeto real renderizado por Vulkan.
 **Limitações:** picking, transparência, todos os shaders, renderização
 offscreen, parte dos materiais e plugins gráficos ainda não foram migrados.
-O piloto respeita agora os objetos `shadeless` (sem iluminação na aproximação
-Vulkan), o desligamento de textura difusa do material original e envia
-`diffuseColor` e `opacity` para os uniforms do shader. **Isso ainda não
-implementa alpha blending/transparência**, nem substitui os shaders de
-materiais originais: a equivalência visual completa continua pendente.
+O piloto respeita objetos `shadeless`, o desligamento de textura
+difusa e os parâmetros originais `diffuseColor` e `opacity`.
+Malhas com `nTransparentPrimitives > 0` ou `opacity < 1` têm agora um
+pipeline de composição alfa (cores não pré-multiplicadas), com teste de
+profundidade ativo e escrita de profundidade desativada. Para as malhas
+marcadas como transparentes, fragmentos de alfa zero são descartados,
+como no caminho original de alpha-test. A ordem dos objetos continua
+definida por `G.world` e `priority`, sem nova ordenação pela câmera.
+**A transparência ainda é parcial**: ordenação fina de faces,
+`alphaToCoverage` multisample, equivalência dos materiais especiais,
+shaders originais e testes visuais comparativos estão pendentes.
 Durante a migração, PyOpenGL permanece necessário a partes do aplicativo;
 portanto **OpenGL ainda não foi eliminado e o objetivo não foi concluído**.
 Não usar o modo experimental como editor de produção até haver paridade.
