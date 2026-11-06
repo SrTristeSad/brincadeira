@@ -386,6 +386,63 @@ def ordenar_objetos_vulkan(mundo, cameras):
     return resultado
 
 
+def arestas_wireframe(faces):
+    """Arestas das faces originais, sem diagonais da triangulação dos quads."""
+    faces = np.asarray(faces, dtype=np.uint32)
+    if faces.ndim != 2 or faces.shape[1] not in (3, 4):
+        raise ValueError("Wireframe exige triângulos ou quads originais")
+    edges = np.stack((faces, np.roll(faces, -1, axis=1)), axis=-1).reshape(-1, 2)
+    edges = edges[edges[:, 0] != edges[:, 1]]
+    return np.unique(np.sort(edges, axis=1), axis=0)
+
+
+class _MaterialWireframe:
+    shader = None
+    shaderParameters = {}
+    shaderConfig = {"normal": False, "diffuse": False}
+    normalMapTexture = None
+    transparent = False
+
+    def __init__(self, original, linhas):
+        self.original = original
+        if linhas:
+            from types import SimpleNamespace
+            self.diffuseColor = SimpleNamespace(values=(0., 0., 0.))
+            self.emissiveColor = SimpleNamespace(values=(0., 0., 0.))
+            self.specularColor = SimpleNamespace(values=(0., 0., 0.))
+            self.opacity = 1.0
+
+    def __getattr__(self, name):
+        return getattr(self.original, name)
+
+
+class _PasseWireframe:
+    isTextured = False
+    texture = None
+    nTransparentPrimitives = 0
+    solid = True
+
+    def __init__(self, original, linhas):
+        self.original = original
+        self.material = _MaterialWireframe(original.material, linhas)
+        self.shadeless = linhas or original.shadeless
+        self._wireframe_preenchimento = not linhas
+        self.primitives = arestas_wireframe(original.primitives) if linhas else original.primitives
+
+    def __getattr__(self, name):
+        return getattr(self.original, name)
+
+
+def passes_wireframe(objetos):
+    """Preservar o modo original: superfície sem textura e arestas pretas."""
+    for obj in objetos:
+        if not getattr(obj, "solid", True) and np.asarray(obj.primitives).shape[-1] in (3, 4):
+            yield _PasseWireframe(obj, False)
+            yield _PasseWireframe(obj, True)
+        else:
+            yield obj
+
+
 class CenaVulkan:
     """Renderização piloto de objetos G.world na própria janela MakeHuman."""
 
@@ -776,7 +833,8 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
         """Cache de variantes Vulkan para culling e depth do MakeHuman."""
         wgpu = self.wgpu
         config = configuracao_raster_vulkan(obj, linhas=linhas)
-        chave = (bool(linhas), *config)
+        preenchimento_wireframe = bool(getattr(obj, "_wireframe_preenchimento", False))
+        chave = (bool(linhas), preenchimento_wireframe, *config)
         cached = self._pipelines_malhas.get(chave)
         if cached is not None:
             return cached
@@ -811,6 +869,8 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
                 format="depth24plus",
                 depth_write_enabled=grava_z,
                 depth_compare=compara_z,
+                depth_bias=1 if preenchimento_wireframe else 0,
+                depth_bias_slope_scale=1.0 if preenchimento_wireframe else 0.0,
             ),
             fragment=wgpu.FragmentState(
                 module=self._shader_malhas, entry_point="fs_main",
@@ -1013,7 +1073,7 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
         self.objetos_desenhados = 0
         self.linhas_desenhadas = 0
         if mundo is not None:
-            for obj in ordenar_objetos_vulkan(mundo, cameras):
+            for obj in passes_wireframe(ordenar_objetos_vulkan(mundo, cameras)):
                 if not obj.visibility:
                     continue
                 if productionRender and getattr(obj, "excludeFromProduction", False):

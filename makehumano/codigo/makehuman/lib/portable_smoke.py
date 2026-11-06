@@ -74,9 +74,24 @@ def check_original_tools(app, report_path):
         if not triangles or len(stl) != 84 + 50 * triangles:
             raise RuntimeError("STL binário contém contagem de triângulos inválida")
 
+        import mh
+        solid_before = human.isSolid()
+        try:
+            human.setSolid(True)
+            solid_image = mh.renderToBuffer(320, 240).data.copy()
+            human.setSolid(False)
+            wire_image = mh.renderToBuffer(320, 240).data.copy()
+            dark_solid = np.count_nonzero(np.all(solid_image[:, :, :3] < 12, axis=2))
+            dark_wire = np.count_nonzero(np.all(wire_image[:, :, :3] < 12, axis=2))
+            if np.array_equal(solid_image, wire_image) or dark_wire <= dark_solid:
+                raise RuntimeError("Modo wireframe original não desenhou arestas pretas")
+        finally:
+            human.setSolid(solid_before)
+
         report.write_text(json.dumps({
             "modifier": modifier.fullName,
             "mhm_roundtrip": True,
+            "wireframe": True,
             "exports": ["obj", "fbx-binary", "collada", "stl-binary"],
             "plugins": sorted(name for name, module in app.modules.items() if module),
         }, indent=2), encoding="utf-8")
