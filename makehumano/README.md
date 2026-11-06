@@ -76,6 +76,11 @@ O teste de CI `vulkan-gui-original` tenta abrir a **GUI original** com esse
 canvas e exige pelo menos um objeto real renderizado por Vulkan.
 **Limitações:** picking, transparência, todos os shaders, renderização
 offscreen, parte dos materiais e plugins gráficos ainda não foram migrados.
+O piloto respeita agora os objetos `shadeless` (sem iluminação na aproximação
+Vulkan), o desligamento de textura difusa do material original e envia
+`diffuseColor` e `opacity` para os uniforms do shader. **Isso ainda não
+implementa alpha blending/transparência**, nem substitui os shaders de
+materiais originais: a equivalência visual completa continua pendente.
 Durante a migração, PyOpenGL permanece necessário a partes do aplicativo;
 portanto **OpenGL ainda não foi eliminado e o objetivo não foi concluído**.
 Não usar o modo experimental como editor de produção até haver paridade.
