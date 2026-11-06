@@ -42,3 +42,9 @@ Os comandos de build de Egret, PixiJS, Phaser, Hilo e Cocos foram retirados **ap
 `Animation.getBlendState()` agora cria também seus mapas aninhados com `Object.create(null)`, impedindo conflitos entre nomes de bones/slots e propriedades herdadas como `constructor` ou `__proto__`. O setter `animations` passou a copiar apenas as entradas próprias e enumeráveis da origem com `Object.keys()` (disponível em ES5), evitando importar propriedades herdadas. API pública, estrutura de animações e compatibilidade com ES5 preservadas.
 
 Foram adicionados dois testes de regressão ao pacote. A compilação integral permanece pendente.
+
+## Substituição de animações na fábrica
+
+`BaseFactory.replaceAnimation()` agora copia somente as entradas próprias de cada catálogo de animações ao mesclar dados, usando `Object.keys()` (ES5). Isso evita propagar propriedades herdadas de objetos externos para o conjunto de animações do esqueleto. O modo de substituição total e a precedência das animações recebidas continuam iguais.
+
+Foram acrescentados três testes de regressão. A compilação completa do motor permanece pendente.
