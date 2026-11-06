@@ -18,6 +18,7 @@ FRAMES = (
     "projection-3d", "projection-accumulated",
     "projection-perspective",
     "light-area", "light-area-two", "light-area-phong",
+    "msaa-off", "msaa-4x", "alpha-to-coverage", "alpha-blend-msaa",
 )
 
 

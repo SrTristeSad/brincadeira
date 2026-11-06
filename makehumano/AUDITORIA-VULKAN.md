@@ -21,19 +21,21 @@ em `motor_wgpu`. O estado abaixo distingue testes exercitados de paridade final.
 | Mapas especulares e de transparência ignorados | Texturas e intensidades originais no WGSL; testes GPU branco/preto/cinza e intensidade zero |
 | Foco e atenuação sem efeito | Cone por posição/foco/ângulo e atenuação por distância; capturas GPU controladas |
 | Erros de acesso a `.mhscene` geravam outra exceção | Tratamento de `OSError` compatível com Python 3; roundtrip de luzes, arquivo ausente, permissão negada e preservação da cena após arquivo truncado testados |
-| Softness alterava a atenuação no editor original | Evento agora atualiza `areaLightSize`, com regressão nos widgets reais; não implementa luzes de área |
+| Softness alterava a atenuação no editor original | Evento agora atualiza `areaLightSize`, com regressão nos widgets reais; emissão de área agora amostrada no Vulkan |
+| Samples/Soft light sem efeito no renderer | Emissão de área integrada, tamanho zero restaura luz pontual, energia comparada à soma explícita de luzes |
+| Atributos opcionais de SceneObject causavam recursão | Consulta de atributo inexistente agora levanta AttributeError, com regressão de hasattr/getattr |
 | Plugins/exportadores só carregavam | Smoke altera geometria, salva/reabre MHM e exporta OBJ/FBX/DAE/STL, verificando estrutura dos arquivos |
 
 ## Validação local
 
-A suíte completa executou **251 testes com sucesso**, usando Python 3.12,
+A suíte completa executou **265 testes com sucesso**, usando Python 3.12,
 NumPy 2.5.4 e Qt 5.15.14. Os testes Qt de gravação PNG verificam os canais,
 alfa e imagens com largura não alinhada. Os dados binários verificam Unicode
 em grupos de malha, tags de proxies e metadados de licença. A criação local do
 pacote Linux e a importação congelada também foram exercitadas; os testes GPU
 e GUI são executados nos runners dos workflows vinculados ao commit.
 
-A comparação adicional de 32 PNGs entre fontes Windows e executável exige
+A comparação adicional de 39 PNGs entre fontes Windows e executável exige
 igualdade exata de pixels no mesmo driver. As capturas são sincronizadas com
 fim de startup para não comparar iluminação ainda não carregada. Essa
 verificação detecta diferenças do empacotamento; não substitui equivalência
@@ -52,14 +54,17 @@ com o renderer original nem validação em outra GPU.
    por gradiente de altura, com prioridade para normal maps. AO agora respeita
    intensidade no material básico e no Phong. A interface pode expor parâmetros
    cujos efeitos não são integralmente implementados.
-3. **Iluminação avançada:** sombras e luzes de área continuam pendentes.
+3. **Iluminação avançada:** sombras continuam pendentes. A emissão de área
+   agora integra até 16 amostras por emissor na viewport, com energia
+   normalizada e sem ruído entre frames; isso não calcula sombras suaves.
    Foco, ângulo total do cone e atenuação quadrática agora afetam os presets
    iluminados. `Light.specular` independente foi tratado. LitSphere e Xray
    conservam seus modelos de iluminação próprios. Não há paridade comprovada
    com todos os renderizadores externos originais.
 4. **Transparência avançada:** ordenar triângulos corrige a dependência simples
    da ordem, mas não resolve ciclos/interseções entre faces ou objetos.
-   Alpha-to-coverage e MSAA ainda precisam ser portados e comparados.
+   MSAA 4x e alpha-to-coverage agora têm testes GPU sintéticos.
+   Ainda faltam cabelos reais, mais drivers e comparação de cobertura entre GPUs.
 5. **Recursos de roupas e cabelos:** este checkout contém a base, olhos e os
    carregadores originais, mas `data/hair` só contém `clear.thumb` e não há uma
    biblioteca de roupas completa. Não inventar ou substituir esses ativos.

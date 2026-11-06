@@ -1056,6 +1056,8 @@ def criar_canvas_vulkan(canvas_original):
                 lights_marker = os.environ.get("MAKEHUMANO_VULKAN_LIGHT_CONTROLS_FILE")
                 if lights_marker and not os.path.exists(lights_marker):
                     from vulkan_smoke_lighting import validar_luzes
+                    from vulkan_smoke_multisampling import validar_multisampling
+                    validar_multisampling(self._cena, G.cameras, G.world, lights_marker)
                     validar_luzes(self._cena, G.cameras, G.world, self.app, lights_marker)
                 caminho = os.environ.get("MAKEHUMANO_VULKAN_FRAME_FILE")
                 if caminho and not os.path.exists(caminho):

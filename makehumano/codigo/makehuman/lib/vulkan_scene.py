@@ -308,6 +308,15 @@ def configuracao_raster_vulkan(obj, *, linhas=False):
     return modo_cull, escrever_profundidade, comparacao
 
 
+def alpha_to_coverage_vulkan(obj, amostras, *, linhas=False):
+    """A2C original requer multisampling e uma superfície translúcida."""
+    if amostras not in (1, 4):
+        raise ValueError("Multisampling Vulkan aceita 1 ou 4 amostras")
+    material = getattr(obj, "material", None)
+    return (amostras > 1 and not linhas and objeto_translucido_vulkan(obj)
+            and bool(getattr(material, "alphaToCoverage", True)))
+
+
 def objeto_translucido_vulkan(obj):
     """Classifica camadas para composição alpha, sem inferir pela textura.
 
@@ -459,6 +468,8 @@ class CenaVulkan:
         from PyQt5 import QtGui
 
         self.wgpu = wgpu
+        from core import G
+        self.amostras = 4 if (G.args or {}).get("multisampling", False) else 1
         self.QtGui = QtGui
         self.canvas = canvas
         self.adapter = wgpu.gpu.request_adapter_sync(
@@ -873,6 +884,7 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
         self._texturas = {}
         self._depth = None
         self._depth_size = None
+        self._cor_msaa = None
         self.frames = 0
         self.objetos_desenhados = 0
         self.linhas_desenhadas = 0
@@ -891,11 +903,14 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
         wgpu = self.wgpu
         config = configuracao_raster_vulkan(obj, linhas=linhas)
         preenchimento_wireframe = bool(getattr(obj, "_wireframe_preenchimento", False))
-        chave = (bool(linhas), preenchimento_wireframe, *config)
+        a2c = alpha_to_coverage_vulkan(obj, self.amostras, linhas=linhas)
+        chave = (self.amostras, a2c, bool(linhas), preenchimento_wireframe, *config)
         cached = self._pipelines_malhas.get(chave)
         if cached is not None:
             return cached
         modo_cull, grava_z, compara_z = config
+        if a2c:
+            grava_z = not bool(getattr(obj, "depthless", False))
         novo = self.device.create_render_pipeline(
             layout=wgpu.AutoLayoutMode.auto,
             vertex=wgpu.VertexState(
@@ -932,12 +947,22 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
             fragment=wgpu.FragmentState(
                 module=self._shader_malhas, entry_point="fs_main",
                 targets=[wgpu.ColorTargetState(
-                    format=self.formato, blend=self._blend_malhas,
+                    format=self.formato, blend=None if a2c else self._blend_malhas,
                 )],
+            ),
+            multisample=wgpu.MultisampleState(
+                count=self.amostras, alpha_to_coverage_enabled=a2c,
             ),
         )
         self._pipelines_malhas[chave] = novo
         return novo
+
+    def configurar_multisampling(self, habilitado):
+        """Reconfigura alvos e variantes no mesmo renderer Vulkan."""
+        self.amostras = 4 if habilitado else 1
+        self._depth_size = None
+        self._depth = None
+        self._cor_msaa = None
 
     def atualizar_iluminacao(self, cena):
         """Guarda a cena original para os próximos passes de renderização."""
@@ -1087,31 +1112,49 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
             return
         tamanho_janela = tuple(map(int, tamanho_janela[:2]))
         tamanho = tuple(map(int, alvo.size[:2])) if alvo is not None else tamanho_janela
+        chave_alvo = (tamanho, self.amostras)
         if alvo is None:
-            if self._depth_size != tamanho:
+            if self._depth_size != chave_alvo:
                 depth = self.device.create_texture(
                     size=(tamanho[0], tamanho[1], 1),
                     format="depth24plus",
+                    sample_count=self.amostras,
                     usage=wgpu.TextureUsage.RENDER_ATTACHMENT,
                 )
                 self._depth = depth.create_view()
-                self._depth_size = tamanho
+                self._depth_size = chave_alvo
+                self._cor_msaa = None
             depth_view = self._depth
             color_view = self.contexto.get_current_texture().create_view()
         else:
             depth = self.device.create_texture(
                 size=(tamanho[0], tamanho[1], 1),
                 format="depth24plus",
+                sample_count=self.amostras,
                 usage=wgpu.TextureUsage.RENDER_ATTACHMENT,
             )
             depth_view = depth.create_view()
             color_view = alvo.create_view()
 
+        resolve_view = None
+        if self.amostras > 1:
+            resolve_view = color_view
+            msaa = self._cor_msaa if alvo is None else None
+            if msaa is None:
+                msaa = self.device.create_texture(
+                    size=(tamanho[0], tamanho[1], 1), format=self.formato,
+                    sample_count=self.amostras,
+                    usage=wgpu.TextureUsage.RENDER_ATTACHMENT,
+                ).create_view()
+                if alvo is None:
+                    self._cor_msaa = msaa
+            color_view = msaa
+
         encoder = self.device.create_command_encoder()
         passagem = encoder.begin_render_pass(
             color_attachments=[wgpu.RenderPassColorAttachment(
                 view=color_view,
-                resolve_target=None,
+                resolve_target=resolve_view,
                 load_op="clear",
                 store_op="store",
                 clear_value=tuple(cor_fundo),
@@ -1122,7 +1165,6 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
                 depth_clear_value=1.0,
             ),
         )
-        passagem.set_pipeline(self.pipeline)
         from vulkan_lighting import (
             dados_iluminacao_cena, cores_especulares_cena, parametros_foco_atenuacao,
         )

@@ -111,8 +111,8 @@ do cone; 180 graus mantém a luz pontual sem cone. `attenuation` aplica
 `1 / (1 + attenuation * distância²)` às contribuições difusa e especular,
 conservando as cenas anteriores quando zero. Luz ambiente não é atenuada.
 Os modelos LitSphere e Xray mantêm sua iluminação própria. O controle
-Softness grava o tamanho de área correto, mas sombras e luzes de área ainda
-não estão implementadas pelo renderer Vulkan.
+Softness grava o tamanho de área correto. A integração de área descrita
+abaixo não implementa sombras.
 
 Os smokes opcionais `vulkan_smoke_materials.py` e `vulkan_smoke_lighting.py`
 renderizam pela mesma cena Vulkan da interface original e conservam capturas
@@ -153,3 +153,41 @@ independente do formato sRGB/BGRA da janela. O readback considera o formato
 da textura alvo, evitando trocar canais quando o destino difere do swapchain.
 O teste GPU detectou a mistura incorreta ao herdar sRGB e valida novamente os
 valores RGBA esperados da composição sobre a imagem existente.
+
+### Emissão de área na viewport
+
+`areaLights > 1` ativa a integração de um emissor quadrado orientado para
+`focus`, com largura `areaLightSize`. Pares de amostras opostas mantêm o
+centro; seus pesos somam um, conservando a energia. O padrão é determinístico
+e não introduz cintilação entre frames. `areaLightSize=0` ou `areaLights=1`
+restaura exatamente a luz pontual. A cena original não é modificada.
+
+Para limitar o custo interativo, a viewport usa no máximo 16 amostras por
+emissor e até oito emissores originais. O número de Samples salvo permanece
+intacto. Os presets Phong, Toon, normalmap e Skin conservam o uso do primeiro
+emissor, integrando suas amostras; o material básico integra os oito.
+LitSphere e Xray preservam seus modelos próprios. Isso implementa emissão
+espacial e variação dos reflexos, **sem oclusão nem sombras suaves**.
+
+O smoke compara a emissão de área com uma soma explícita de luzes pontuais
+com energia dividida, verifica tamanho zero, repetibilidade, resposta de
+Samples e o preset Phong. Eventos dos widgets originais Soft light, Softness
+e Samples e o roundtrip `.mhscene` também são exercitados.
+
+### Multisampling e alpha-to-coverage
+
+A opção original `--multisampling` ativa MSAA 4x na viewport e nos passes de
+cena offscreen. Cor e profundidade usam quatro amostras; o alvo final é
+resolvido para a textura legível pela CPU. Sem a opção, o padrão continua
+uma amostra. `renderSkin` conserva seu destino linear de pintura independente.
+
+Materiais translúcidos com `alphaToCoverage=True` usam cobertura multisample
+no lugar de alpha blending, com profundidade por amostra, como no contrato
+original. Linhas não ativam A2C. O cache de pipelines distingue contagem e
+modo de cobertura; alvos são recriados ao mudar resolução ou multisampling.
+A cobertura e o alfa resolvido são quantizados pelo hardware; isso não
+implementa transparência OIT nem garante paridade entre todos os drivers.
+
+O smoke alterna 1x/4x no mesmo renderer, verifica cobertura parcial nas
+bordas, a resposta do controle de A2C, alfa zero e o retorno exato ao modo
+anterior. Preserva capturas dos quatro cenários para comparação do portátil.
