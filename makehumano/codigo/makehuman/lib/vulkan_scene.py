@@ -300,6 +300,8 @@ struct Globals {
     especular: vec4<f32>,
     emissiva: vec4<f32>,
     observador: vec4<f32>,
+    shader_preset: vec4<f32>,
+    shader_parametros: vec4<f32>,
     luzes_posicao: array<vec4<f32>, 8>,
     luzes_cor: array<vec4<f32>, 8>,
 };
@@ -361,6 +363,20 @@ struct Fragmento {
         }
     }
     let direcao_visao = normalize(dados.observador.xyz - i.mundo);
+    // Port do shader GLSL xray_fragment_shader.txt do MakeHuman.
+    // Conserva o fade de contorno e os parâmetros de material originais.
+    if (dados.shader_preset.x > 0.5 && dados.shader_preset.x < 1.5) {
+        let frente = abs(dot(normal, direcao_visao));
+        let intensidade = dados.shader_parametros.z;
+        let contorno = dados.shader_parametros.x + intensidade
+                     * (1.0 - pow(frente,
+                                   max(dados.shader_parametros.y, 0.0001)));
+        let cor_vertice = select(vec3<f32>(1.0), i.cor.rgb,
+                                dados.shader_parametros.w > 0.5);
+        let cor_xray = cor_vertice
+                       + select(vec3<f32>(0.0), tex.rgb, usar_textura);
+        return vec4<f32>(contorno * cor_xray, contorno);
+    }
     for (var j: i32 = 0; j < 8; j = j + 1) {
         if (j >= i32(dados.flags.z)) {
             break;
@@ -476,6 +492,7 @@ struct Fragmento {
         self.linhas_desenhadas = 0
         self._primitivas_pendentes = set()
         self._cena_luzes = None
+        self._shaders_pendentes = set()
         self._shader_malhas = shader
         self._blend_malhas = blend
         self._pipelines_malhas = {
@@ -763,6 +780,17 @@ struct Fragmento {
                         tamanho_destino=tamanho,
                     )
                 cor, flags = parametros_material_vulkan(obj)
+                from vulkan_shader import configuracao_shader_nativo
+                modo_shader, shader_parametros, shader_pendente = (
+                    configuracao_shader_nativo(getattr(obj, "material", None))
+                )
+                if (shader_pendente and shader_pendente
+                        not in self._shaders_pendentes):
+                    self._shaders_pendentes.add(shader_pendente)
+                    print(
+                        "MAKEHUMANO_VULKAN: shader GLSL ainda não portado: "
+                        + shader_pendente, flush=True,
+                    )
                 especular, emissiva, opacidade = aparencia_material_vulkan(obj)
                 cor[3] = opacidade
                 flags[2] = float(total_luzes)
@@ -785,10 +813,14 @@ struct Fragmento {
                     raise ValueError("View original não inversível") from exc
                 observador = np.array([*posicao_camera, 1.0], np.float32)
                 normal_modelo = matriz_normal_vulkan(modelo)
+                shader_preset = np.array(
+                    [float(modo_shader), 0, 0, 0], np.float32,
+                )
                 uniforms = np.concatenate((
                     mvp.T.reshape(-1), modelo.T.reshape(-1),
                     normal_modelo.T.reshape(-1),
                     cor, flags, ambiente, especular, emissiva, observador,
+                    shader_preset, np.asarray(shader_parametros, np.float32),
                     posicoes.reshape(-1), cores.reshape(-1),
                 )).astype(np.float32)
                 buf_u = self.device.create_buffer_with_data(
