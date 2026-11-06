@@ -336,6 +336,31 @@ def criar_canvas_vulkan(canvas_original):
                         alfa.data[:, :, 0] != alfa.data[:, :, 2]
                     ).any():
                         raise RuntimeError("Máscara alfa Vulkan não é cinza")
+                    # A captura pública de produção deve renderizar uma
+                    # nova cena Vulkan, sem depender do bitmap do widget.
+                    from pathlib import Path
+                    from image import Image
+                    captura_png = str(Path(render_marker).with_suffix(".png"))
+                    pos_x = G.windowWidth // 2 - 80
+                    pos_y = G.windowHeight // 2 - 60
+                    captura = mh.grabScreen(
+                        pos_x, pos_y, 160, 120,
+                        filename=captura_png, productionRender=True,
+                    )
+                    if (captura.data.shape != (120, 160, 3)
+                            or captura.data.dtype.name != "uint8"):
+                        raise RuntimeError(
+                            "grabScreen de produção Vulkan: imagem RGB inválida"
+                        )
+                    if not os.path.isfile(captura_png):
+                        raise RuntimeError(
+                            "grabScreen de produção Vulkan: PNG não foi salvo"
+                        )
+                    gravada = Image(path=captura_png)
+                    if not np.array_equal(captura.data, gravada.data):
+                        raise RuntimeError(
+                            "grabScreen de produção Vulkan: PNG não corresponde ao RGB"
+                        )
                     with open(render_marker, "w", encoding="utf-8") as saida:
                         saida.write(
                             "vulkan-render:160x120:"
