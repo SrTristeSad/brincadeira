@@ -86,7 +86,13 @@ como no caminho original de alpha-test. A ordem dos objetos continua
 definida por `G.world` e `priority`, sem nova ordenação pela câmera.
 **A transparência ainda é parcial**: ordenação fina de faces,
 `alphaToCoverage` multisample, equivalência dos materiais especiais,
-shaders originais e testes visuais comparativos estão pendentes.
+shaders originais e comparações visuais com OpenGL estão pendentes.
+O workflow `testar-wgpu.yml` também executa quatro testes de pixels reais
+na mesma `CenaVulkan` da interface original, em canvas offscreen com
+Vulkan/Lavapipe. A regressão verifica mistura alfa, oclusão, preservação
+do depth buffer e alfa zero; os pixels são lidos da saída GPU, e não
+deduzidos apenas de configurações de pipeline. Não substitui a paridade
+visual ou funcional com os materiais da aplicação completa.
 Durante a migração, PyOpenGL permanece necessário a partes do aplicativo;
 portanto **OpenGL ainda não foi eliminado e o objetivo não foi concluído**.
 Não usar o modo experimental como editor de produção até haver paridade.
