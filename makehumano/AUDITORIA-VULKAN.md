@@ -152,11 +152,15 @@ reais e revisão humana.
    recarregado, comparando poses locais dos 163 ossos. Animações FBX/Collada,
    demais opções BVH, rigs alternativos, proxies/roupas e demais opções
    ainda precisam ser reabertos em consumidores independentes.
-7. **Legado gráfico restante:** `lib/glmodule.py` ainda contém a implementação
-   obsoleta e os métodos históricos `Object3D.draw/pick` a referenciam. O
-   renderer ativo e os serviços `mh` passam pelo Vulkan. Retirar esse arquivo
-   exige resolver/aposentar explicitamente esses contratos, sem fingir que
-   redraw da cena equivale a uma chamada de desenho dentro de um render pass.
+7. **Legado gráfico removido do repositório original:** `lib/glmodule.py`
+   foi excluído da branch experimental após varredura dos módulos da GUI,
+   plugins e testes. `Object3D.draw/pick` conservam os métodos históricos,
+   mas falham com `NotImplementedError` e explicação de migração, pois
+   desenho imediato não equivale ao redraw de uma cena Vulkan.
+   `debugdump.appendGL` continua disponível como nome histórico e
+   informa o backend Vulkan sem importar PyOpenGL. O smoke e as suítes
+   estáticas devem validar que não há imports do motor antigo.
+   Plugins externos com chamadas imediatas continuam sem equivalência.
 8. **GLSL personalizado:** não existe tradução genérica para WGSL. Os presets
    oficiais possuem rotas nativas; scripts GLSL externos continuam pendentes.
 9. **Interações completas:** os smokes chamam APIs originais e verificam pixels;
