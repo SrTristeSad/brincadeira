@@ -78,3 +78,9 @@ O defeito foi reproduzido em JavaScript isolado; o build completo e a suíte com
 Ao transferir um objeto que implementa `IAnimatable` com `clock` como propriedade simples, o `WorldClock.add()` agora o remove explicitamente do relógio anterior antes de associá-lo ao novo. Sem isso, o objeto podia receber atualizações duas vezes (uma de cada relógio). Foram adicionados três testes de regressão para transferências normais, transferências durante a atualização e adições repetidas. A interface pública permanece igual.
 
 O comportamento anterior e a correção foram reproduzidos num caso JavaScript isolado. A suíte completa do DragonBonesJS ainda não foi executada.
+
+## Proteção contra hierarquias externas corrompidas (em revisão)
+
+`WorldClock.contains()` agora detecta referências cíclicas entre objetos `IAnimatable`, retornando `false` quando o ciclo não conduz ao relógio consultado. Isso evita buscas infinitas caso alguma integração externa forneça um encadeamento de relógios inválido, sem mudar o comportamento das hierarquias válidas ou a API pública. Adicionados três testes específicos.
+
+O trecho foi compilado e executado num módulo isolado com TypeScript 5.8.3 / Node.js 22: **3 de 3 testes passaram**. A compilação completa do núcleo e a execução de toda a suíte continuam pendentes.

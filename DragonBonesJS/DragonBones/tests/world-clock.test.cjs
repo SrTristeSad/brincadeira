@@ -289,3 +289,35 @@ test("WorldClock rejects three-level cycles created with the clock setter", () =
     root.advanceTime(0.2);
     assert.equal(leaf.time, 0.2);
 });
+
+test("WorldClock.contains safely rejects an external self-cycle", () => {
+    const owner = new WorldClock();
+    const broken = new WorldClock();
+    // Simulate corrupt clock data supplied by an external runtime.
+    Object.defineProperty(broken, "clock", { configurable: true, value: broken });
+    assert.equal(owner.contains(broken), false);
+});
+
+test("WorldClock.contains safely rejects an external two-clock cycle", () => {
+    const owner = new WorldClock();
+    const first = new WorldClock();
+    const second = new WorldClock();
+    Object.defineProperty(first, "clock", { configurable: true, value: second });
+    Object.defineProperty(second, "clock", { configurable: true, value: first });
+    assert.equal(owner.contains(first), false);
+    assert.equal(owner.contains(second), false);
+});
+
+test("WorldClock.contains preserves normal descendant and self behavior", () => {
+    const root = new WorldClock();
+    const child = new WorldClock();
+    const grandchild = new WorldClock();
+    root.add(child);
+    child.add(grandchild);
+    assert.equal(root.contains(grandchild), true);
+    assert.equal(grandchild.contains(root), false);
+    assert.equal(root.contains(root), false);
+    grandchild.add(root);
+    assert.equal(root.clock, null);
+    assert.equal(grandchild.clock, child);
+});

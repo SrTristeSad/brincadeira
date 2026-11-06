@@ -171,7 +171,15 @@ namespace dragonBones {
             }
 
             let ancestor: IAnimatable | null = value;
+            const visited: Array<IAnimatable> = [];
             while (ancestor !== this && ancestor !== null) {
+                // External IAnimatable implementations may expose a corrupt clock
+                // cycle. Never let a hierarchy lookup spin forever.
+                if (visited.indexOf(ancestor) >= 0) {
+                    return false;
+                }
+
+                visited.push(ancestor);
                 ancestor = ancestor.clock;
             }
 
