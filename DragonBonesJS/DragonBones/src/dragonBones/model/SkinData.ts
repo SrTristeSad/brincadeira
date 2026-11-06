@@ -49,7 +49,7 @@ namespace dragonBones {
         /**
          * @private
          */
-        public readonly displays: Map<Array<DisplayData | null>> = {};
+        public readonly displays: Map<Array<DisplayData | null>> = Object.create(null);
         /**
          * @private
          */

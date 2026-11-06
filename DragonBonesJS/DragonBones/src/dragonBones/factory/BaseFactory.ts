@@ -51,8 +51,8 @@ namespace dragonBones {
          */
         public autoSearch: boolean = false;
 
-        protected readonly _dragonBonesDataMap: Map<DragonBonesData> = {};
-        protected readonly _textureAtlasDataMap: Map<Array<TextureAtlasData>> = {};
+        protected readonly _dragonBonesDataMap: Map<DragonBonesData> = Object.create(null);
+        protected readonly _textureAtlasDataMap: Map<Array<TextureAtlasData>> = Object.create(null);
         protected _dragonBones: DragonBones = null as any;
         protected _dataParser: DataParser = null as any;
         /**
@@ -181,7 +181,7 @@ namespace dragonBones {
                 return;
             }
 
-            const skinSlots: Map<Array<DisplayData | null>> = {};
+            const skinSlots: Map<Array<DisplayData | null>> = Object.create(null);
             for (let k in defaultSkin.displays) {
                 const displays = defaultSkin.getDisplays(k) as any;
                 skinSlots[k] = displays;
@@ -947,7 +947,7 @@ namespace dragonBones {
             }
             else {
                 const rawAnimations = armature.animation.animations;
-                const animations: Map<AnimationData> = {};
+                const animations: Map<AnimationData> = Object.create(null);
 
                 for (let k in rawAnimations) {
                     animations[k] = rawAnimations[k];

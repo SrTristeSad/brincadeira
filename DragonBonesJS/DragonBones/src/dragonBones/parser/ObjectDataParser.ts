@@ -126,10 +126,10 @@ namespace dragonBones {
         private readonly _cacheRawMeshes: Array<any> = [];
         private readonly _cacheMeshes: Array<MeshDisplayData> = [];
         private readonly _actionFrames: Array<ActionFrame> = [];
-        private readonly _weightSlotPose: Map<Array<number>> = {};
-        private readonly _weightBonePoses: Map<Array<number>> = {};
-        private readonly _cacheBones: Map<Array<BoneData>> = {};
-        private readonly _slotChildActions: Map<Array<ActionData>> = {};
+        private readonly _weightSlotPose: Map<Array<number>> = Object.create(null);
+        private readonly _weightBonePoses: Map<Array<number>> = Object.create(null);
+        private readonly _cacheBones: Map<Array<BoneData>> = Object.create(null);
+        private readonly _slotChildActions: Map<Array<ActionData>> = Object.create(null);
 
         private _getCurvePoint(x1: number, y1: number, x2: number, y2: number, x3: number, y3: number, x4: number, y4: number, t: number, result: Point): void {
             const l_t = 1.0 - t;

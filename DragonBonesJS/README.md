@@ -22,6 +22,8 @@ Alterações iniciais:
 5. Removida a opção de compilação `watch` do `tsconfig.json`, rejeitada pelo TypeScript moderno.
 6. Adicionados testes para manter a API pública tanto no build normal quanto no minificado, além de verificações da matemática original de matrizes.
 7. Mantidos e ampliados os testes de regressão de `WorldClock` e `BaseObject`.
+8. Corrigidos mapas internos indexados por nomes de ossos, slots, skins, animações, texturas e armaduras: agora usam dicionários sem protótipo para evitar colisões com chaves como `constructor` e `__proto__`.
+9. Adicionados testes de regressão para preservar nomes válidos de elementos que colidem com propriedades herdadas.
 
 ## Compilar e testar
 

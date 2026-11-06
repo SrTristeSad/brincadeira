@@ -73,7 +73,7 @@ namespace dragonBones {
         /**
          * @private
          */
-        public readonly textures: Map<TextureData> = {};
+        public readonly textures: Map<TextureData> = Object.create(null);
 
         protected _onClear(): void {
             for (let k in this.textures) {
