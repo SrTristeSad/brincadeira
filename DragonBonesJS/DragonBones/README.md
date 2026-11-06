@@ -36,3 +36,9 @@ npm run build
 Os comandos de build de Egret, PixiJS, Phaser, Hilo e Cocos foram retirados **apenas deste pacote isolado**, porque as integrações correspondentes não estão presentes nesta cópia. Isso não altera nenhum dos projetos ou motores existentes no repositório original.
 
 **Estado de validação:** as configurações foram verificadas com um projeto TypeScript mínimo, mas o núcleo inteiro ainda precisa ser compilado e testado com todas as dependências. Não presuma que um `npm install` ou `npm test` já tenha passado nesta cópia.
+
+## Dicionários internos de animação
+
+`Animation.getBlendState()` agora cria também seus mapas aninhados com `Object.create(null)`, impedindo conflitos entre nomes de bones/slots e propriedades herdadas como `constructor` ou `__proto__`. O setter `animations` passou a copiar apenas as entradas próprias e enumeráveis da origem com `Object.keys()` (disponível em ES5), evitando importar propriedades herdadas. API pública, estrutura de animações e compatibilidade com ES5 preservadas.
+
+Foram adicionados dois testes de regressão ao pacote. A compilação integral permanece pendente.

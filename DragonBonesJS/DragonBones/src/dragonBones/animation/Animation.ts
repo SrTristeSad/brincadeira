@@ -747,7 +747,9 @@ namespace dragonBones {
          */
         public getBlendState(type: string, name: string, target: BaseObject): BlendState {
             if (!(type in this._blendStates)) {
-                this._blendStates[type] = {};
+                // Blend state names are supplied by bones and slots. Prevent
+                // prototype properties from masquerading as cached states.
+                this._blendStates[type] = Object.create(null);
             }
 
             const blendStates = this._blendStates[type];
@@ -919,7 +921,9 @@ namespace dragonBones {
                 delete this._animations[k];
             }
 
-            for (let k in value) {
+            // Only copy the source's own animation names; prototype entries
+            // are not animation data and must never enter the public catalog.
+            for (const k of Object.keys(value)) {
                 this._animationNames.push(k);
                 this._animations[k] = value[k];
             }
