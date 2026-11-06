@@ -224,6 +224,8 @@ jobs:
             Remove-Item Env:MAKEHUMANO_PORTABLE_SELFTEST -ErrorAction SilentlyContinue
             python makehumano/testes/diagnostico_vulkan_windows.py
             if ($LASTEXITCODE -ne 0) { throw "Driver Vulkan de teste não funciona fora do pacote" }
+            python makehumano/testes/smoke_gui.py --log-dir source-windows-logs
+            if ($LASTEXITCODE -ne 0) { throw "Falha na GUI Windows fora do pacote" }
             python makehumano/testes/smoke_startup_failure.py dist/MakeHumano/MakeHumano.exe
             if ($LASTEXITCODE -ne 0) { throw "Falha na regressão de runtime Vulkan ausente" }
             python makehumano/testes/smoke_gui.py --executable dist/MakeHumano/MakeHumano.exe --log-dir portable-logs
@@ -258,6 +260,7 @@ jobs:
           name: Diagnostico-portatil-${{ matrix.nome }}
           path: |
             portable-logs/
+            source-windows-logs/
             build/MakeHumano/warn-MakeHumano.txt
             dist/MakeHumano/MakeHumano-erro.txt
           retention-days: 14
