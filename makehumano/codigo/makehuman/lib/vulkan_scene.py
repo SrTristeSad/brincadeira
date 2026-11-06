@@ -257,9 +257,14 @@ def configuracao_raster_vulkan(obj, *, linhas=False):
     if not np.isfinite(opacidade):
         raise ValueError("Material original: opacidade não finita")
     transparente = bool(getattr(material, "transparent", False))
+    # glmodule.drawObject() desativava glDepthMask para malhas com
+    # transparentPrimitives ao usar glAlphaFunc(GL_GREATER, 0).
+    # O Vulkan deve preservar o contrato da malha original mesmo
+    # quando material.transparent não foi marcado explicitamente.
+    recorte_alfa = bool(getattr(obj, "nTransparentPrimitives", 0))
     escrever_profundidade = (
         not linhas and not sem_profundidade
-        and not transparente and opacidade >= 1.0
+        and not transparente and not recorte_alfa and opacidade >= 1.0
     )
     comparacao = "always" if sem_profundidade else "less-equal"
     return modo_cull, escrever_profundidade, comparacao
@@ -336,7 +341,7 @@ struct Fragmento {
     o.cor = v.cor;
     return o;
 }
-@fragment fn fs_main(i: Fragmento) -> @location(0) vec4<f32> {
+fn cor_fragmento(i: Fragmento) -> vec4<f32> {
     let uv = vec2<f32>(i.uv.x, 1.0 - i.uv.y);
     let tex = textureSample(mapa, amostra, uv);
     let usar_textura = dados.flags.y > 0.5;
@@ -537,6 +542,17 @@ struct Fragmento {
     return vec4<f32>(rgb * i.cor.rgb * dados.cor.rgb * luz
                      + brilho + dados.emissiva.rgb,
                      alfa * i.cor.a * dados.cor.a);
+}
+
+@fragment fn fs_main(i: Fragmento) -> @location(0) vec4<f32> {
+    let resultado = cor_fragmento(i);
+    // Contrato original: glAlphaFunc(GL_GREATER, 0.0) descarta pixels
+    // totalmente transparentes em malhas com partes recortadas.
+    // O descarte ocorre antes de qualquer escrita de profundidade.
+    if (dados.shader_preset.z > 0.5 && resultado.a <= 0.0) {
+        discard;
+    }
+    return resultado;
 }
 """
         shader = self.device.create_shader_module(code=codigo)
@@ -990,7 +1006,12 @@ struct Fragmento {
                             "Preset skin exige ambientOcclusionMap e gradientMap"
                         )
                 shader_preset = np.array(
-                    [float(modo_shader), float(textura_ao is not None), 0, 0],
+                    [
+                        float(modo_shader),
+                        float(textura_ao is not None),
+                        float(bool(getattr(obj, "nTransparentPrimitives", 0))),
+                        0.0,
+                    ],
                     np.float32,
                 )
                 shader_extra = np.asarray(
