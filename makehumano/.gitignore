@@ -1,13 +1,27 @@
-# Python
+# Python e ambientes locais
 __pycache__/
 *.py[cod]
 .venv/
 venv/
 .pytest_cache/
 .ruff_cache/
+.mypy_cache/
+.tox/
+.nox/
+
+# Relatórios de testes e arquivos temporários
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+*.log
+*.tmp
+*.swp
+.DS_Store
+Thumbs.db
 
 # Backups temporários, não a cópia de trabalho em codigo/
 codigo-backup-*/
 .importacao-*/
 
-# NÃO ignorar codigo/: alterações do MakeHuman podem ser salvas no GitHub.
+# NÃO ignorar codigo/: alterações do MakeHuman devem ser versionadas.
