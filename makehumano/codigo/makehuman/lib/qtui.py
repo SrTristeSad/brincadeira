@@ -698,7 +698,9 @@ class Application(QtWidgets.QApplication, events3d.EventHandler):
         self.OnInit()
         self.callAsync(self.started)
         self.messages.start()
-        self.exec_()
+        exit_code = self.exec_()
+        self.messages.stop()
+        return exit_code
 
     def stop(self):
         log.notice("ABOUT TO STOP APPLICATION")

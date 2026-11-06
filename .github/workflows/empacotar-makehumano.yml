@@ -215,6 +215,8 @@ jobs:
           $env:PYTHONUTF8 = "1"
           try {
             Remove-Item Env:MAKEHUMANO_PORTABLE_SELFTEST -ErrorAction SilentlyContinue
+            python makehumano/testes/smoke_startup_failure.py dist/MakeHumano/MakeHumano.exe
+            if ($LASTEXITCODE -ne 0) { throw "Falha na regressão de runtime Vulkan ausente" }
             python makehumano/testes/smoke_gui.py --executable dist/MakeHumano/MakeHumano.exe --log-dir portable-logs
             if ($LASTEXITCODE -ne 0) { throw "Falha no smoke da GUI Windows" }
           } finally {

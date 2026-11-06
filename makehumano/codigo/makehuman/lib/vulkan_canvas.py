@@ -40,6 +40,7 @@ def criar_canvas_vulkan(canvas_original):
             self.app = app
             self.blockRedraw = False
             self._cena = None
+            self._erro_inicializacao = None
             self._pronto = False
             super().__init__(parent, update_mode="ondemand")
             G.canvas = self
@@ -224,7 +225,27 @@ def criar_canvas_vulkan(canvas_original):
                 return
             if self._cena is None:
                 print("MAKEHUMANO_VULKAN: inicializando GPU", flush=True)
-            self._garantir_cena()
+            if self._erro_inicializacao is not None:
+                return
+            try:
+                self._garantir_cena()
+            except Exception as error:
+                import sys
+                self._erro_inicializacao = error
+                sys.excepthook(*sys.exc_info())
+
+                def informar_falha():
+                    if not os.environ.get("MAKEHUMANO_SMOKE_READY_FILE"):
+                        QtWidgets.QMessageBox.critical(
+                            self, "MakeHumano — falha ao iniciar Vulkan",
+                            "Não foi possível inicializar a renderização Vulkan.\n\n"
+                            + str(self._erro_inicializacao)
+                            + "\n\nConsulte MakeHumano-erro.txt e o log de inicialização.",
+                        )
+                    QtWidgets.QApplication.exit(1)
+
+                QtCore.QTimer.singleShot(0, informar_falha)
+                return
             try:
                 self._cena.desenhar(
                     G.world, G.cameras, cor_fundo=G.clearColor,

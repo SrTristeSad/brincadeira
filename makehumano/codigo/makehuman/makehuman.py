@@ -648,12 +648,13 @@ def main():
         print("MAKEHUMANO_PORTABLE: importação da GUI OK", flush=True)
         return
     application = MHApplication()
-    application.run()
+    exit_code = application.run()
 
     #import cProfile
     #cProfile.run('application.run()')
 
     close_standard_streams()
+    return exit_code
 
 if __name__ == '__main__':
-    main()
+    raise SystemExit(main())

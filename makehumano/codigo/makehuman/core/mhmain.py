@@ -1821,7 +1821,7 @@ class MHApplication(gui3d.Application, mh.Application):
             self.switchCategory(tab.name)
 
     def run(self):
-        self.start()
+        return self.start()
 
     def addExporter(self, exporter):
         self.getCategory('Files').getTaskByName('Export').addExporter(exporter)
