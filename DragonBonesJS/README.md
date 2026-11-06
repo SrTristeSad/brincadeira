@@ -15,9 +15,11 @@ Foi importado apenas o núcleo `DragonBones/` em TypeScript, sem adicionar novas
 
 Alterações iniciais:
 
-1. Corrigido o risco de recursão infinita em `WorldClock` ao tentar criar ciclos entre relógios via `add()` ou pelo setter `clock`.
-2. Corrigido o script `build` para compilar antes de minificar, com execução sequencial via `&&`, mantendo as dependências de origem nesta primeira etapa.
-3. Adicionados testes de regressão para avanço de tempo, remoção, limpeza e ciclos em `WorldClock`.
+1. Protegidas hierarquias de `WorldClock` contra ciclos em `add()` e no setter `clock`.
+2. Corrigido `WorldClock.clear()` para soltar as referências dos objetos removidos, evitando atualizações inesperadas.
+3. Protegido o pool de `BaseObject` contra limpeza dupla e colisões com propriedades herdadas do JavaScript.
+4. Corrigida a sequência de compilação do núcleo (`tsc` antes de `uglifyjs`).
+5. Adicionados testes de regressão de `WorldClock` e `BaseObject`.
 
 ## Compilar e testar
 
@@ -30,7 +32,7 @@ npm test
 npm run build
 ```
 
-**Validação pendente:** os testes e a compilação ainda não foram executados com todas as dependências deste projeto. A compatibilidade com versões atuais de TypeScript, PixiJS, Phaser e Cocos ainda não foi validada.
+**Validação pendente:** os testes e a compilação ainda não foram executados com todas as dependências deste projeto. A revisão de código e verificações estáticas não substituem os testes de execução. A compatibilidade com versões atuais de TypeScript, PixiJS, Phaser e Cocos ainda não foi validada.
 
 ## Próximos passos
 

@@ -36,8 +36,9 @@ namespace dragonBones {
     export abstract class BaseObject {
         private static _hashCode: number = 0;
         private static _defaultMaxCount: number = 3000;
-        private static readonly _maxCountMap: Map<number> = {};
-        private static readonly _poolsMap: Map<Array<BaseObject>> = {};
+        // Use dictionaries without inherited keys, so constructor names are safe.
+        private static readonly _maxCountMap: Map<number> = Object.create(null);
+        private static readonly _poolsMap: Map<Array<BaseObject>> = Object.create(null);
 
         private static _returnObject(object: BaseObject): void {
             const classType = String(object.constructor);
@@ -179,6 +180,11 @@ namespace dragonBones {
          * @language zh_CN
          */
         public returnToPool(): void {
+            if (this._isInPool) {
+                console.warn("The object is already in the pool.");
+                return;
+            }
+
             this._onClear();
             BaseObject._returnObject(this);
         }

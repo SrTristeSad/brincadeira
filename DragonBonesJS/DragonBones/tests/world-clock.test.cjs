@@ -74,3 +74,32 @@ test("WorldClock clears all attached animatables", () => {
     assert.deepEqual(first.updates, []);
     assert.deepEqual(second.updates, []);
 });
+
+test("WorldClock.clear discards references and does not resume removed animatables", () => {
+    const clock = new WorldClock();
+    const first = animatable();
+    clock.add(first);
+    clock.clear();
+    clock.advanceTime(0.1);
+    assert.deepEqual(first.updates, []);
+
+    const second = animatable();
+    clock.add(second);
+    clock.advanceTime(0.2);
+    assert.deepEqual(first.updates, []);
+    assert.deepEqual(second.updates, [0.2]);
+});
+
+test("WorldClock.clear detaches nested clocks without clearing their own contents", () => {
+    const parent = new WorldClock();
+    const child = new WorldClock();
+    const leaf = animatable();
+    child.add(leaf);
+    parent.add(child);
+    parent.clear();
+    assert.equal(child.clock, null);
+    parent.advanceTime(0.2);
+    assert.deepEqual(leaf.updates, []);
+    child.advanceTime(0.3);
+    assert.deepEqual(leaf.updates, [0.3]);
+});

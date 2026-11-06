@@ -11,7 +11,7 @@
     "build-cocos": "cd .. & cd Cocos & cd 1.x & npm run build & cd .. & cd .. & cd DragonBones",
     "build-all": "npm run build-egret & npm run build-pixi & npm run build-phaser & npm run build-hilo & npm run build-cocos",
     "build:ts": "tsc --project tsconfig.json",
-    "test": "npm run build:ts && node --test tests/world-clock.test.cjs"
+    "test": "npm run build:ts && node --test"
   },
   "devDependencies": {
     "typescript": "^2.4.2",

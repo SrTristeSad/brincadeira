@@ -235,6 +235,9 @@ namespace dragonBones {
                     animatable.clock = null;
                 }
             }
+
+            // Drop all references, including those without a clock setter.
+            this._animatebles.length = 0;
         }
         /**
          * @inheritDoc
