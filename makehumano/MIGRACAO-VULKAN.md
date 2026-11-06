@@ -23,6 +23,7 @@
 | `mh.Texture` | `vulkan_texture.Texture` em memória CPU | Implementação provisória |
 | Material `.mhmat` | Difusa, opacidade, brilho especular, emissão, back/front cull, depthless | Pipeline WGSL; equivalência visual pendente |
 | Malhas com `transparentPrimitives` | Desativa escrita de profundidade e descarta fragmentos de alfa zero (`glAlphaFunc(GL_GREATER, 0)` original) | Smoke GPU de camadas sobrepostas; alpha-to-coverage/MSAA pendentes |
+| Camadas translúcidas | Composição de opacos antes de transparências, ordenação back-to-front pelo centro da malha dentro de cada bloco de `priority`/`cameraMode`; overlays `depthless` por último | Smoke GPU com duas camadas alpha em ordens de entrada invertidas; ordenação por triângulo pendente |
 | Normal maps `.mhmat` | Textura e intensidade originais; base tangente derivada de UVs no fragmento | Pipeline validada na CI; comparação visual pendente |
 | Iluminação `.mhscene` | Até oito luzes pontuais, ambiente e reflexo Blinn-Phong | Aproximação; falta atenuação/foco/especular de cena |
 | Shader xray original (.mhmat) | WGSL nativo com `edgefalloff`, `intensity`, cor ambiente e alfa de contorno | Execução GPU validada; comparar imagem |
@@ -70,7 +71,7 @@ python -m unittest discover -s makehumano/testes -p 'test_*wgpu.py' -v
 ## Pendências que impedem o lançamento
 
 - Alcançar equivalência **visual** dos seis presets oficiais WGSL. Normalmap deriva tangentes no fragmento, Skin usa gradiente de uma linha em textura 2D, e Phong incorporou AO; diferenças com o GLSL original ainda precisam ser quantificadas. GLSL arbitrário continua sem compilação.
-- Concluir a ordenação de superfícies translúcidas, blend de múltiplas camadas e `alphaToCoverage`/MSAA; os recortes com alfa zero e `transparentPrimitives` já foram corrigidos no depth buffer e testados na GPU.
+- Aperfeiçoar a transparência de cabelos e roupas entrelaçadas: já existe ordenação back-to-front pelo centro da malha e smoke para duas camadas; faltam ordenação de triângulos dentro da mesma malha, `alphaToCoverage`/MSAA e equivalência visual no modelo completo.
 - Reproduzir atenuação/especular/foco das luzes de cena, outros comportamentos avançados de materiais. A transformação de normais já usa inversa-transposta do modelo.
 - Criar testes comparativos de imagens, incluindo reflexos, alfa, normal maps e culling, porque o smoke só verifica inicialização e integridade básica.
 - Completar paridade de `renderSkin` para formatos de imagem, texturas dinâmicas e render pass acumulativo.
