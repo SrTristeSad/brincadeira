@@ -257,3 +257,12 @@ verificação de separadores Windows roda no runner Windows.
 A chave resolve aliases reais de arquivo, acompanhando Material.getFilePath:
 nomes curtos 8.3, junctions e links simbólicos não devem criar uma segunda
 cópia de trabalho da mesma textura.
+
+
+O exportador original de mapa UV agora deduplica pares de índices uint32
+sem empacotamento em 16 bits, preservando malhas com mais de 65.536 UVs e
+removendo arestas degeneradas. mapUV chama o serviço Vulkan diretamente;
+falhas de GPU são propagadas, sem mascará-las pelo rasterizador CPU legado.
+O smoke passa pelo ExporterUV original, salva e relê PNG RGB 2048x2048 e
+verifica arestas brancas e fundo preto. A captura entra na comparação entre
+fontes e executável.

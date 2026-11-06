@@ -86,6 +86,16 @@ def check_original_tools(app, report_path):
         if not triangles or len(stl) != 84 + 50 * triangles:
             raise RuntimeError("STL binário contém contagem de triângulos inválida")
 
+        # Chama o exportador original: não basta testar renderSkin isolado.
+        uv_path = report.parent / "uv-map.png"
+        app.modules["9_export_uvmap"].ExporterUV().export(human, lambda ext: str(uv_path))
+        from image import Image
+        uv_pixels = Image(path=str(uv_path)).data
+        if uv_pixels.shape != (2048, 2048, 3):
+            raise RuntimeError("Exportador UV não produziu PNG RGB 2048x2048")
+        if not np.any(np.all(uv_pixels == 255, axis=2)) or not np.any(np.all(uv_pixels == 0, axis=2)):
+            raise RuntimeError("Exportador UV não desenhou arestas brancas sobre fundo preto")
+
         import mh
         solid_before = human.isSolid()
         try:
@@ -111,7 +121,7 @@ def check_original_tools(app, report_path):
             "modifier_undo_redo": True,
             "wireframe": True,
             "rig_pose": rig_pose,
-            "exports": ["obj", "fbx-binary", "collada", "stl-binary"],
+            "exports": ["obj", "fbx-binary", "collada", "stl-binary", "uv-png"],
             "plugins": sorted(name for name, module in app.modules.items() if module),
         }, indent=2), encoding="utf-8")
     finally:
