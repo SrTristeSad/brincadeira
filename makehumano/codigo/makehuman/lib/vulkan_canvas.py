@@ -46,6 +46,9 @@ def criar_canvas_vulkan(canvas_original):
             # do primeiro request_adapter. O runtime deve existir ANTES.
             from vulkan_runtime import preparar_runtime_vulkan
             preparar_runtime_vulkan()
+            if os.environ.get("MAKEHUMANO_VULKAN_DEBUG") == "1":
+                import wgpu
+                wgpu.logger.setLevel("DEBUG")
             super().__init__(parent, update_mode="ondemand")
             G.canvas = self
             self.setFocusPolicy(QtCore.Qt.TabFocus)
