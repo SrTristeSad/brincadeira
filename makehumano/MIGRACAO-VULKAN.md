@@ -147,3 +147,9 @@ homogêneas equivalentes pela API `mh.renderSkin`.
 A divisão projectiva por W/Q ocorre no fragmento, após interpolar as
 coordenadas homogêneas. Um cenário GPU com Q variável detecta a distorção
 que ocorreria dividindo as coordenadas ainda no vertex shader.
+
+A projeção usa destino `rgba8unorm` próprio para compor bytes das imagens,
+independente do formato sRGB/BGRA da janela. O readback considera o formato
+da textura alvo, evitando trocar canais quando o destino difere do swapchain.
+O teste GPU detectou a mistura incorreta ao herdar sRGB e valida novamente os
+valores RGBA esperados da composição sobre a imagem existente.
