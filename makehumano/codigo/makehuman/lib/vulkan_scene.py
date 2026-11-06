@@ -404,7 +404,7 @@ def arestas_wireframe(faces):
 class _MaterialWireframe:
     shader = None
     shaderParameters = {}
-    shaderConfig = {"normal": False, "bump": False, "diffuse": False, "spec": False, "transparency": False}
+    shaderConfig = {"normal": False, "bump": False, "ambientOcclusion": False, "diffuse": False, "spec": False, "transparency": False}
     normalMapTexture = None
     transparent = False
 
@@ -545,6 +545,9 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
     let spec_map = textureSample(mapa_especular, amostra, uv).rgb;
     let spec_factor = mix(vec3<f32>(1.0), spec_map, dados.mapas_parametros.x);
     let cor_especular = dados.especular.rgb * spec_factor;
+    let ao_factor = mix(vec3<f32>(1.0),
+                        textureSample(mapa_ao, amostra, uv).rgb,
+                        dados.mapas_parametros.w);
     let usar_textura = dados.flags.y > 0.5;
     let rgb = select(vec3<f32>(1.0), tex.rgb, usar_textura);
     let alfa = select(1.0, tex.a, usar_textura);
@@ -619,13 +622,10 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
         return vec4<f32>(cor_skin, tex.a * dados.cor.a);
     }
     // Phong original: iluminação por fragmento, uma luz, cor difusa,
-    // ambiente e especular do Material. AO e luzes avançadas pendentes.
+    // ambiente, especular e mapa AO do Material original.
     if (dados.shader_preset.x > 2.5 && dados.shader_preset.x < 3.5) {
         let ambiente_phong = dados.ambiente.rgb * dados.shader_parametros.xyz;
-        var tex_phong = rgb;
-        if (dados.shader_preset.y > 0.5) {
-            tex_phong *= textureSample(mapa_ao, amostra, uv).rgb;
-        }
+        let tex_phong = rgb * ao_factor;
         var color_phong = ambiente_phong * tex_phong * dados.cor.rgb;
         if (dados.flags.z > 0.5) {
             let light_dir = normalize(dados.luzes_posicao[0].xyz - i.mundo);
@@ -759,7 +759,8 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
     }
     let luz = select(iluminacao, vec3<f32>(1.0), dados.flags.x > 0.5);
     let brilho = select(reflexo, vec3<f32>(0.0), dados.flags.x > 0.5);
-    return vec4<f32>(rgb * i.cor.rgb * dados.cor.rgb * luz
+    let oclusao = select(ao_factor, vec3<f32>(1.0), dados.flags.x > 0.5);
+    return vec4<f32>(rgb * oclusao * i.cor.rgb * dados.cor.rgb * luz
                      + brilho + dados.emissiva.rgb,
                      alfa * i.cor.a * dados.cor.a);
 }
@@ -1227,11 +1228,10 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
                 observador = np.array([*posicao_camera, 1.0], np.float32)
                 normal_modelo = matriz_normal_vulkan(modelo)
                 textura_ao = None
+                forca_ao = 0.0
                 textura_gradiente = None
-                if modo_shader == 3:
-                    config = getattr(material_obj, "shaderConfig", {}) or {}
-                    if config.get("ambientOcclusion", True):
-                        textura_ao = textura_ao_shader_nativa(material_obj)
+                if modo_shader in (0, 3):
+                    textura_ao, forca_ao = parametros_mapa(material_obj, "ao")
                 elif modo_shader == 6:
                     textura_ao, textura_gradiente = (
                         texturas_skin_nativas(material_obj)
@@ -1259,7 +1259,7 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
                 mapa_bump, forca_bump = (None, 0.0)
                 if caminho_normal is None:
                     mapa_bump, forca_bump = parametros_mapa(material_obj, "bump")
-                mapas_parametros = np.array([forca_spec, forca_trans, forca_bump, 0.0], np.float32)
+                mapas_parametros = np.array([forca_spec, forca_trans, forca_bump, forca_ao], np.float32)
                 uniforms = np.concatenate((
                     mvp.T.reshape(-1), modelo.T.reshape(-1),
                     normal_modelo.T.reshape(-1), view.T.reshape(-1),

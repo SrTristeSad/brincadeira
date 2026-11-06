@@ -117,3 +117,19 @@ não estão implementadas pelo renderer Vulkan.
 Os smokes opcionais `vulkan_smoke_materials.py` e `vulkan_smoke_lighting.py`
 renderizam pela mesma cena Vulkan da interface original e conservam capturas
 e marcadores JSON. Não constituem um editor ou renderer alternativo.
+
+### Bump e oclusão ambiente
+
+O renderer interpreta `bumpMapTexture`/`bumpMapIntensity` como altura linear
+(média RGB). O gradiente da altura perturba a normal em coordenadas de mundo,
+sem alterar a malha, UVs, picking ou cobertura alfa. Altura constante, força
+zero e `shaderConfig.bump=False` preservam a iluminação anterior. Normal maps
+têm prioridade sobre bump, como em `Material._updateShaderConfig`. Isso não
+implementa displacement nem substitui sombras.
+
+`aoMapTexture`/`aoMapIntensity` e os nomes de uniforms originais são respeitados
+no material básico e no Phong: mistura entre branco e o mapa pela intensidade.
+AO modula a cor difusa sem apagar reflexão especular ou emissão; o material
+básico shadeless ignora o mapa. O Skin conserva seu uso próprio do canal azul
+para o gradiente de iluminação. Os smokes verificam mapas constantes, altura
+variável, intensidade zero, controles desligados e prioridade de normal maps.

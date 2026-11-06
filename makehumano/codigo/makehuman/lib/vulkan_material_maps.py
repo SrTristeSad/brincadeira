@@ -3,6 +3,7 @@ import math
 import os
 
 _MAPAS = {
+    "ao": ("ambientOcclusion", "aoMapTexture", "aomapTexture", "aoMapIntensity", "aomapIntensity"),
     "bump": ("bump", "bumpMapTexture", "bumpmapTexture", "bumpMapIntensity", "bumpmapIntensity"),
     "specular": ("spec", "specularMapTexture", "specularmapTexture", "specularMapIntensity", "specularmapIntensity"),
     "transparency": ("transparency", "transparencyMapTexture", "transparencymapTexture", "transparencyMapIntensity", "transparencymapIntensity"),
@@ -25,6 +26,8 @@ def parametros_mapa(material, tipo):
     texture = params.get(param)
     if texture is None:
         texture = getattr(material, attr, None)
+    if texture is None and tipo == "ao":
+        texture = params.get("ambientOcclusionMap")
     if texture is None:
         return None, 0.0
     value = params.get(intensity_param, getattr(material, intensity_attr, 1.0))

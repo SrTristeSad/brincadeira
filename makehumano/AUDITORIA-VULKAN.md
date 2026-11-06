@@ -26,14 +26,14 @@ em `motor_wgpu`. O estado abaixo distingue testes exercitados de paridade final.
 
 ## Validação local
 
-A suíte completa executou **246 testes com sucesso**, usando Python 3.12,
+A suíte completa executou **250 testes com sucesso**, usando Python 3.12,
 NumPy 2.5.4 e Qt 5.15.14. Os testes Qt de gravação PNG verificam os canais,
 alfa e imagens com largura não alinhada. Os dados binários verificam Unicode
 em grupos de malha, tags de proxies e metadados de licença. A criação local do
 pacote Linux e a importação congelada também foram exercitadas; os testes GPU
 e GUI são executados nos runners dos workflows vinculados ao commit.
 
-A comparação adicional de 23 PNGs entre fontes Windows e executável exige
+A comparação adicional de 29 PNGs entre fontes Windows e executável exige
 igualdade exata de pixels no mesmo driver. As capturas são sincronizadas com
 fim de startup para não comparar iluminação ainda não carregada. Essa
 verificação detecta diferenças do empacotamento; não substitui equivalência
@@ -45,10 +45,12 @@ com o renderer original nem validação em outra GPU.
    de integração, não uma matriz de drivers NVIDIA/AMD/Intel. Não classificar
    um artefato como aprovado enquanto o smoke Windows estiver falhando.
 2. **Paridade de materiais e shaders:** os seis presets executam em WGSL, mas
-   ainda faltam referências comparativas do original. Bump/displacement
-   ainda não possuem cobertura completa no
+   ainda faltam referências comparativas do original. Displacement
+   ainda não possui cobertura completa no
    shader atual. Mapas especulares e de transparência separados agora têm
-   testes analíticos GPU, incluindo intensidade zero. A interface pode expor parâmetros
+   testes analíticos GPU, incluindo intensidade zero. Bump altera as normais
+   por gradiente de altura, com prioridade para normal maps. AO agora respeita
+   intensidade no material básico e no Phong. A interface pode expor parâmetros
    cujos efeitos não são integralmente implementados.
 3. **Iluminação avançada:** sombras e luzes de área continuam pendentes.
    Foco, ângulo total do cone e atenuação quadrática agora afetam os presets

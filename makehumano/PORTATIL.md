@@ -32,14 +32,14 @@ exige simultaneamente:
 - picking, framebuffer offscreen, `renderToBuffer`, `renderAlphaMask`, `renderSkin`;
 - execução dos seis presets oficiais WGSL, normal maps e composição alfa;
 - alteração real da malha pelo modificador `macrodetails/Age`, undo e redo no histórico original;
-- mapas especulares e transparência separados, incluindo intensidade zero;
+- mapas especulares, transparência, bump e AO, incluindo intensidade zero, altura constante e prioridade dos normal maps;
 - foco, ângulo e atenuação das luzes com comparação de pixels e regressão dos widgets originais;
 - salvamento e recarregamento `.mhm`, com comparação das coordenadas;
 - exportação OBJ com vértices/faces, FBX binário com cabeçalho, Collada com geometria XML e STL binário com contagem/tamanho dos triângulos;
 - carregamento dos plugins de modificadores, materiais, OBJ, FBX, Collada e STL;
 - resposta do controle wireframe, com arestas pretas e imagem diferente da superfície sólida;
 - processo ainda vivo e ausência de traceback ou erro de render no log;
-- no Windows, igualdade exata de 23 capturas PNG entre fontes e executável. As
+- no Windows, igualdade exata de 29 capturas PNG entre fontes e executável. As
   capturas só são geradas após terminar a carga da iluminação, plugins e targets.
 
 Isso **não** comprova equivalência visual dos shaders, todos os controles da

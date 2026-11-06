@@ -13,6 +13,8 @@ FRAMES = (
     "map-transparency-grey", "map-transparency-clear",
     "light-point", "light-attenuated", "light-spot", "light-spot-away",
     "bump-disabled", "bump-enabled",
+    "ao-grey", "ao-black",
+    "ao-phong-white", "ao-phong-black",
 )
 
 

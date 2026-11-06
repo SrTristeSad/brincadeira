@@ -149,8 +149,52 @@ def validar_mapas(cena, cameras, mundo, marker):
             raise RuntimeError("Bump substituiu o normal map prioritário do material original")
         Image(data=baseline).save(str(path.parent / "bump-disabled.png"))
         Image(data=bumped).save(str(path.parent / "bump-enabled.png"))
+        material = Material()
+        material.diffuseColor = SimpleNamespace(values=(1., 1., 1.))
+        material.shaderConfig = {"normal": False, "bump": False, "diffuse": False,
+                                 "spec": False, "transparency": False, "ambientOcclusion": True}
+        reference_ao = render(material)
+        material.aoMapTexture = white
+        if not np.array_equal(reference_ao, render(material)):
+            raise RuntimeError("Mapa AO branco alterou o material")
+        material.aoMapTexture = grey
+        grey_ao = render(material)
+        material.aoMapTexture = black
+        black_ao = render(material)
+        if np.any(black_ao[:, :, :3]) or not np.any(black_ao[:, :, 3]):
+            raise RuntimeError("Mapa AO preto não suprimiu apenas a iluminação difusa")
+        if not 0 < int(grey_ao[:, :, :3].sum()) < int(reference_ao[:, :, :3].sum()):
+            raise RuntimeError("Mapa AO cinza não reduziu a iluminação")
+        material.aoMapIntensity = 0.
+        if not np.array_equal(reference_ao, render(material)):
+            raise RuntimeError("Intensidade AO zero alterou o material")
+        material.aoMapIntensity = 1.
+        material.shaderConfig["ambientOcclusion"] = False
+        if not np.array_equal(reference_ao, render(material)):
+            raise RuntimeError("Mapa AO desligado alterou o material")
+        Image(data=grey_ao).save(str(path.parent / "ao-grey.png"))
+        Image(data=black_ao).save(str(path.parent / "ao-black.png"))
+        # O preset Phong usa a mesma intensidade, conservando o brilho
+        # especular separado do fator de oclusão da cor difusa.
+        from getpath import getSysDataPath
+        material.shader = getSysDataPath("shaders/glsl/phong")
+        material.shaderConfig["ambientOcclusion"] = True
+        material.aoMapTexture = None
+        phong_reference = render(material)
+        material.aoMapTexture = white
+        if not np.array_equal(phong_reference, render(material)):
+            raise RuntimeError("AO branco alterou o preset Phong")
+        material.aoMapTexture = black
+        phong_black = render(material)
+        if np.any(phong_black[:, :, :3]) or not np.any(phong_reference[:, :, :3]):
+            raise RuntimeError("AO preto não suprimiu a cor difusa do Phong")
+        material.aoMapIntensity = 0.
+        if not np.array_equal(phong_reference, render(material)):
+            raise RuntimeError("Phong ignorou intensidade AO zero")
+        Image(data=phong_reference).save(str(path.parent / "ao-phong-white.png"))
+        Image(data=phong_black).save(str(path.parent / "ao-phong-black.png"))
         path.write_text(json.dumps({"specular": True, "transparency": True,
                                    "zero_intensity": True, "bump": True,
-                                   "normal_precedence": True}), encoding="utf-8")
+                                   "normal_precedence": True, "ao": True}), encoding="utf-8")
     finally:
         cena.atualizar_iluminacao(previous)

@@ -32,6 +32,16 @@ class MaterialMaps(unittest.TestCase):
             with self.subTest(values=values):
                 self.assertEqual(parametros_mapa(self.material(bumpMapTexture="missing.png", **values), "bump"), (None, 0))
 
+    def test_ao_original_and_official_shader_alias(self):
+        image = object()
+        self.assertEqual(parametros_mapa(self.material(aoMapTexture=image, aoMapIntensity=.5), "ao"), (image, .5))
+        self.assertEqual(parametros_mapa(self.material(shaderParameters={"ambientOcclusionMap": image}), "ao"), (image, 1))
+
+    def test_ao_zero_or_disabled_does_not_load_missing_map(self):
+        for values in ({"shaderConfig": {"ambientOcclusion": False}}, {"aoMapIntensity": 0}):
+            with self.subTest(values=values):
+                self.assertEqual(parametros_mapa(self.material(aoMapTexture="missing.png", **values), "ao"), (None, 0))
+
     def test_dynamic_shader_parameters_and_scalar_list(self):
         image = object()
         mat = self.material(shaderParameters={"transparencymapTexture": image,
