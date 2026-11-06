@@ -76,6 +76,11 @@ O teste de CI `vulkan-gui-original` tenta abrir a **GUI original** com esse
 canvas e exige pelo menos um objeto real renderizado por Vulkan.
 **Limitações:** picking, transparência, todos os shaders, renderização
 offscreen, parte dos materiais e plugins gráficos ainda não foram migrados.
+No piloto Vulkan, o cache de texturas de arquivos verifica modificações
+por metadados do sistema de arquivos e recarrega imagens substituídas no
+mesmo caminho (inclusive substituições atômicas e arquivos que surgem depois).
+Esse comportamento recupera parte da invalidação já existente no OpenGL
+original; ainda não contempla todas as modalidades de texturas dinâmicas.
 Durante a migração, PyOpenGL permanece necessário a partes do aplicativo;
 portanto **OpenGL ainda não foi eliminado e o objetivo não foi concluído**.
 Não usar o modo experimental como editor de produção até haver paridade.
