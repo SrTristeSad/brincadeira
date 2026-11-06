@@ -182,7 +182,12 @@ fn shadow_box(origin: vec3<f32>, direction: vec3<f32>, node: ShadowNode, limit: 
     return true;
 }
 fn shadow_edge(a: vec2<f32>, b: vec2<f32>) -> f32 {
-    return a.x*b.y - a.y*b.x;
+    let products = a * b.yx;
+    let value = products.x-products.y;
+    // Shared reversed edges can round differently under fused operations.
+    // Snap only within a float32 roundoff bound, then apply half-open edges.
+    let roundoff = (abs(products.x)+abs(products.y))*0.00000048;
+    return select(value, 0.0, abs(value) <= roundoff);
 }
 fn shadow_inclusive(a: vec2<f32>, b: vec2<f32>, orientation: f32) -> bool {
     let delta = (b-a)*orientation;

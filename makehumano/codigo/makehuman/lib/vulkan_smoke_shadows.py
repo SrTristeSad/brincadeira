@@ -122,7 +122,16 @@ def validar_sombras(cena, cameras, mundo, directory):
             expected = on[:, :, :3].astype(float) + fraction*(off[:, :, :3].astype(float)-on[:, :, :3])
             error = np.max(np.abs(image[:, :, :3].astype(float)[dark]-expected[dark]))
             if error > 3.:
-                raise RuntimeError(f'Sombra {label}: transmissão incorreta, erro máximo {error}')
+                debug_path = Path(directory)
+                np.savez_compressed(debug_path/'shadow-alpha-failure.npz', off=off, on=on,
+                    actual=image, mask=dark, fraction=fraction, receiver=receiver.verts,
+                    blocker=blocker.verts, model=model, view=view, light=np.asarray(light.position))
+                for name, pixels in [('before', off), ('opaque', on), ('actual', image)]:
+                    Image(data=pixels).save(str(debug_path/('shadow-alpha-failure-'+name+'.png')))
+                delta = np.max(np.abs(image[:, :, :3].astype(float)-expected), axis=2)*dark
+                y, x = np.unravel_index(np.argmax(delta), delta.shape)
+                raise RuntimeError(f'Sombra {label}: erro máximo {error} em {x},{y}; '
+                    f'antes={off[y,x,:3].tolist()}, opaco={on[y,x,:3].tolist()}, atual={image[y,x,:3].tolist()}')
 
         blocker.material.opacity = .5
         half = render()
