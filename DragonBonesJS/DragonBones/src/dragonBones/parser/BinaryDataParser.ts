@@ -214,7 +214,8 @@ namespace dragonBones {
 
             if (DataParser.BONE in rawData) {
                 const rawTimeliness = rawData[DataParser.BONE];
-                for (let k in rawTimeliness) {
+                // Ignore inherited entries from externally supplied timeline maps.
+                for (const k of Object.keys(rawTimeliness || {})) {
                     const rawTimelines = rawTimeliness[k] as Array<number>;
                     const bone = this._armature.getBone(k);
                     if (bone === null) {
@@ -232,7 +233,7 @@ namespace dragonBones {
 
             if (DataParser.SLOT in rawData) {
                 const rawTimeliness = rawData[DataParser.SLOT];
-                for (let k in rawTimeliness) {
+                for (const k of Object.keys(rawTimeliness || {})) {
                     const rawTimelines = rawTimeliness[k] as Array<number>;
                     const slot = this._armature.getSlot(k);
                     if (slot === null) {
@@ -250,7 +251,7 @@ namespace dragonBones {
 
             if (DataParser.CONSTRAINT in rawData) {
                 const rawTimeliness = rawData[DataParser.CONSTRAINT];
-                for (let k in rawTimeliness) {
+                for (const k of Object.keys(rawTimeliness || {})) {
                     const rawTimelines = rawTimeliness[k] as Array<number>;
                     const constraint = this._armature.getConstraint(k);
                     if (constraint === null) {
