@@ -116,6 +116,82 @@ def validar_sombras(cena, cameras, mundo, directory):
         if not np.array_equal(visible_receiver, render(production=True)):
             raise RuntimeError('Objeto excluído da produção ainda projetou sombra')
         blocker.excludeFromProduction = False
+        # Fração transmitida é medida no receptor, fora da projeção visual
+        # dos cartões. A área dark foi determinada por um oclusor opaco.
+        def check_fraction(image, fraction, label):
+            expected = on[:, :, :3].astype(float) + fraction*(off[:, :, :3].astype(float)-on[:, :, :3])
+            error = np.max(np.abs(image[:, :, :3].astype(float)[dark]-expected[dark]))
+            if error > 3.:
+                raise RuntimeError(f'Sombra {label}: transmissão incorreta, erro máximo {error}')
+
+        blocker.material.opacity = .5
+        half = render()
+        check_fraction(half, .5, 'opacidade 50% ou diagonal duplicada')
+        blocker.material.opacity = 1.
+        blocker.color = Object.color.copy()
+        blocker.color[:, 3] = 128
+        check_fraction(render(), 1.-128./255., 'alfa dos vértices')
+        blocker.color[:, 3] = 255
+        from vulkan_texture import Texture
+        rgba = np.full((32, 32, 4), 255, np.uint8)
+        rgba[:, :, 3] = 0
+        rgba[:16, :16, 3] = 255
+        texture = Texture(image=Image(data=rgba))
+        blocker.texture = texture
+        blocker.isTextured = True
+        blocker.hasUVs = True
+        blocker.UVs = np.array([[0., 0.], [1., 0.], [1., 1.], [0., 1.]], np.float32)
+        cutout = render()
+        difference = np.sum(off[:, :, :3].astype(float)-on[:, :, :3], axis=2)
+        transmitted = np.sum(cutout[:, :, :3].astype(float)-on[:, :, :3], axis=2)
+        if np.count_nonzero(dark & (transmitted > .9*difference)) < 5:
+            raise RuntimeError('Textura recortada não deixou a luz passar pelos buracos')
+        if np.count_nonzero(dark & (transmitted < .1*difference)) < 3:
+            raise RuntimeError('Textura recortada não preservou a sombra da região opaca')
+        # UVs independentes assimétricas verificam também a origem superior.
+        from vulkan_scene import matriz_wgpu
+        mvp = matriz_wgpu(camera, receiver, tamanho_origem=(G.windowWidth, G.windowHeight), tamanho_destino=(160, 120))
+        for u, v, expected_fraction in ((.25, .75, 0.), (.25, .25, 1.), (.75, .75, 1.)):
+            offset = scale*np.array([(4./3.)*.28*(2*u-1)-2./3., (4./3.)*.28*(2*v-1), 0.])
+            point = center+basis@offset
+            clip = mvp@np.array([*point, 1.])
+            x, y = np.floor((clip[:2]/clip[3]*[.5, -.5]+[.5, .5])*[160, 120]).astype(int)
+            expected = on[y, x, :3].astype(float)+expected_fraction*(off[y, x, :3].astype(float)-on[y, x, :3])
+            if np.max(np.abs(cutout[y, x, :3].astype(float)-expected)) > 3.:
+                raise RuntimeError(f'Sombra recortada ignorou UV/orientação em {u}, {v}')
+        rgba[:, :, 3] = 0
+        texture.loadImage(Image(data=rgba))
+        check_fraction(render(), 1., 'edição alpha em memória')
+        rgba[:, :, 3] = 255
+        texture.loadImage(Image(data=rgba))
+        check_fraction(render(), 0., 'restauração alpha opaco')
+        rgba[:, :, 3] = 128
+        texture.loadImage(Image(data=rgba))
+        check_fraction(render(), 1.-128./255., 'alfa parcial da textura')
+        blocker.texture = None
+        blocker.isTextured = False
+        blocker.hasUVs = False
+        blocker.material.transparencyMapTexture = Image(data=np.full((4, 4, 3), 128, np.uint8))
+        blocker.material.transparencyMapIntensity = 1.
+        check_fraction(render(), 128./255., 'mapa de transparência')
+        blocker.material.transparencyMapIntensity = 0.
+        check_fraction(render(), 0., 'intensidade zero do mapa')
+        blocker.material.transparencyMapIntensity = 1.
+        blocker.material.shaderConfig['transparency'] = False
+        check_fraction(render(), 0., 'mapa desativado')
+        blocker.material.transparencyMapTexture = None
+        blocker.material.shaderConfig.clear()
+        blocker.material.opacity = .5
+        second = Object()
+        second.material = material(True, False)
+        second.material.opacity = .5
+        second.verts = quad(.28*2.5/3., 1.5) + basis@np.array([scale/3., 0., 0.])
+        layers = render([receiver, blocker, second])
+        check_fraction(layers, .25, 'duas camadas de 50%')
+        reordered = render([second, blocker, receiver])
+        if not np.array_equal(layers, reordered):
+            raise RuntimeError('Ordem dos objetos alterou a transmissão das sombras')
+        blocker.material.opacity = 1.
         light.areaLights = 8
         light.areaLightSize = scale*2.
         soft = render()
@@ -131,11 +207,14 @@ def validar_sombras(cena, cameras, mundo, directory):
         if not np.array_equal(original_receiver, receiver.verts):
             raise RuntimeError('Sombras alteraram a malha receptora')
         path = Path(directory)
-        for name, image in [('shadow-off', off), ('shadow-point', on), ('shadow-area', soft)]:
+        for name, image in [('shadow-off', off), ('shadow-point', on), ('shadow-area', soft),
+                            ('shadow-cutout', cutout), ('shadow-opacity', half), ('shadow-layers', layers)]:
             Image(data=image).save(str(path / (name+'.png')))
         (path/'shadows.json').write_text(json.dumps(dict(point=True, area_penumbra=True,
             cast_receive=True, original_widgets=True, mhmat_roundtrip=True,
             behind_receiver=True, production_exclusion=True,
-            mesh_preserved=True, partial_pixels=int(np.count_nonzero(partial)))), encoding='utf-8')
+            mesh_preserved=True, alpha_cutout=True, alpha_uv_orientation=True,
+            texture_edit=True, vertex_alpha=True, opacity=True, transparency_map=True,
+            layered_transmission=True, order_independent=True, partial_pixels=int(np.count_nonzero(partial)))), encoding='utf-8')
     finally:
         cena.atualizar_iluminacao(previous)

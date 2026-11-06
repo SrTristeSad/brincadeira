@@ -87,12 +87,25 @@ class ShadowBVH(unittest.TestCase):
             return object()
         scene = SimpleNamespace(device=SimpleNamespace(create_buffer_with_data=upload),
                                 wgpu=SimpleNamespace(BufferUsage=SimpleNamespace(STORAGE=1)))
-        with patch('vulkan_shadows.triangulos_cena', return_value=triangles):
+        from vulkan_shadow_alpha import SURFACE_DTYPE
+        surfaces = np.zeros(1, SURFACE_DTYPE)
+        pixels = np.array([0xffffffff], np.uint32)
+        with patch('vulkan_shadows.dados_cena', return_value=(triangles, surfaces, pixels)):
             a = preparar_buffers(scene, [], [])
             b = preparar_buffers(scene, [], [])
             self.assertIs(a[0], b[0])
-            self.assertEqual(len(uploads), 2)
+            self.assertEqual(len(uploads), 4)
             triangles[0, 0, 0] = 1
             c = preparar_buffers(scene, [], [])
             self.assertIsNot(a[0], c[0])
-            self.assertEqual(len(uploads), 4)
+            self.assertEqual(len(uploads), 6)
+            pixels[0] = 0
+            d = preparar_buffers(scene, [], [])
+            self.assertIs(c[0], d[0])
+            self.assertIsNot(c[3], d[3])
+            self.assertEqual(len(uploads), 8)
+            surfaces['uv2_opacity'][0, 2] = .5
+            e = preparar_buffers(scene, [], [])
+            self.assertIs(d[0], e[0])
+            self.assertIsNot(d[2], e[2])
+            self.assertEqual(len(uploads), 10)

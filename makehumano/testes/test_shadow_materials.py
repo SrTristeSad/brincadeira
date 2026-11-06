@@ -42,19 +42,19 @@ class ShadowMaterials(unittest.TestCase):
         self.assertEqual(len(self.triangles()), 2)
         self.assertEqual(len(self.triangles(production=True)), 0)
 
-    def test_translucency_and_alpha_cutouts_are_not_opaque_occluders(self):
+    def test_translucency_and_alpha_cutouts_keep_geometry_for_gpu_coverage(self):
         self.obj.material.transparent = True
-        self.assertEqual(len(self.triangles()), 0)
+        self.assertEqual(len(self.triangles()), 2)
         self.obj.material.transparent = False
         self.obj.material.opacity = .5
-        self.assertEqual(len(self.triangles()), 0)
+        self.assertEqual(len(self.triangles()), 2)
         self.obj.material.opacity = 1.
         self.obj.color[0, 3] = 0
-        self.assertEqual(len(self.triangles()), 0)
+        self.assertEqual(len(self.triangles()), 2)
         self.obj.color[0, 3] = 255
         self.obj.isTextured = True
         self.obj.texture = SimpleNamespace(data=np.array([[[255, 255, 255, 0]]], np.uint8))
-        self.assertEqual(len(self.triangles()), 0)
+        self.assertEqual(len(self.triangles()), 2)
         self.obj.texture.data[:, :, 3] = 255
         self.assertEqual(len(self.triangles()), 2)
 
@@ -70,4 +70,4 @@ class ShadowMaterials(unittest.TestCase):
         np.testing.assert_array_equal(self.obj.verts, original)
         self.obj.primitives = np.array([[0, 1, 2, 3], [0, 1, 2, 3]], np.uint32)
         self.obj.nTransparentPrimitives = 1
-        np.testing.assert_array_equal(self.triangles(), result)
+        np.testing.assert_array_equal(self.triangles(), np.concatenate((result[:1], result[:1], result[1:], result[1:])))

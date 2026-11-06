@@ -21,6 +21,7 @@ FRAMES = (
     "msaa-off", "msaa-4x", "alpha-to-coverage", "alpha-blend-msaa",
     "rig-rest", "rig-tpose",
     "shadow-off", "shadow-point", "shadow-area",
+    "shadow-cutout", "shadow-opacity", "shadow-layers",
     "uv-map",
     "displacement-off", "displacement-on",
     "projection-original", "projection-displaced", "projection-painted-viewport",

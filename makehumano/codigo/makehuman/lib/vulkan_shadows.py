@@ -2,7 +2,7 @@
 
 Não há rasterizador CPU nem dependência de extensões de ray tracing. A árvore
 é achatada em pré-ordem, com índices de escape para percurso sem pilha GPU.
-Nesta etapa somente superfícies opacas lançam sombras.
+A cobertura do Material original controla recorte e transmissão escalar.
 """
 import hashlib
 import numpy as np
@@ -81,12 +81,12 @@ def reajustar_bvh(triangles, nodes, order, levels):
     return packed
 
 
-def triangulos_cena(mundo, cameras, production=False):
-    from vulkan_scene import preparar_malha_original, mapa_transparencia_ativo
-    from vulkan_texture import getTexture
-    from vulkan_scene import pixels_textura_rgba
+def dados_cena(mundo, cameras, production=False):
+    from vulkan_scene import preparar_malha_original
+    from vulkan_shadow_alpha import superficies, PixelsSombra
     from vulkan_shader import nome_preset_nativo
-    result = []
+    result, surface_data = [], []
+    pixels = PixelsSombra()
     for obj in mundo or ():
         material = getattr(obj, 'material', None)
         if (not obj.visibility or obj.cameraMode != 0 or getattr(obj, 'depthless', False)
@@ -98,67 +98,61 @@ def triangulos_cena(mundo, cameras, production=False):
             continue
         if nome_preset_nativo(getattr(material, 'shader', None)) == 'xray':
             continue
-        if (getattr(material, 'transparent', False)
-                or float(getattr(material, 'opacity', 1.)) < 1.
-                or mapa_transparencia_ativo(material)):
-            continue
-        # Não projetar o retângulo opaco de texturas com recortes alpha.
-        # Oclusão com transmissão/recorte requer outro contrato de material.
-        if getattr(obj, 'isTextured', False) and getattr(obj, 'texture', None) is not None:
-            resource = obj.texture
-            if isinstance(resource, (str, bytes)) or hasattr(resource, '__fspath__'):
-                resource = getTexture(resource)
-            from image import Image
-            if isinstance(resource, Image):
-                resource = getTexture(resource)
-            if resource is not None and hasattr(resource, 'data'):
-                rgba = pixels_textura_rgba(np.asarray(resource.data))
-                if np.any(rgba[:, :, 3] < 255):
-                    continue
-        if np.any(np.asarray(obj.color)[:, 3] < 255):
-            continue
-        # Faces translúcidas originais ficam no fim da lista de primitivas.
-        opaque = len(faces) - min(max(int(getattr(obj, 'nTransparentPrimitives', 0)), 0), len(faces))
-        if not opaque:
-            continue
         vertices, indices = preparar_malha_original(obj)
         indices = indices.reshape(-1, 3)
-        if faces.shape[1] == 4:
-            mask = np.arange(len(faces)) < opaque
-            raw = np.concatenate((faces[:, [0, 1, 2]], faces[:, [0, 2, 3]]))
-            valid = (raw[:, 0] != raw[:, 1]) & (raw[:, 1] != raw[:, 2]) & (raw[:, 0] != raw[:, 2])
-            indices = raw[valid & np.tile(mask, 2)]
-        elif opaque < len(faces):
-            raw = faces[:opaque]
-            indices = raw[(raw[:, 0] != raw[:, 1]) & (raw[:, 1] != raw[:, 2]) & (raw[:, 0] != raw[:, 2])]
+        if not len(indices):
+            continue
+        surface_data.append(superficies(obj, vertices, indices, pixels))
         model = np.asarray(cameras[obj.cameraMode].getModelMatrix(obj), np.float32)
         if model.shape != (4, 4) or not np.isfinite(model).all():
             raise ValueError('Modelo original inválido para sombras')
         positions = vertices[:, :3] @ model[:3, :3].T + model[:3, 3]
         result.append(positions[indices])
-    return np.ascontiguousarray(np.concatenate(result) if result else np.empty((0, 3, 3)), dtype=np.float32)
+    from vulkan_shadow_alpha import SURFACE_DTYPE
+    triangles = np.ascontiguousarray(np.concatenate(result) if result else np.empty((0, 3, 3)), dtype=np.float32)
+    surfaces = np.concatenate(surface_data) if surface_data else np.zeros(0, SURFACE_DTYPE)
+    return triangles, surfaces, pixels.pixels()
+
+
+def triangulos_cena(mundo, cameras, production=False):
+    """Geometria visível dos oclusores, sem excluir faces só por serem alpha."""
+    return dados_cena(mundo, cameras, production)[0]
 
 
 def preparar_buffers(cena, mundo, cameras, production=False):
-    triangles = triangulos_cena(mundo, cameras, production)
+    from vulkan_shadow_alpha import SURFACE_DTYPE
+    triangles, surfaces, pixels = dados_cena(mundo, cameras, production)
     signature = hashlib.blake2b(triangles, digest_size=16).digest()
     cache = getattr(cena, '_shadow_cache', None)
-    if cache is not None and cache[0] == signature:
-        return cache[1:]
-    topology = getattr(cena, '_shadow_topology', None)
-    if topology is not None and len(topology[1]) == len(triangles):
-        nodes, order, levels = topology
-        packed = reajustar_bvh(triangles, nodes, order, levels)
-    else:
-        nodes, packed, order, levels = construir_bvh(triangles, metadata=True)
-        cena._shadow_topology = (nodes, order, levels)
     usage = cena.wgpu.BufferUsage.STORAGE
-    node_buffer = cena.device.create_buffer_with_data(data=nodes if len(nodes) else np.zeros(1, NODE_DTYPE), usage=usage)
-    triangle_buffer = cena.device.create_buffer_with_data(data=packed if len(packed) else np.zeros((1, 3, 4), np.float32), usage=usage)
-    extent = float(np.linalg.norm(np.ptp(triangles.reshape(-1, 3), axis=0))) if len(triangles) else 1.
-    bias = max(1e-6, extent*2e-5)
-    cena._shadow_cache = (signature, node_buffer, triangle_buffer, len(nodes), bias)
-    return cena._shadow_cache[1:]
+    if cache is None or cache[0] != signature:
+        topology = getattr(cena, '_shadow_topology', None)
+        if topology is not None and len(topology[1]) == len(triangles):
+            nodes, order, levels = topology
+            packed = reajustar_bvh(triangles, nodes, order, levels)
+        else:
+            nodes, packed, order, levels = construir_bvh(triangles, metadata=True)
+            cena._shadow_topology = (nodes, order, levels)
+        node_buffer = cena.device.create_buffer_with_data(data=nodes if len(nodes) else np.zeros(1, NODE_DTYPE), usage=usage)
+        triangle_buffer = cena.device.create_buffer_with_data(data=packed if len(packed) else np.zeros((1, 3, 4), np.float32), usage=usage)
+        extent = float(np.linalg.norm(np.ptp(triangles.reshape(-1, 3), axis=0))) if len(triangles) else 1.
+        bias = max(1e-6, extent*2e-5)
+        cache = cena._shadow_cache = (signature, node_buffer, triangle_buffer, len(nodes), bias)
+    order = cena._shadow_topology[1]
+    ordered_surfaces = np.ascontiguousarray(surfaces[order])
+    hasher = hashlib.blake2b(ordered_surfaces, digest_size=16)
+    hasher.update(pixels)
+    alpha_signature = hasher.digest()
+    alpha_cache = getattr(cena, '_shadow_alpha_cache', None)
+    if alpha_cache is None or alpha_cache[0] != alpha_signature:
+        limit = getattr(cena.device, 'limits', {}).get('max-storage-buffer-binding-size', 128*1024*1024)
+        if max(ordered_surfaces.nbytes, pixels.nbytes) > limit:
+            raise ValueError('Dados alpha de sombras excedem o limite de storage buffer do dispositivo')
+        surface_buffer = cena.device.create_buffer_with_data(
+            data=ordered_surfaces if len(ordered_surfaces) else np.zeros(1, SURFACE_DTYPE), usage=usage)
+        pixel_buffer = cena.device.create_buffer_with_data(data=pixels, usage=usage)
+        alpha_cache = cena._shadow_alpha_cache = (alpha_signature, surface_buffer, pixel_buffer)
+    return cache[1], cache[2], alpha_cache[1], alpha_cache[2], cache[3], cache[4]
 
 
 WGSL = """
@@ -187,21 +181,42 @@ fn shadow_box(origin: vec3<f32>, direction: vec3<f32>, node: ShadowNode, limit: 
     }
     return true;
 }
-fn shadow_hit(origin: vec3<f32>, direction: vec3<f32>, triangle: ShadowTriangle, limit: f32, bias: f32) -> bool {
-    let edge1 = triangle.b.xyz - triangle.a.xyz;
-    let edge2 = triangle.c.xyz - triangle.a.xyz;
-    let p = cross(direction, edge2);
-    let determinant = dot(edge1, p);
-    if (abs(determinant) < 0.00000001) { return false; }
-    let inverse = 1.0 / determinant;
-    let delta = origin - triangle.a.xyz;
-    let u = dot(delta, p) * inverse;
-    if (u < 0.0 || u > 1.0) { return false; }
-    let q = cross(delta, edge1);
-    let v = dot(direction, q) * inverse;
-    if (v < 0.0 || u + v > 1.0) { return false; }
-    let distance = dot(edge2, q) * inverse;
-    return distance > bias && distance < limit - bias;
+fn shadow_edge(a: vec2<f32>, b: vec2<f32>) -> f32 {
+    return a.x*b.y - a.y*b.x;
+}
+fn shadow_inclusive(a: vec2<f32>, b: vec2<f32>, orientation: f32) -> bool {
+    let delta = (b-a)*orientation;
+    return delta.y > 0.0 || (delta.y == 0.0 && delta.x < 0.0);
+}
+fn shadow_hit(origin: vec3<f32>, direction: vec3<f32>, triangle: ShadowTriangle, limit: f32, bias: f32) -> vec3<f32> {
+    // Project onto the plane perpendicular to the dominant ray component.
+    // Half-open edges assign a shared diagonal to exactly one triangle;
+    // otherwise partial alpha would attenuate twice along a quad's seam.
+    var kz = 0u;
+    if (abs(direction.y) > abs(direction[kz])) { kz = 1u; }
+    if (abs(direction.z) > abs(direction[kz])) { kz = 2u; }
+    let kx = (kz+1u)%3u;
+    let ky = (kx+1u)%3u;
+    let shear = vec2<f32>(direction[kx], direction[ky])/direction[kz];
+    let a = triangle.a.xyz-origin;
+    let b = triangle.b.xyz-origin;
+    let c = triangle.c.xyz-origin;
+    let pa = vec2<f32>(a[kx], a[ky])-shear*a[kz];
+    let pb = vec2<f32>(b[kx], b[ky])-shear*b[kz];
+    let pc = vec2<f32>(c[kx], c[ky])-shear*c[kz];
+    let weights = vec3<f32>(shadow_edge(pb, pc), shadow_edge(pc, pa), shadow_edge(pa, pb));
+    let determinant = weights.x+weights.y+weights.z;
+    let miss = vec3<f32>(-1.0);
+    if (abs(determinant) < 0.000000000001) { return miss; }
+    let orientation = sign(determinant);
+    if (any(weights*orientation < vec3<f32>(0.0))) { return miss; }
+    if (weights.x == 0.0 && !shadow_inclusive(pb, pc, orientation)) { return miss; }
+    if (weights.y == 0.0 && !shadow_inclusive(pc, pa, orientation)) { return miss; }
+    if (weights.z == 0.0 && !shadow_inclusive(pa, pb, orientation)) { return miss; }
+    let barycentric = weights/determinant;
+    let distance = dot(barycentric, vec3<f32>(a[kz], b[kz], c[kz]))/direction[kz];
+    if (distance <= bias || distance >= limit-bias) { return miss; }
+    return barycentric;
 }
 fn shadow_visibility(position: vec3<f32>, light: vec3<f32>) -> f32 {
     let count = u32(dados.amostragem_luzes.z);
@@ -212,6 +227,7 @@ fn shadow_visibility(position: vec3<f32>, light: vec3<f32>) -> f32 {
     if (distance <= 2.0 * bias) { return 1.0; }
     let direction = delta / distance;
     var index = 0u;
+    var visibility = 1.0;
     loop {
         if (index >= count) { break; }
         let node = shadow_nodes[index];
@@ -221,11 +237,16 @@ fn shadow_visibility(position: vec3<f32>, light: vec3<f32>) -> f32 {
             index += 1u;
         } else {
             for (var t = 0u; t < node.span.y; t++) {
-                if (shadow_hit(position, direction, shadow_triangles[node.span.x + t], distance, bias)) { return 0.0; }
+                let triangle_index = node.span.x + t;
+                let barycentric = shadow_hit(position, direction, shadow_triangles[triangle_index], distance, bias);
+                if (barycentric.x >= 0.0) {
+                    visibility *= 1.0-shadow_alpha(triangle_index, barycentric);
+                    if (visibility <= 0.0) { return 0.0; }
+                }
             }
             index = node.span.z;
         }
     }
-    return 1.0;
+    return visibility;
 }
 """

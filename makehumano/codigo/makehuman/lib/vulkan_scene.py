@@ -803,6 +803,8 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
 }
 """
         from vulkan_shadows import WGSL as sombras_wgsl
+        from vulkan_shadow_alpha import WGSL as alpha_sombras_wgsl
+        sombras_wgsl = alpha_sombras_wgsl + sombras_wgsl
         shader = self.device.create_shader_module(code=codigo.replace("__CAPACIDADE_LUZES__", str(MAX_LUZES_VULKAN)).replace("__SOMBRAS_WGSL__", sombras_wgsl))
         # Preserva a cobertura alpha dos materiais (inclusive textura alpha)
         # para que a máscara de produção venha da GPU, não da captura Qt.
@@ -1193,7 +1195,7 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
         cores_especulares = cores_especulares_cena(cena_amostrada, MAX_LUZES_VULKAN)
         direcoes_luzes, atenuacoes_luzes = parametros_foco_atenuacao(cena_amostrada, MAX_LUZES_VULKAN)
         from vulkan_shadows import preparar_buffers
-        shadow_nodes, shadow_triangles, shadow_count, shadow_bias = preparar_buffers(
+        shadow_nodes, shadow_triangles, shadow_surfaces, shadow_pixels, shadow_count, shadow_bias = preparar_buffers(
             self, mundo, cameras, productionRender,
         )
         amostragem_luzes = np.array([amostras_primeira, 0., shadow_count, shadow_bias], np.float32)
@@ -1389,6 +1391,8 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
                         wgpu.BindGroupEntry(binding=9, resource=textura_altura.create_view()),
                         wgpu.BindGroupEntry(binding=10, resource=wgpu.BufferBinding(buffer=shadow_nodes)),
                         wgpu.BindGroupEntry(binding=11, resource=wgpu.BufferBinding(buffer=shadow_triangles)),
+                        wgpu.BindGroupEntry(binding=12, resource=wgpu.BufferBinding(buffer=shadow_surfaces)),
+                        wgpu.BindGroupEntry(binding=13, resource=wgpu.BufferBinding(buffer=shadow_pixels)),
                     ],
                 )
                 passagem.set_bind_group(0, bind)
