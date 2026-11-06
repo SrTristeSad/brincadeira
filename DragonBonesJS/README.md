@@ -46,3 +46,11 @@ npm run build
 - Avaliar integrações com motores gráficos somente depois da estabilização do núcleo.
 
 **Regra:** todos os arquivos alterados ou adicionados neste trabalho devem permanecer dentro de `DragonBonesJS/`. Não modificar outras pastas do repositório.
+
+## Etapa de empacotamento (em revisão)
+
+- `DragonBones/package.json` passa a declarar caminhos reais de entrada JavaScript e de tipos TypeScript, mantendo a saída ES5 existente.
+- O pacote inclui a própria cópia da licença MIT e declara os artefatos gerados como conteúdo distribuível.
+- Comandos antigos para integrações gráficas ausentes são removidos apenas do subpacote `DragonBones/`.
+- Testes adicionais verificam, após o build, se os pontos de entrada existem e se o pacote pode ser carregado pelo Node.
+- **Não há execução confirmada do build integral**: qualquer falha remanescente do TypeScript 5.8.3 precisa ser corrigida antes de considerar o núcleo estável.
