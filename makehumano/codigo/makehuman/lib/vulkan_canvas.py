@@ -1069,6 +1069,9 @@ def criar_canvas_vulkan(canvas_original):
                     from vulkan_smoke_displacement import validar_displacement
                     validar_displacement(self._cena, G.cameras, G.world,
                                          str(Path(caminho).parent / "displacement.json"))
+                    from vulkan_smoke_points import validar_pontos
+                    validar_pontos(self._cena, G.cameras, G.world,
+                                   str(Path(caminho).parent / "points.json"))
                     with open(caminho, "w", encoding="utf-8") as saida:
                         saida.write(
                             "vulkan-makehuman-original:"
