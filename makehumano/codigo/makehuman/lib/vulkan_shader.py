@@ -9,7 +9,7 @@ suporte a shaders personalizados enquanto ainda não foram convertidos.
 # Apenas presets portados e testados entram no seletor original.
 # Shader.supported() continua False: isso descreve compilação de GLSL,
 # que ainda não existe em Vulkan.
-PRESETS_NATIVOS = frozenset(("xray", "litsphere"))
+PRESETS_NATIVOS = frozenset(("xray", "litsphere", "phong", "toon"))
 
 
 def nome_preset_nativo(caminho):
@@ -46,7 +46,8 @@ def configuracao_shader_nativo(material):
     """Resolve presets GLSL originais portados explicitamente para WGSL.
 
     Retorna (modo, controles, nome_pendente). Não compila nem interpreta GLSL.
-    mode 0 = shader de material padrão; 1 = xray; 2 = litsphere.
+    mode 0 = material padrão; 1 = xray; 2 = litsphere; 3 = phong;
+    mode 4 = toon. Os parâmetros extras do toon ficam em função separada.
     Um preset desconhecido fica identificado como pendente, sem fingir
     que foi convertido.
     """
@@ -64,6 +65,24 @@ def configuracao_shader_nativo(material):
         return 0, (0.0, 0.0, 0.0, 0.0), nome
 
     parametros = getattr(material, "shaderParameters", {}) or {}
+    if nome == "phong":
+        ambient = getattr(material, "ambientColor", None)
+        rgb = getattr(ambient, "values", ambient)
+        if rgb is None:
+            rgb = (0.2, 0.2, 0.2)
+        if len(rgb) != 3 or not all(math.isfinite(float(c)) for c in rgb):
+            raise ValueError("Shader phong: ambientColor RGB inválido")
+        return 3, tuple(float(v) for v in rgb) + (0.0,), None
+    if nome == "toon":
+        return 4, tuple(
+            _parametro_numerico(parametros, key, default, nome)
+            for key, default in (
+                ("silhouetteThreshold", 0.2),
+                ("shininess", 20.0),
+                ("ambientIntensity", 0.4),
+                ("specularIntensity", 0.2),
+            )
+        ), None
     if nome == "litsphere":
         aditivo = parametros.get("AdditiveShading", 0.0)
         if isinstance(aditivo, (tuple, list)) and len(aditivo) == 1:
@@ -110,6 +129,35 @@ def configuracao_shader_nativo(material):
         None,
     )
 
+
+
+def _parametro_numerico(parametros, chave, padrao, nome_shader):
+    """Lê um parâmetro escalar do material original (incluindo listas .mhmat)."""
+    import math
+
+    valor = parametros.get(chave, padrao)
+    if isinstance(valor, (list, tuple)):
+        if len(valor) != 1:
+            raise ValueError("Shader " + nome_shader + ": vetor inválido: " + chave)
+        valor = valor[0]
+    numero = float(valor)
+    if not math.isfinite(numero):
+        raise ValueError("Shader " + nome_shader + ": " + chave + " não finito")
+    return numero
+
+
+def parametros_extras_shader_nativo(material):
+    """Quatro floats extras WGSL; toon usa três controles de iluminação."""
+    caminho = getattr(material, "shader", None)
+    if nome_preset_nativo(caminho) != "toon":
+        return (0.0, 0.0, 0.0, 0.0)
+    parametros = getattr(material, "shaderParameters", {}) or {}
+    return (
+        _parametro_numerico(parametros, "diffuseIntensity", 0.4, "toon"),
+        _parametro_numerico(parametros, "specular_th", 0.3, "toon"),
+        _parametro_numerico(parametros, "diffuse_th", 0.5, "toon"),
+        0.0,
+    )
 
 def textura_litsphere_nativa(material):
     """Obtém imagem ou caminho da LitSphere pelos parâmetros do .mhmat.
