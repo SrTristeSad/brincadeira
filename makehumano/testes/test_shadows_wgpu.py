@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import unittest
 import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'codigo/makehuman/lib'))
-from vulkan_shadows import construir_bvh, NODE_DTYPE, preparar_buffers
+from vulkan_shadows import construir_bvh, NODE_DTYPE, preparar_buffers, reajustar_bvh
 
 
 class ShadowBVH(unittest.TestCase):
@@ -52,6 +52,24 @@ class ShadowBVH(unittest.TestCase):
         self.assertEqual(len(triangles), 65)
         self.assertEqual(int(nodes['span'][0, 2]), len(nodes))
         self.assertLess(len(nodes), 2*len(source))
+
+    def test_refit_bounds_follow_deformation_without_reordering_topology(self):
+        source = np.random.default_rng(1).normal(size=(71, 3, 3)).astype(np.float32)
+        nodes, packed, order, levels = construir_bvh(source, metadata=True)
+        spans = nodes['span'].copy()
+        source[:, :, 0] *= -3
+        source[:, :, 1] += 20
+        packed = reajustar_bvh(source, nodes, order, levels)
+        np.testing.assert_array_equal(nodes['span'], spans)
+        np.testing.assert_array_equal(packed[:, :, :3], source[order])
+        for index, node in enumerate(nodes):
+            escape = int(node['span'][2])
+            leaves = nodes[index:escape]
+            leaves = leaves[leaves['span'][:, 1] > 0]
+            points = np.concatenate([packed[int(n['span'][0]):int(n['span'][0]+n['span'][1]), :, :3]
+                                     for n in leaves])
+            np.testing.assert_allclose(node['minimum'][:3], points.min(axis=(0, 1)))
+            np.testing.assert_allclose(node['maximum'][:3], points.max(axis=(0, 1)))
 
     def test_invalid_geometry_is_not_silently_ignored(self):
         for source in (np.zeros((1, 3)), np.full((1, 3, 3), np.nan)):

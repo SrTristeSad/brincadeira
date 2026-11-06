@@ -10,7 +10,7 @@ import numpy as np
 NODE_DTYPE = np.dtype([('minimum', '<f4', 4), ('maximum', '<f4', 4), ('span', '<u4', 4)])
 
 
-def construir_bvh(triangles, leaf_size=8):
+def construir_bvh(triangles, leaf_size=8, *, metadata=False):
     triangles = np.asarray(triangles, dtype=np.float32)
     if triangles.shape == (0,):
         triangles = triangles.reshape(0, 3, 3)
@@ -19,7 +19,8 @@ def construir_bvh(triangles, leaf_size=8):
     if leaf_size < 1:
         raise ValueError('Folhas da BVH devem conter ao menos um triângulo')
     if not len(triangles):
-        return np.zeros(0, NODE_DTYPE), np.zeros((0, 3, 4), np.float32)
+        empty = (np.zeros(0, NODE_DTYPE), np.zeros((0, 3, 4), np.float32))
+        return (*empty, np.zeros(0, np.intp), ()) if metadata else empty
     minimum = triangles.min(axis=1)
     maximum = triangles.max(axis=1)
     centers = (minimum + maximum) * .5
@@ -49,7 +50,35 @@ def construir_bvh(triangles, leaf_size=8):
         result['span'][index, :3] = (first, count, escape)
     packed = np.zeros((len(triangles), 3, 4), np.float32)
     packed[:, :, :3] = triangles[ordered]
-    return result, packed
+    if not metadata:
+        return result, packed
+    levels, current = [], np.array([0], np.intp)
+    while len(current):
+        internal = current[result['span'][current, 1] == 0]
+        if not len(internal):
+            break
+        levels.append(internal)
+        left = internal+1
+        current = np.concatenate((left, result['span'][left, 2])).astype(np.intp)
+    return result, packed, np.asarray(ordered, np.intp), tuple(reversed(levels))
+
+
+def reajustar_bvh(triangles, nodes, order, levels):
+    """Recalcula limites após morph/pose sem particionar novamente a malha."""
+    packed = np.zeros((len(order), 3, 4), np.float32)
+    if not len(order):
+        return packed
+    packed[:, :, :3] = triangles[order]
+    leaves = np.flatnonzero(nodes['span'][:, 1])
+    starts = nodes['span'][leaves, 0]
+    nodes['minimum'][leaves, :3] = np.minimum.reduceat(packed[:, :, :3].min(axis=1), starts, axis=0)
+    nodes['maximum'][leaves, :3] = np.maximum.reduceat(packed[:, :, :3].max(axis=1), starts, axis=0)
+    for internal in levels:
+        left = internal+1
+        right = nodes['span'][left, 2]
+        nodes['minimum'][internal, :3] = np.minimum(nodes['minimum'][left, :3], nodes['minimum'][right, :3])
+        nodes['maximum'][internal, :3] = np.maximum(nodes['maximum'][left, :3], nodes['maximum'][right, :3])
+    return packed
 
 
 def triangulos_cena(mundo, cameras, production=False):
@@ -76,6 +105,9 @@ def triangulos_cena(mundo, cameras, production=False):
             resource = obj.texture
             if isinstance(resource, (str, bytes)) or hasattr(resource, '__fspath__'):
                 resource = getTexture(resource)
+            from image import Image
+            if isinstance(resource, Image):
+                resource = getTexture(resource)
             if resource is not None and hasattr(resource, 'data'):
                 rgba = pixels_textura_rgba(np.asarray(resource.data))
                 if np.any(rgba[:, :, 3] < 255):
@@ -97,6 +129,8 @@ def triangulos_cena(mundo, cameras, production=False):
             raw = faces[:opaque]
             indices = raw[(raw[:, 0] != raw[:, 1]) & (raw[:, 1] != raw[:, 2]) & (raw[:, 0] != raw[:, 2])]
         model = np.asarray(cameras[obj.cameraMode].getModelMatrix(obj), np.float32)
+        if model.shape != (4, 4) or not np.isfinite(model).all():
+            raise ValueError('Modelo original inválido para sombras')
         positions = vertices[:, :3] @ model[:3, :3].T + model[:3, 3]
         result.append(positions[indices])
     return np.ascontiguousarray(np.concatenate(result) if result else np.empty((0, 3, 3)), dtype=np.float32)
@@ -108,7 +142,13 @@ def preparar_buffers(cena, mundo, cameras, production=False):
     cache = getattr(cena, '_shadow_cache', None)
     if cache is not None and cache[0] == signature:
         return cache[1:]
-    nodes, packed = construir_bvh(triangles)
+    topology = getattr(cena, '_shadow_topology', None)
+    if topology is not None and len(topology[1]) == len(triangles):
+        nodes, order, levels = topology
+        packed = reajustar_bvh(triangles, nodes, order, levels)
+    else:
+        nodes, packed, order, levels = construir_bvh(triangles, metadata=True)
+        cena._shadow_topology = (nodes, order, levels)
     usage = cena.wgpu.BufferUsage.STORAGE
     node_buffer = cena.device.create_buffer_with_data(data=nodes if len(nodes) else np.zeros(1, NODE_DTYPE), usage=usage)
     triangle_buffer = cena.device.create_buffer_with_data(data=packed if len(packed) else np.zeros((1, 3, 4), np.float32), usage=usage)
