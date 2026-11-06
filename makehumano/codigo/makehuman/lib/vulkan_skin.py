@@ -165,7 +165,7 @@ struct Saida {
         ),
         fragment=wgpu.FragmentState(
             module=shader, entry_point="fs_skin",
-            targets=[wgpu.ColorTargetState(format=cena.formato, blend=blend)],
+            targets=[wgpu.ColorTargetState(format="rgba8unorm", blend=blend)],
         ),
     )
     cache[linhas] = pipeline
@@ -191,14 +191,14 @@ def render_skin(cena, dst, vertsPerPrimitive, verts, index=None,
     geometria, indices, linhas = preparar_skin(
         vertsPerPrimitive, verts, index, UVs, color,
     )
-    textura_alvo = cena.framebuffer_offscreen(largura, altura)
+    # Projeção compõe bytes de imagens; não herda a transferência sRGB
+    # do swapchain, que alteraria a mistura e cada passe acumulado.
+    textura_alvo = cena.framebuffer_offscreen(largura, altura, formato="rgba8unorm")
     limpa = True
     if clearColor is None and origem is not None:
         rgba = pixels_textura_rgba(origem)
         if rgba.shape[:2] != (altura, largura):
             raise ValueError("Tamanho dos pixels de destino incompatível")
-        if cena.formato.startswith("bgra"):
-            rgba = np.ascontiguousarray(rgba[:, :, [2, 1, 0, 3]])
         cena.device.queue.write_texture(
             wgpu.TexelCopyTextureInfo(
                 texture=textura_alvo, mip_level=0, origin=(0, 0, 0),

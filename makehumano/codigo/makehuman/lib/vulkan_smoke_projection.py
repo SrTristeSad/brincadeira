@@ -45,7 +45,7 @@ def validar_projecao(marker):
     mh.renderSkin(destination, 4, vertices, color=colors)
     first = destination.data.copy()
     if not np.all(np.abs(first[16, 16].astype(int) - [128, 0, 127, 255]) <= 1):
-        raise RuntimeError("Pintura não compôs alfa sobre a textura existente")
+        raise RuntimeError(f"Pintura não compôs alfa sobre a textura existente: {first[16, 16].tolist()}")
     model = np.eye(4, dtype=np.float32)
     model[0, 3] = .5
     colors[:] = [0, 255, 0, 255]

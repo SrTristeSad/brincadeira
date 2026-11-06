@@ -996,20 +996,21 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
         self._texturas[chave] = (assinatura, textura)
         return textura
 
-    def framebuffer_offscreen(self, largura, altura):
+    def framebuffer_offscreen(self, largura, altura, *, formato=None):
         """Aloca destino de renderização legível pela CPU, fora do swapchain."""
         from vulkan_offscreen import bytes_por_linha_alinhados
         largura, altura = int(largura), int(altura)
         bytes_por_linha_alinhados(largura)
         if altura < 1:
             raise ValueError("Altura offscreen deve ser positiva")
-        if self.formato not in ("rgba8unorm", "rgba8unorm-srgb",
+        formato = self.formato if formato is None else formato
+        if formato not in ("rgba8unorm", "rgba8unorm-srgb",
                                 "bgra8unorm", "bgra8unorm-srgb"):
-            raise ValueError("Formato de framebuffer não suportado: " + str(self.formato))
+            raise ValueError("Formato de framebuffer não suportado: " + str(formato))
         return self.device.create_texture(
             size=(largura, altura, 1),
             dimension="2d",
-            format=self.formato,
+            format=formato,
             usage=self.wgpu.TextureUsage.RENDER_ATTACHMENT
                   | self.wgpu.TextureUsage.COPY_SRC
                   | self.wgpu.TextureUsage.COPY_DST,
@@ -1046,7 +1047,7 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
             dados = buffer.read_mapped(copy=True)
         finally:
             buffer.unmap()
-        return decodificar_buffer_rgba(dados, largura, altura, self.formato)
+        return decodificar_buffer_rgba(dados, largura, altura, alvo.format)
 
     def ler_framebuffer_rgb(self, alvo):
         """Lê RGB do framebuffer Vulkan, mantendo o contrato original."""
