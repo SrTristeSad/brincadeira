@@ -60,12 +60,15 @@ def validar_proxies(app, directory):
         if selection()[0].getUuid() != low_uuid:
             raise RuntimeError('Redo não restaurou os olhos de baixa resolução')
         before = selection()[1].coord.copy()
+        low_image = capture()
         value = -.8 if original_value > .2 else .8
         app.do(ModifierAction(modifier, original_value, value, lambda: None))
         after = selection()[1].coord.copy()
         if np.allclose(before, after, atol=1e-5):
             raise RuntimeError('Proxy de olhos não acompanhou o morph original da cabeça')
         deformed_image = capture()
+        if np.array_equal(low_image, deformed_image):
+            raise RuntimeError('Vulkan não exibiu a deformação do proxy original')
         app.undo()
         np.testing.assert_allclose(selection()[1].coord, before, atol=2e-5)
         app.redo()
@@ -86,7 +89,7 @@ def validar_proxies(app, directory):
         Image(data=high_image).save(str(directory/'proxy-eyes-high.png'))
         Image(data=deformed_image).save(str(directory/'proxy-eyes-deformed.png'))
         result = dict(original_loader=True, high_vertices=high_count, low_vertices=low_count,
-            selection_undo_redo=True, morph_binding=True, morph_undo_redo=True,
+            selection_undo_redo=True, morph_binding=True, morph_visible=True, morph_undo_redo=True,
             mhm_uuid_roundtrip=True, image_roundtrip=True)
     finally:
         modifier.setValue(original_value)
