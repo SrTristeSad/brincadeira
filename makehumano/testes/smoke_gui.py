@@ -28,6 +28,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--executable", type=Path, help="Testar binário congelado")
     parser.add_argument("--log-dir", type=Path, help="Preservar logs da CI")
+    parser.add_argument("--multisampling", action="store_true", help="Exercitar a opção original MSAA")
     args = parser.parse_args()
     if sys.platform != "win32" and not os.environ.get("DISPLAY"):
         print("DISPLAY não definido. Execute com xvfb-run ou em desktop X11.", file=sys.stderr)
@@ -84,6 +85,8 @@ def main():
 
         command = ([str(args.executable.resolve())] if args.executable else
                    [sys.executable, "-u", str(APP)])
+        if args.multisampling:
+            command.append("--multisampling")
         print(f"Iniciando GUI: {command}", flush=True)
         with logfile.open("wb") as log:
             processo = subprocess.Popen(

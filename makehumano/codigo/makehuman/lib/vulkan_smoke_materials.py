@@ -25,6 +25,9 @@ def validar_mapas(cena, cameras, mundo, marker):
         specularMapIntensity = 1.0
         transparencyMapIntensity = 1.0
         transparent = False
+        # Estes casos verificam mistura alfa analítica. A2C é validado
+        # separadamente e quantiza cobertura por amostra, não opacidade.
+        alphaToCoverage = False
         opacity = 1.0
         shininess = 0.1
         diffuseColor = SimpleNamespace(values=(0., 0., 0.))
@@ -99,7 +102,8 @@ def validar_mapas(cena, cameras, mundo, marker):
         half = render(material, True)
         mask = opaque[:, :, 3] > 0
         # Cobertura alfa deve ser aproximadamente 1 - 128/255, sem gamma.
-        if not np.any(mask) or not np.all(np.abs(half[mask, 3].astype(int) - 127) <= 1):
+        expected_alpha = opaque[mask, 3].astype(float) * (127. / 255.)
+        if not np.any(mask) or not np.all(np.abs(half[mask, 3].astype(int) - expected_alpha) <= 1):
             raise RuntimeError("Mapa de transparência cinza não produziu alfa esperado")
         material.transparencyMapTexture = white
         clear = render(material, True)

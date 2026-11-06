@@ -236,6 +236,8 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "Falha no smoke da GUI Windows" }
             python makehumano/testes/compare_portable_frames.py source-windows-logs portable-logs
             if ($LASTEXITCODE -ne 0) { throw "Render Windows difere entre fontes e pacote" }
+            python makehumano/testes/smoke_gui.py --executable dist/MakeHumano/MakeHumano.exe --multisampling --log-dir portable-msaa-logs
+            if ($LASTEXITCODE -ne 0) { throw "Falha na GUI Windows com --multisampling" }
           } finally {
             Remove-ItemProperty -Path $driverRegistry -Name $env:VK_DRIVER_FILES -ErrorAction SilentlyContinue
           }
@@ -255,6 +257,9 @@ jobs:
           xvfb-run -a -s "-screen 0 1280x800x24" \
             python makehumano/testes/smoke_gui.py \
               --executable dist/MakeHumano/MakeHumano --log-dir portable-logs
+          xvfb-run -a -s "-screen 0 1280x800x24" \
+            python makehumano/testes/smoke_gui.py \
+              --executable dist/MakeHumano/MakeHumano --multisampling --log-dir portable-msaa-logs
 
       - name: Preservar diagnóstico da GUI e análise PyInstaller
         if: always()
@@ -263,6 +268,7 @@ jobs:
           name: Diagnostico-portatil-${{ matrix.nome }}
           path: |
             portable-logs/
+            portable-msaa-logs/
             source-windows-logs/
             build/MakeHumano/warn-MakeHumano.txt
             dist/MakeHumano/MakeHumano-erro.txt
