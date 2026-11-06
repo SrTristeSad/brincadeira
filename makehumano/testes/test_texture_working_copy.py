@@ -68,8 +68,8 @@ class TextureWorkingCopy(unittest.TestCase):
                         + struct.pack(">I", zlib.crc32(nome + conteudo)))
             cabecalho = struct.pack(">IIBBBBB", 4, 4, 8, 6, 0, 0, 0)
             rgba = bytes((valor, valor, valor, 255))
-            linhas = (b"\\x00" + rgba * 4) * 4
-            return (b"\\x89PNG\\r\\n\\x1a\\n"
+            linhas = (b"\x00" + rgba * 4) * 4
+            return (b"\x89PNG\r\n\x1a\n"
                     + bloco(b"IHDR", cabecalho)
                     + bloco(b"IDAT", zlib.compress(linhas, level=0))
                     + bloco(b"IEND", b""))
