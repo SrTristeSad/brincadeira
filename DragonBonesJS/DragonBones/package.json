@@ -11,10 +11,13 @@
     "build-cocos": "cd .. & cd Cocos & cd 1.x & npm run build & cd .. & cd .. & cd DragonBones",
     "build-all": "npm run build-egret & npm run build-pixi & npm run build-phaser & npm run build-hilo & npm run build-cocos",
     "build:ts": "tsc --project tsconfig.json",
-    "test": "npm run build:ts && node --test"
+    "test": "npm run build && node --test"
   },
   "devDependencies": {
-    "typescript": "^2.4.2",
-    "uglify-js": "^3.0.26"
+    "typescript": "5.8.3",
+    "uglify-js": "3.19.3"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

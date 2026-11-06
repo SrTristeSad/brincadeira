@@ -18,12 +18,14 @@ Alterações iniciais:
 1. Protegidas hierarquias de `WorldClock` contra ciclos em `add()` e no setter `clock`.
 2. Corrigido `WorldClock.clear()` para soltar referências sem interromper de forma insegura uma atualização em andamento.
 3. Protegido o pool de `BaseObject` contra limpeza dupla e colisões com propriedades herdadas do JavaScript.
-4. Corrigida a sequência de compilação do núcleo (`tsc` antes de `uglifyjs`).
-5. Adicionados testes de regressão de `WorldClock` e `BaseObject`.
+4. Corrigida a sequência de compilação do núcleo (`tsc` antes de `uglifyjs`) e atualizado o ambiente de compilação para TypeScript 5.8.3 e UglifyJS 3.19.3.
+5. Removida a opção de compilação `watch` do `tsconfig.json`, rejeitada pelo TypeScript moderno.
+6. Adicionados testes para manter a API pública tanto no build normal quanto no minificado, além de verificações da matemática original de matrizes.
+7. Mantidos e ampliados os testes de regressão de `WorldClock` e `BaseObject`.
 
 ## Compilar e testar
 
-Requer Node.js 18+ para executar os testes, com acesso às dependências locais:
+Requer Node.js 22+ para compilar e executar os testes, com acesso às dependências locais. O projeto de origem foi feito para ES5; a versão de Node.js especificada aqui se refere **somente às ferramentas de desenvolvimento**, não ao runtime do usuário final:
 
 ```sh
 cd DragonBonesJS/DragonBones
@@ -32,12 +34,12 @@ npm test
 npm run build
 ```
 
-**Validação pendente:** os testes e a compilação ainda não foram executados com todas as dependências deste projeto. A revisão de código e verificações estáticas não substituem os testes de execução. A compatibilidade com versões atuais de TypeScript, PixiJS, Phaser e Cocos ainda não foi validada.
+**Validação pendente:** um projeto mínimo com a configuração equivalente foi compilado com TypeScript 5.8.3 após remover `watch`, mas os testes e a compilação **do núcleo completo** ainda não foram executados com todas as dependências deste projeto. A revisão de código e verificações estáticas não substituem os testes de execução. A compatibilidade com versões atuais de TypeScript, PixiJS, Phaser e Cocos ainda não foi validada.
 
 ## Próximos passos
 
 - Executar e estabilizar o build e os testes do núcleo.
-- Modernizar dependências e TypeScript de forma incremental e testada.
+- Executar o build completo com TypeScript 5.8.3 e ajustar eventuais erros sem alterar a API pública.
 - Refatorar código legado e melhorar segurança de memória e desempenho, sem alterar o comportamento público esperado.
 - Avaliar integrações com motores gráficos somente depois da estabilização do núcleo.
 
