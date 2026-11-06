@@ -34,6 +34,7 @@ def main():
         marcador_xray = base / "vulkan-xray"
         marcador_litsphere = base / "vulkan-litsphere"
         marcador_estilos = base / "vulkan-phong-toon"
+        marcador_normalmap = base / "vulkan-normalmap"
         logfile = base / "startup.log"
         home = base / "home"
         home.mkdir()
@@ -51,6 +52,7 @@ def main():
         ambiente["MAKEHUMANO_VULKAN_XRAY_FILE"] = str(marcador_xray)
         ambiente["MAKEHUMANO_VULKAN_LITSPHERE_FILE"] = str(marcador_litsphere)
         ambiente["MAKEHUMANO_VULKAN_ESTILOS_FILE"] = str(marcador_estilos)
+        ambiente["MAKEHUMANO_VULKAN_NORMALMAP_FILE"] = str(marcador_normalmap)
         ambiente["WGPU_BACKEND_TYPE"] = "Vulkan"
         ambiente["LIBGL_ALWAYS_SOFTWARE"] = "1"
         ambiente["QT_X11_NO_MITSHM"] = "1"
@@ -119,11 +121,17 @@ def main():
                             encoding="utf-8"
                         ).startswith("vulkan-phong-toon:160x120:")
                     )
+                    normalmap_valido = (
+                        marcador_normalmap.is_file()
+                        and marcador_normalmap.read_text(
+                            encoding="utf-8"
+                        ).startswith("vulkan-normalmap:160x120:")
+                    )
                     if (
                         gui_pronta and quadro_vulkan and picking_valido
                         and framebuffer_valido and render_valido and skin_valido
                         and xray_valido and litsphere_valido
-                        and estilos_validos
+                        and estilos_validos and normalmap_valido
                     ):
                         # Se a aplicação saiu imediatamente após iniciar, não considerar sucesso.
                         time.sleep(1)
