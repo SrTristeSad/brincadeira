@@ -40,8 +40,18 @@ jobs:
       - name: Construir executável com dependências incluídas
         shell: bash
         run: |
+          # O entrypoint original carrega mhmain dinamicamente após
+          # set_sys_path(); sem --paths/hidden-import o PyInstaller só
+          # analisa a tela de licença e omite cProfile e dependências.
           python -m PyInstaller --noconfirm --clean --onedir --console \
             --name MakeHumano \
+            --paths makehumano/codigo/makehuman/lib \
+            --paths makehumano/codigo/makehuman/core \
+            --paths makehumano/codigo/makehuman/shared \
+            --paths makehumano/codigo/makehuman/apps \
+            --paths makehumano/codigo/makehuman/apps/gui \
+            --hidden-import mhmain \
+            --hidden-import cProfile \
             --collect-all PyQt5 \
             --collect-all numpy \
             --collect-all wgpu \
@@ -100,8 +110,15 @@ jobs:
           (pasta / "Iniciar-MakeHumano.bat").write_text(
               '@echo off\r\ncd /d "%~dp0"\r\n'
               'set WGPU_BACKEND_TYPE=Vulkan\r\n'
+              'set "MAKEHUMANO_PORTABLE_ERROR_LOG=%~dp0MakeHumano-erro.txt"\r\n'
               '"%~dp0MakeHumano.exe" %*\r\n'
-              'if errorlevel 1 pause\r\n',
+              'if errorlevel 1 (\r\n'
+              'echo.\r\n'
+              'echo Erro ao abrir MakeHumano.\r\n'
+              'if exist "%~dp0MakeHumano-erro.txt" type "%~dp0MakeHumano-erro.txt"\r\n'
+              'echo Envie o arquivo MakeHumano-erro.txt ao relatar o problema.\r\n'
+              'pause\r\n'
+              ')\r\n',
               encoding="utf-8",
           )
           script = pasta / "Iniciar-MakeHumano.sh"
@@ -115,22 +132,84 @@ jobs:
           script.chmod(0o755)
           PY
 
-      - name: Teste rápido do executável Windows
+      - name: Testar importações reais da GUI portátil no Windows
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $exe = Resolve-Path "dist/MakeHumano/MakeHumano.exe"
-          $processo = Start-Process -FilePath $exe -ArgumentList "--license" -WorkingDirectory "dist/MakeHumano" -Wait -PassThru
-          if ($processo.ExitCode -ne 0) { throw "Executável Windows não inicializou: $($processo.ExitCode)" }
-          Write-Output "Executável Windows iniciou e encerrou sem erro."
+          $pasta = (Resolve-Path "dist/MakeHumano").Path
+          $env:MAKEHUMANO_PORTABLE_SELFTEST = "1"
+          $env:MAKEHUMANO_PORTABLE_SELFTEST_FILE = Join-Path $pasta "autoteste.ok"
+          $env:MAKEHUMANO_PORTABLE_ERROR_LOG = Join-Path $pasta "MakeHumano-erro.txt"
+          $exe = Join-Path $pasta "MakeHumano.exe"
+          $processo = Start-Process -FilePath $exe -WorkingDirectory $pasta -Wait -PassThru
+          if ($processo.ExitCode -ne 0) {
+            if (Test-Path $env:MAKEHUMANO_PORTABLE_ERROR_LOG) {
+              Get-Content $env:MAKEHUMANO_PORTABLE_ERROR_LOG
+            }
+            throw "GUI portátil não conseguiu importar mhmain: $($processo.ExitCode)"
+          }
+          if (!(Test-Path $env:MAKEHUMANO_PORTABLE_SELFTEST_FILE)) {
+            throw "A GUI portátil não chegou ao import de mhmain"
+          }
+          if ((Get-Content $env:MAKEHUMANO_PORTABLE_SELFTEST_FILE -Raw).Trim() -ne "imports-ok") {
+            throw "Autoteste portátil inválido"
+          }
+          Remove-Item $env:MAKEHUMANO_PORTABLE_SELFTEST_FILE
+          Remove-Item $env:MAKEHUMANO_PORTABLE_ERROR_LOG -ErrorAction SilentlyContinue
+          Write-Output "As importações reais da GUI portátil passaram."
 
-      - name: Teste rápido do executável Linux
+      - name: Testar importações reais da GUI portátil no Linux
         if: runner.os == 'Linux'
         shell: bash
         run: |
           cd dist/MakeHumano
-          timeout 40 ./MakeHumano --license
+          export MAKEHUMANO_PORTABLE_SELFTEST=1
+          export MAKEHUMANO_PORTABLE_SELFTEST_FILE="$(pwd)/autoteste.ok"
+          export MAKEHUMANO_PORTABLE_ERROR_LOG="$(pwd)/MakeHumano-erro.txt"
+          timeout 60 ./MakeHumano
+          test "$(cat autoteste.ok)" = "imports-ok"
+          rm -f autoteste.ok MakeHumano-erro.txt
           test -x ./Iniciar-MakeHumano.sh
+
+      - name: Verificar abertura da GUI congelada no Linux
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            xvfb xauth libvulkan1 mesa-vulkan-drivers libglu1-mesa \
+            libxkbcommon-x11-0 libxcb-xinerama0 libxcb-cursor0 \
+            libxcb-keysyms1 libxcb-icccm4 libxcb-image0 \
+            libxcb-randr0 libxcb-render-util0 libxcb-xinput0 \
+            libxcb-util1 libxcb-shape0 libxcb-xfixes0 \
+            libxcb-sync1 libx11-xcb1 libfontconfig1
+          cd dist/MakeHumano
+          export WGPU_BACKEND_TYPE=Vulkan
+          export LIBGL_ALWAYS_SOFTWARE=1
+          export QT_X11_NO_MITSHM=1
+          export MAKEHUMANO_SMOKE_READY_FILE="$(pwd)/gui-congelada.ok"
+          export HOME="$(mktemp -d)"
+          xvfb-run -a -s "-screen 0 1280x800x24" ./MakeHumano > teste-gui.log 2>&1 &
+          processo=$!
+          trap 'kill "$processo" 2>/dev/null || true' EXIT
+          for tentativa in $(seq 1 55); do
+            if test -f gui-congelada.ok; then break; fi
+            if ! kill -0 "$processo" 2>/dev/null; then
+              echo "Executável portátil encerrou antes de abrir a GUI:"
+              tail -100 teste-gui.log
+              exit 1
+            fi
+            sleep 1
+          done
+          if ! test -f gui-congelada.ok; then
+            echo "GUI congelada não sinalizou abertura:"
+            tail -100 teste-gui.log
+            exit 1
+          fi
+          kill "$processo" 2>/dev/null || true
+          wait "$processo" || true
+          rm -f gui-congelada.ok teste-gui.log
+          echo "GUI portátil Linux abriu em Vulkan com recursos originais."
 
       - name: Disponibilizar o ZIP portátil
         uses: actions/upload-artifact@v4
