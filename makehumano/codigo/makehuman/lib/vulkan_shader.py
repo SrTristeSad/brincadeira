@@ -9,7 +9,7 @@ suporte a shaders personalizados enquanto ainda não foram convertidos.
 # Apenas presets portados e testados entram no seletor original.
 # Shader.supported() continua False: isso descreve compilação de GLSL,
 # que ainda não existe em Vulkan.
-PRESETS_NATIVOS = frozenset(("xray", "litsphere", "phong", "toon", "normalmap"))
+PRESETS_NATIVOS = frozenset(("xray", "litsphere", "phong", "toon", "normalmap", "skin"))
 
 
 def nome_preset_nativo(caminho):
@@ -65,6 +65,10 @@ def configuracao_shader_nativo(material):
         return 0, (0.0, 0.0, 0.0, 0.0), nome
 
     parametros = getattr(material, "shaderParameters", {}) or {}
+    if nome == "skin":
+        # A iluminação dermatológica original requer duas texturas
+        # adicionais (AO e gradiente) além da cor difusa.
+        return 6, (0.0, 0.0, 0.0, 0.0), None
     if nome == "normalmap":
         # A geometria mantém o tangent space no fragmento Vulkan,
         # enquanto os parâmetros da cena continuam os do MakeHuman.
@@ -193,3 +197,41 @@ def textura_normalmap_nativa(material):
             + os.fspath(textura)
         )
     return textura
+
+
+def _textura_shader_nativa(material, nomes, atributo=None):
+    """Resolver recursos do Material sem inventar imagens substitutas."""
+    import os
+
+    if material is None:
+        return None
+    parametros = getattr(material, "shaderParameters", {}) or {}
+    imagem = next(
+        (parametros[nome] for nome in nomes if parametros.get(nome) is not None),
+        None,
+    )
+    if imagem is None and atributo is not None:
+        imagem = getattr(material, atributo, None)
+    if imagem is None:
+        return None
+    if isinstance(imagem, (str, os.PathLike)) and not os.path.isfile(imagem):
+        raise ValueError("Textura de shader não encontrada: " + os.fspath(imagem))
+    return imagem
+
+
+def textura_ao_shader_nativa(material):
+    """Textura AO original, para Phong e Skin WGSL."""
+    return _textura_shader_nativa(
+        material, ("ambientOcclusionMap", "aomapTexture"), "aoMapTexture",
+    )
+
+
+def texturas_skin_nativas(material):
+    """Retorna as texturas AO e gradiente exigidas pelo GLSL skin.
+
+    A gradientMap é amostrada horizontalmente em uma imagem 2D de 1 linha,
+    emulando o sampler1D legado que WebGPU não utiliza na cena principal.
+    """
+    ao = textura_ao_shader_nativa(material)
+    gradiente = _textura_shader_nativa(material, ("gradientMap",))
+    return ao, gradiente
