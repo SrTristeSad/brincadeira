@@ -3,13 +3,12 @@ from pathlib import Path
 import sys
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1] / "codigo/makehuman"
 for directory in (ROOT, ROOT / "lib", ROOT / "core", ROOT / "shared"):
     sys.path.insert(0, str(directory))
-import projection
+from projection_math import direcao_camera
 
 
 class ProjectionCamera(unittest.TestCase):
@@ -22,8 +21,7 @@ class ProjectionCamera(unittest.TestCase):
             return model
 
         camera = SimpleNamespace(eye=(0., 0., 10.), focus=(0., 0., 0.), getModelMatrix=model_matrix)
-        with patch.object(projection.G, "app", SimpleNamespace(modelCamera=camera)):
-            return projection.getCamera(mesh)
+        return direcao_camera(mesh, camera)
 
     def test_mesh_does_not_need_obsolete_transform_attribute(self):
         np.testing.assert_allclose(self.direction(np.eye(4)), [0., 0., 1.])

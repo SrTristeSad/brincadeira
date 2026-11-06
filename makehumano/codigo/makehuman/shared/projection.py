@@ -122,18 +122,10 @@ def RasterizeTriangles(dst, coords, shader):
         progress.step()
 
 def getCamera(mesh):
-    ex, ey, ez = G.app.modelCamera.eye
-    eye = np.asarray([ex,ey,ez,1.], dtype=np.float64).reshape(4, 1)
-    fx, fy, fz = G.app.modelCamera.focus
-    focus = np.asarray([fx,fy,fz,1.], dtype=np.float64).reshape(4, 1)
     # Usar a mesma transformação do render original, incluindo a órbita.
     # module3d.Object3D não expõe mais o antigo atributo mesh.transform.
-    transform = np.linalg.inv(np.asarray(G.app.modelCamera.getModelMatrix(mesh.object3d)))
-    eye = v4to3(transform @ eye)
-    focus = v4to3(transform @ focus)
-    camera = vnormalize(eye - focus)
-    # log.debug('%s %s %s', eye, focus, camera)
-    return camera
+    from projection_math import direcao_camera
+    return direcao_camera(mesh, G.app.modelCamera)
 
 def getFaces(mesh):
     group_mask = np.ones(len(mesh._faceGroups), dtype=bool)
