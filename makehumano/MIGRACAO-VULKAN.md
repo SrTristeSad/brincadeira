@@ -111,8 +111,8 @@ do cone; 180 graus mantém a luz pontual sem cone. `attenuation` aplica
 `1 / (1 + attenuation * distância²)` às contribuições difusa e especular,
 conservando as cenas anteriores quando zero. Luz ambiente não é atenuada.
 Os modelos LitSphere e Xray mantêm sua iluminação própria. O controle
-Softness grava o tamanho de área correto. A integração de área descrita
-abaixo não implementa sombras.
+Softness grava o tamanho de área correto. A oclusão e penumbra são descritas
+na [etapa separada de sombras](SOMBRAS-VULKAN.md).
 
 Os smokes opcionais `vulkan_smoke_materials.py` e `vulkan_smoke_lighting.py`
 renderizam pela mesma cena Vulkan da interface original e conservam capturas
@@ -167,7 +167,8 @@ emissor e até oito emissores originais. O número de Samples salvo permanece
 intacto. Os presets Phong, Toon, normalmap e Skin conservam o uso do primeiro
 emissor, integrando suas amostras; o material básico integra os oito.
 LitSphere e Xray preservam seus modelos próprios. Isso implementa emissão
-espacial e variação dos reflexos, **sem oclusão nem sombras suaves**.
+espacial e variação dos reflexos. A oclusão por superfícies opacas e a
+penumbra foram adicionadas na [etapa separada de sombras](SOMBRAS-VULKAN.md).
 
 O smoke compara a emissão de área com uma soma explícita de luzes pontuais
 com energia dividida, verifica tamanho zero, repetibilidade, resposta de
@@ -274,3 +275,15 @@ Conversões de transformations.py usam asarray no lugar do copy=False rígido
 de NumPy 2, permitindo entradas float32 e sequências Python. O smoke chama
 o ExporterBVH original com dois quadros de repouso/T-pose, relê o arquivo e
 compara poses locais e taxa de quadros; nenhuma animação FBX é anunciada.
+
+
+### Sombras como etapa separada
+
+`vulkan_shadows.py` prepara a BVH da geometria renderizada; WGSL consulta a
+oclusão por fragmento e amostra de luz. Os campos originais castShadows e
+receiveShadows estão expostos no Material Editor e persistem em .mhmat.
+Sombras atenuam difusa/especular diretas, preservando ambiente/emissão e os
+modelos próprios de LitSphere/Xray. Atualizações de morph, pose e displacement
+reajustam a árvore; estados idênticos reutilizam buffers. Texturas recortadas
+e materiais translúcidos ainda não lançam sombras. Consulte
+[SOMBRAS-VULKAN.md](SOMBRAS-VULKAN.md) para arquitetura, testes e limites.

@@ -28,8 +28,8 @@ Iniciar-MakeHumano.bat --multisampling
 ```
 
 Isso ativa MSAA 4x e permite Alpha to Coverage nos materiais translúcidos.
-Sem o argumento, o modo padrão continua sem MSAA. Sombras não são
-implementadas por essa opção.
+Sem o argumento, o modo padrão continua sem MSAA. A suavização é independente
+das [sombras Vulkan](SOMBRAS-VULKAN.md), controladas pelos materiais e luzes.
 
 ## O que a CI exige do executável
 
@@ -51,6 +51,7 @@ exige simultaneamente:
 - BVH original com animação de dois quadros, recarga e comparação das poses locais dos 163 ossos mesmo após skinning;
 - FBX/Collada com esqueleto, leitura independente de ossos, índices, pesos e matrizes;
 - mapas especulares, transparência, bump e AO, incluindo intensidade zero, altura constante e prioridade dos normal maps;
+- sombras de superfícies opacas, penumbra de área, controles originais Cast/Receive e persistência .mhmat;
 - foco, ângulo, atenuação e emissão de área, incluindo energia normalizada, tamanho zero e eventos dos widgets originais;
 - MSAA 4x, bordas diagonais e controle original Alpha to Coverage;
 - salvamento e recarregamento `.mhm`, com comparação das coordenadas;
@@ -59,7 +60,7 @@ exige simultaneamente:
 - resposta do controle wireframe, com arestas pretas e imagem diferente da superfície sólida;
 - processo ainda vivo e ausência de traceback ou erro de render no log;
 - segunda abertura do portátil com `--multisampling`, desde a inicialização;
-- no Windows, igualdade exata de 47 capturas PNG entre fontes e executável. As
+- no Windows, igualdade exata de 50 capturas PNG entre fontes e executável. As
   capturas só são geradas após terminar a carga da iluminação, plugins e targets.
 
 Isso **não** comprova equivalência visual dos shaders, todos os controles da
@@ -118,27 +119,28 @@ uma build bem-sucedida como prova de compatibilidade completa.
 
 ## Evidências desta etapa
 
-- [CI e pacotes da revisão funcional](https://github.com/SrTristeSad/brincadeira/actions/runs/42254423827)
-- [CPU, Vulkan e GUI com/sem PyOpenGL](https://github.com/SrTristeSad/brincadeira/actions/runs/42254423518)
-- [Suíte de testes em Python 3.12 e 3.13](https://github.com/SrTristeSad/brincadeira/actions/runs/42254423496)
+- [CI e pacotes da revisão funcional](https://github.com/SrTristeSad/brincadeira/actions/runs/42257728380)
+- [CPU, Vulkan e GUI com/sem PyOpenGL](https://github.com/SrTristeSad/brincadeira/actions/runs/42257728593)
+- [Suíte de testes em Python 3.12 e 3.13](https://github.com/SrTristeSad/brincadeira/actions/runs/42257728535)
 
-As builds acima correspondem ao código `547674994cf9437a8671bd517a1e78e6c3613567`.
+As builds acima correspondem ao código `dc3ec040c5305cfa764d13093614ad7e5afb6926`.
 
 Windows e Linux concluíram a abertura real e os testes funcionais, tanto no
-modo padrão quanto com `--multisampling`. As 47 capturas Windows foram
+modo padrão quanto com `--multisampling`. As 50 capturas Windows foram
 comparadas novamente após baixar os diagnósticos: igualdade exata entre
-fontes e executável. As 46 capturas da revisão anterior também permaneceram
-idênticas nos dois modos. A suíte de 310 casos passou em Python 3.12/3.13
-(com a exclusão do caso específico de separadores Windows no Linux).
+fontes e executável. A otimização de reajuste da BVH preservou as 50 capturas
+Linux da primeira implementação de sombras, nos dois modos. A suíte local de
+321 casos passou (um caso específico de Windows excluído no Linux). A CI
+também verifica Python 3.12/3.13; os links acima identificam o código dos pacotes.
 
-- [ZIP Windows desta revisão](https://github.com/SrTristeSad/brincadeira/actions/runs/42254423827/artifacts/13522126705)
-- [ZIP Linux desta revisão](https://github.com/SrTristeSad/brincadeira/actions/runs/42254423827/artifacts/13521538537)
-- [Diagnóstico Windows](https://github.com/SrTristeSad/brincadeira/actions/runs/42254423827/artifacts/13522910474)
+- [ZIP Windows desta revisão](https://github.com/SrTristeSad/brincadeira/actions/runs/42257728380/artifacts/13524435592)
+- [ZIP Linux desta revisão](https://github.com/SrTristeSad/brincadeira/actions/runs/42257728380/artifacts/13523965487)
+- [Diagnóstico Windows](https://github.com/SrTristeSad/brincadeira/actions/runs/42257728380/artifacts/13523971123)
 
 SHA-256 do ZIP Windows:
-`908c8cc9e2b15fb5832be3760842d6cc20865517b04b2f96e2c596864b81d8d6`.
+`009235138da66f17554adbbe2f23bd67fee11eedb52928fc6123b6e5424b520f`.
 O ZIP foi baixado e verificado: integridade, executável, Python 3.12, Qt,
-wgpu-native, malha base, rig oficial e módulos novos (topologia UV/BVH) presentes; nenhum driver
+wgpu-native, malha base, rig oficial e módulos novos (UV/BVH/sombras) presentes; nenhum driver
 de CI incluído. A validação Windows usa Vulkan por software e ainda não
 comprova compatibilidade com GPUs físicas.
 
