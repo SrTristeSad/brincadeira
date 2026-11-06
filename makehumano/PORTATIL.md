@@ -47,6 +47,8 @@ exige simultaneamente:
 - alteração real da malha pelo modificador `macrodetails/Age`, undo e redo no histórico original;
 - rig oficial e T-pose deformando a malha e a imagem, undo/redo e roundtrip MHM com rig/pose;
 - reprodução de dois quadros e parada sem looping, verificando coordenadas do personagem;
+- PNG UV 2048x2048 pelo exportador original, sem fallback CPU; índices UV uint32 sem compactação em 16 bits;
+- BVH original com animação de dois quadros, recarga e comparação das poses locais dos 163 ossos mesmo após skinning;
 - FBX/Collada com esqueleto, leitura independente de ossos, índices, pesos e matrizes;
 - mapas especulares, transparência, bump e AO, incluindo intensidade zero, altura constante e prioridade dos normal maps;
 - foco, ângulo, atenuação e emissão de área, incluindo energia normalizada, tamanho zero e eventos dos widgets originais;
@@ -57,13 +59,13 @@ exige simultaneamente:
 - resposta do controle wireframe, com arestas pretas e imagem diferente da superfície sólida;
 - processo ainda vivo e ausência de traceback ou erro de render no log;
 - segunda abertura do portátil com `--multisampling`, desde a inicialização;
-- no Windows, igualdade exata de 46 capturas PNG entre fontes e executável. As
+- no Windows, igualdade exata de 47 capturas PNG entre fontes e executável. As
   capturas só são geradas após terminar a carga da iluminação, plugins e targets.
 
 Isso **não** comprova equivalência visual dos shaders, todos os controles da
 interface ou todos os formatos/opções de exportação. Os quatro formatos citados
 são exportados com a malha original e olhos padrão, e FBX/Collada também
-com o rig oficial em repouso. Animações exportadas, roupas externas e
+com o rig oficial em repouso. Animações FBX/Collada, outras opções BVH, roupas externas e
 importação desses arquivos em outras aplicações ainda exigem validação.
 
 No Windows, a CI instala Mesa/Lavapipe e seu loader Vulkan para renderizar por
@@ -116,27 +118,27 @@ uma build bem-sucedida como prova de compatibilidade completa.
 
 ## Evidências desta etapa
 
-- [CI e pacotes da revisão funcional](https://github.com/SrTristeSad/brincadeira/actions/runs/42246515895)
-- [CPU, Vulkan e GUI com/sem PyOpenGL](https://github.com/SrTristeSad/brincadeira/actions/runs/42246515890)
-- [Suíte de testes em Python 3.12 e 3.13](https://github.com/SrTristeSad/brincadeira/actions/runs/42246516087)
+- [CI e pacotes da revisão funcional](https://github.com/SrTristeSad/brincadeira/actions/runs/42254423827)
+- [CPU, Vulkan e GUI com/sem PyOpenGL](https://github.com/SrTristeSad/brincadeira/actions/runs/42254423518)
+- [Suíte de testes em Python 3.12 e 3.13](https://github.com/SrTristeSad/brincadeira/actions/runs/42254423496)
 
-As builds acima correspondem ao código `eb517ba0e8b35b486b786d97864714104330295f`.
+As builds acima correspondem ao código `547674994cf9437a8671bd517a1e78e6c3613567`.
 
 Windows e Linux concluíram a abertura real e os testes funcionais, tanto no
-modo padrão quanto com `--multisampling`. As 46 capturas Windows foram
+modo padrão quanto com `--multisampling`. As 47 capturas Windows foram
 comparadas novamente após baixar os diagnósticos: igualdade exata entre
-fontes e executável. As 41 capturas da revisão anterior também permaneceram
-idênticas nos dois modos. A suíte de 305 casos passou em Python 3.12/3.13
+fontes e executável. As 46 capturas da revisão anterior também permaneceram
+idênticas nos dois modos. A suíte de 310 casos passou em Python 3.12/3.13
 (com a exclusão do caso específico de separadores Windows no Linux).
 
-- [ZIP Windows desta revisão](https://github.com/SrTristeSad/brincadeira/actions/runs/42246515895/artifacts/13519286641)
-- [ZIP Linux desta revisão](https://github.com/SrTristeSad/brincadeira/actions/runs/42246515895/artifacts/13518041448)
-- [Diagnóstico Windows](https://github.com/SrTristeSad/brincadeira/actions/runs/42246515895/artifacts/13519156911)
+- [ZIP Windows desta revisão](https://github.com/SrTristeSad/brincadeira/actions/runs/42254423827/artifacts/13522126705)
+- [ZIP Linux desta revisão](https://github.com/SrTristeSad/brincadeira/actions/runs/42254423827/artifacts/13521538537)
+- [Diagnóstico Windows](https://github.com/SrTristeSad/brincadeira/actions/runs/42254423827/artifacts/13522910474)
 
 SHA-256 do ZIP Windows:
-`a98d6cd68ef5155a640e7e8c5080de0e21f228d497c157fc691551a855a6cedd`.
+`908c8cc9e2b15fb5832be3760842d6cc20865517b04b2f96e2c596864b81d8d6`.
 O ZIP foi baixado e verificado: integridade, executável, Python 3.12, Qt,
-wgpu-native, malha base, rig oficial e módulos novos presentes; nenhum driver
+wgpu-native, malha base, rig oficial e módulos novos (topologia UV/BVH) presentes; nenhum driver
 de CI incluído. A validação Windows usa Vulkan por software e ainda não
 comprova compatibilidade com GPUs físicas.
 

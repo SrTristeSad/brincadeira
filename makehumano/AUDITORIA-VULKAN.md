@@ -79,7 +79,9 @@ com o renderer original nem validação em outra GPU.
 6. **Exportação ampliada:** o smoke valida malha/olhos nos quatro formatos e
    o rig oficial em repouso no FBX binário/Collada, relendo ossos, matrizes e
    pesos. Rig/pose oficiais também são salvos/reabertos em MHM.
-   Animações exportadas, rigs alternativos, proxies/roupas e demais opções
+   O BVH com dois quadros de repouso/T-pose é exportado pelo plugin e
+   recarregado, comparando poses locais dos 163 ossos. Animações FBX/Collada,
+   demais opções BVH, rigs alternativos, proxies/roupas e demais opções
    ainda precisam ser reabertos em consumidores independentes.
 7. **Legado gráfico restante:** `lib/glmodule.py` ainda contém a implementação
    obsoleta e os métodos históricos `Object3D.draw/pick` a referenciam. O
