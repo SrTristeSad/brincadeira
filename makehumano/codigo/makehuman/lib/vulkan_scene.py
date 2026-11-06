@@ -303,6 +303,7 @@ struct Globals {
     observador: vec4<f32>,
     shader_preset: vec4<f32>,
     shader_parametros: vec4<f32>,
+    shader_parametros_extra: vec4<f32>,
     luzes_posicao: array<vec4<f32>, 8>,
     luzes_cor: array<vec4<f32>, 8>,
 };
@@ -365,6 +366,64 @@ struct Fragmento {
         }
     }
     let direcao_visao = normalize(dados.observador.xyz - i.mundo);
+    // Phong original: iluminação por fragmento, uma luz, cor difusa,
+    // ambiente e especular do Material. AO e luzes avançadas pendentes.
+    if (dados.shader_preset.x > 2.5 && dados.shader_preset.x < 3.5) {
+        let ambiente_phong = dados.ambiente.rgb * dados.shader_parametros.xyz;
+        var color_phong = ambiente_phong * rgb * dados.cor.rgb;
+        if (dados.flags.z > 0.5) {
+            let light_dir = normalize(dados.luzes_posicao[0].xyz - i.mundo);
+            let ndotl = max(dot(normal, light_dir), 0.0);
+            color_phong += dados.luzes_cor[0].rgb * rgb
+                           * dados.cor.rgb * ndotl;
+            if (ndotl > 0.0) {
+                let half_dir = normalize(light_dir + direcao_visao);
+                let expoente = max(1.0, dados.especular.w
+                                       * (255.0 / 128.0));
+                let especular_phong = pow(
+                    max(dot(normal, half_dir), 0.0), expoente
+                );
+                color_phong += dados.luzes_cor[0].rgb
+                               * dados.especular.rgb * especular_phong;
+            }
+        }
+        return vec4<f32>(
+            color_phong + dados.emissiva.rgb,
+            alfa * dados.cor.a * i.cor.a,
+        );
+    }
+    // Toon original: limiar de silhueta, faixas de difusa e especular
+    // com smoothstep, primeira luz e alfa da textura difusa.
+    if (dados.shader_preset.x > 3.5 && dados.shader_preset.x < 4.5) {
+        let sil = max(dot(normal, direcao_visao), 0.0);
+        if (sil < dados.shader_parametros.x) {
+            return vec4<f32>(0.0, 0.0, 0.0,
+                             tex.a * dados.cor.a);
+        }
+        var multiplier = dados.shader_parametros.z;
+        if (dados.flags.z > 0.5) {
+            let light_dir = normalize(dados.luzes_posicao[0].xyz - i.mundo);
+            let meio = normalize(light_dir + direcao_visao);
+            let spec = pow(
+                max(dot(normal, meio), 0.0),
+                max(dados.shader_parametros.y, 0.0001),
+            );
+            multiplier += dados.shader_parametros.w * smoothstep(
+                dados.shader_parametros_extra.y - 0.01,
+                dados.shader_parametros_extra.y,
+                spec,
+            );
+            let diff = max(dot(normal, light_dir), 0.0);
+            multiplier += dados.shader_parametros_extra.x * smoothstep(
+                dados.shader_parametros_extra.z - 0.01,
+                dados.shader_parametros_extra.z,
+                diff,
+            );
+        }
+        return vec4<f32>(
+            multiplier * tex.rgb, tex.a * dados.cor.a,
+        );
+    }
     // Port do litsphere_fragment_shader.txt: iluminação capturada em
     // textura indexada pela normal em espaço de câmera, sem luzes GLSL.
     if (dados.shader_preset.x > 1.5 && dados.shader_preset.x < 2.5) {
@@ -810,6 +869,7 @@ struct Fragmento {
                 cor, flags = parametros_material_vulkan(obj)
                 from vulkan_shader import (
                     configuracao_shader_nativo, textura_litsphere_nativa,
+                    parametros_extras_shader_nativo,
                 )
                 material_obj = getattr(obj, "material", None)
                 modo_shader, shader_parametros, shader_pendente = (
@@ -856,12 +916,16 @@ struct Fragmento {
                 shader_preset = np.array(
                     [float(modo_shader), 0, 0, 0], np.float32,
                 )
+                shader_extra = np.asarray(
+                    parametros_extras_shader_nativo(material_obj),
+                    dtype=np.float32,
+                )
                 uniforms = np.concatenate((
                     mvp.T.reshape(-1), modelo.T.reshape(-1),
                     normal_modelo.T.reshape(-1), view.T.reshape(-1),
                     cor, flags, ambiente, especular, emissiva, observador,
                     shader_preset, np.asarray(shader_parametros, np.float32),
-                    posicoes.reshape(-1), cores.reshape(-1),
+                    shader_extra, posicoes.reshape(-1), cores.reshape(-1),
                 )).astype(np.float32)
                 buf_u = self.device.create_buffer_with_data(
                     data=uniforms, usage=wgpu.BufferUsage.UNIFORM
