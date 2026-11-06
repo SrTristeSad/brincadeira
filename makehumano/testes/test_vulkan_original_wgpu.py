@@ -25,7 +25,8 @@ from vulkan_scene import (
     CenaVulkan, preparar_malha_original, matriz_wgpu, assinatura_textura,
     parametros_material_vulkan, pixels_textura_rgba, aparencia_material_vulkan,
     configuracao_raster_vulkan, parametros_normalmap_vulkan,
-    matriz_normal_vulkan,
+    matriz_normal_vulkan, ordenar_objetos_vulkan,
+    objeto_translucido_vulkan, profundidade_camada_vulkan,
 )
 from vulkan_texture import Texture as TextureVulkan
 from vulkan_skin import preparar_skin, normalizar_cor_fundo
@@ -1045,6 +1046,98 @@ class TestarShaderSkinOriginalVulkan(unittest.TestCase):
             nome_preset_nativo("/data/shaders/glsl/skin"), "skin",
         )
         self.assertIsNone(nome_preset_nativo("/plugins/skin"))
+
+
+class TestarOrdenacaoTranslucidaVulkan(unittest.TestCase):
+    def _obj(self, nome, z, *, priority=0, mode=0, alpha=1.0,
+             transparent=False, depthless=False, cutout=0):
+        return SimpleNamespace(
+            name=nome,
+            priority=priority, cameraMode=mode, depthless=depthless,
+            verts=np.array(
+                [[-1.0, -1.0, z], [1.0, -1.0, z], [0.0, 1.0, z]],
+                dtype=np.float32,
+            ),
+            model=np.eye(4),
+            nTransparentPrimitives=cutout,
+            material=SimpleNamespace(
+                opacity=alpha, transparent=transparent,
+            ),
+        )
+
+    def _camera(self):
+        return SimpleNamespace(
+            updated=True,
+            getMatrices=lambda olho: (
+                np.eye(4, dtype=np.float64),
+                np.eye(4, dtype=np.float64),
+            ),
+            getModelMatrix=lambda obj: obj.model,
+        )
+
+    def test_translucidas_vem_atras_para_frente_apesar_da_entrada(self):
+        perto = self._obj("perto", -2, alpha=0.5)
+        longe = self._obj("longe", -12, alpha=0.5)
+        meio = self._obj("meio", -7, transparent=True)
+        opaco = self._obj("opaco", -4)
+        resultado = ordenar_objetos_vulkan(
+            [perto, opaco, meio, longe], [self._camera()],
+        )
+        self.assertEqual(
+            [obj.name for obj in resultado],
+            ["opaco", "longe", "meio", "perto"],
+        )
+
+    def test_prioridades_de_camadas_e_cameras_ficam_intactas(self):
+        primeiro = self._obj("prioridade-zero", -1, priority=0, alpha=0.5)
+        segundo = self._obj("prioridade-um", -20, priority=1, alpha=0.5)
+        terceira_camera = self._obj("camera-um", -50, mode=1, alpha=0.5)
+        resultado = ordenar_objetos_vulkan(
+            [segundo, primeiro, terceira_camera],
+            [self._camera(), self._camera()],
+        )
+        self.assertEqual(
+            [obj.name for obj in resultado],
+            ["prioridade-zero", "camera-um", "prioridade-um"],
+        )
+
+    def test_overlay_depthless_mantem_prioridade_e_ultimo_passe(self):
+        overlay = self._obj("overlay", -1, depthless=True)
+        atras = self._obj("atras", -9, alpha=0.4)
+        solido = self._obj("solido", -3)
+        resultado = ordenar_objetos_vulkan(
+            [overlay, atras, solido], [self._camera()],
+        )
+        self.assertEqual(
+            [obj.name for obj in resultado], ["solido", "atras", "overlay"],
+        )
+
+    def test_primitivas_recortadas_entram_na_fase_transparente(self):
+        recorte = self._obj("recorte", -12, cutout=20)
+        opaco = self._obj("opaco", -2)
+        self.assertTrue(objeto_translucido_vulkan(recorte))
+        self.assertFalse(objeto_translucido_vulkan(opaco))
+        self.assertEqual(
+            [obj.name for obj in ordenar_objetos_vulkan(
+                [recorte, opaco], [self._camera()],
+            )], ["opaco", "recorte"],
+        )
+
+    def test_centro_em_espaco_de_camera_respeita_matriz_de_modelo(self):
+        obj = self._obj("objeto", -3, alpha=0.3)
+        obj.model[2, 3] = -6
+        self.assertAlmostEqual(
+            profundidade_camada_vulkan(obj, self._camera()), -9.0,
+        )
+
+    def test_rejeita_vertices_e_opacidade_invalidos(self):
+        obj = self._obj("invalido", -3, alpha=float("nan"))
+        with self.assertRaises(ValueError):
+            objeto_translucido_vulkan(obj)
+        obj.material.opacity = 0.4
+        obj.verts[0, 2] = float("nan")
+        with self.assertRaises(ValueError):
+            profundidade_camada_vulkan(obj, self._camera())
 
 
 if __name__ == "__main__":
