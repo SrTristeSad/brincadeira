@@ -28,8 +28,11 @@
 | Shader LitSphere (pele padrão) | WGSL usa normal em espaço de câmera, textura de LitSphere original e `AdditiveShading`; `autoBlendSkin` usa `EthnicSkinBlender` original | Captura GPU e testes de parâmetros; equivalência visual pendente |
 | Shader Phong original | WGSL usa o primeiro ponto de luz da cena, ambiente, difusa, especular e emissão do material original | Port da base; falta AO e comparação visual |
 | Shader Toon original | WGSL reproduz limiar da silhueta e faixas de luz por `smoothstep` com sete parâmetros do GLSL | Port da base; testar equivalência visual |
-| Seleção do shader no editor de materiais | Presets xray, LitSphere, Phong e Toon listados; parâmetros dos três primeiros com controles dedicados quando aplicável e sete ajustes Toon | Smoke da GUI; validar interações manualmente |
-| Shaders GLSL restantes | `normalmap`, `skin` ainda sem equivalentes integrais | **Pendente** |
+| Shader normalmap oficial | WGSL usa mapa de normais e iluminação difusa/especular em espaço tangente derivado das UVs | Base implementada; validação visual e tangentes originais pendentes |
+| Shader skin oficial | WGSL amostra mapa AO e gradiente horizontal de cor convertido do antigo sampler1D | Base implementada; requer ambos os recursos e comparação visual |
+| Shader Phong — mapa AO | Quando configurado, usa `aomapTexture` do material para modular a cor difusa | Implementado; falta teste visual comparativo |
+| Seleção do shader no editor de materiais | Seis presets oficiais são reconhecidos; os parâmetros xray/LitSphere/Toon são editáveis na interface original | Validar interações e requisitos de textura para skin/normalmap |
+| Equivalência dos shaders GLSL | Os seis presets têm caminhos WGSL; normalmap/skin e recursos avançados ainda não reproduzem integralmente os shaders legados | **Parcial** |
 | Shaders GLSL arbitrários | `vulkan_shader.Shader.supported()` permanece falso; nenhum compilador GLSL genérico | **Pendente** |
 
 ## Arquitetura
@@ -64,7 +67,7 @@ python -m unittest discover -s makehumano/testes -p 'test_*wgpu.py' -v
 
 ## Pendências que impedem o lançamento
 
-- Completar os dois presets GLSL restantes (`normalmap`, `skin`) e seus uniforms/atributos para WGSL; `phong` já possui base (falta AO) e `toon` já possui o modelo de faixas nativo. GLSL arbitrário continua sem compilação.
+- Alcançar equivalência **visual** dos seis presets oficiais WGSL. Normalmap deriva tangentes no fragmento, Skin usa gradiente de uma linha em textura 2D, e Phong incorporou AO; diferenças com o GLSL original ainda precisam ser quantificadas. GLSL arbitrário continua sem compilação.
 - Concluir a equivalência de transparência e ordenação de superfícies translúcidas, especialmente materiais sobrepostos; variantes de culling/depthless já foram adicionadas.
 - Reproduzir atenuação/especular/foco das luzes de cena, outros comportamentos avançados de materiais. A transformação de normais já usa inversa-transposta do modelo.
 - Criar testes comparativos de imagens, incluindo reflexos, alfa, normal maps e culling, porque o smoke só verifica inicialização e integridade básica.
