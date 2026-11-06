@@ -1,6 +1,8 @@
 """Verificações opt-in da aplicação original, em perfil temporário da CI."""
 import importlib
 import json
+import struct
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 
@@ -43,10 +45,39 @@ def check_original_tools(app, report_path):
             raise RuntimeError("OBJ não contém vértices")
         if not any(line.startswith("f ") for line in text.splitlines()):
             raise RuntimeError("OBJ não contém faces")
+        # Exportar os formatos principais, não apenas importar seus módulos.
+        fbx_plugin = app.modules["9_export_fbx"]
+        fbx_config = fbx_plugin.FbxConfig()
+        fbx_config.setHuman(human)
+        fbx_path = report.parent / "personagem-portátil.fbx"
+        importlib.import_module("9_export_fbx.mh2fbx").exportFbx(str(fbx_path), fbx_config)
+        if not fbx_path.read_bytes().startswith(b"Kaydara FBX Binary  \x00\x1a\x00"):
+            raise RuntimeError("FBX binário não contém cabeçalho válido")
+
+        dae_plugin = app.modules["9_export_collada"]
+        dae_config = dae_plugin.DaeConfig()
+        dae_config.setHuman(human)
+        dae_path = report.parent / "personagem-portátil.dae"
+        importlib.import_module("9_export_collada.mh2collada").exportCollada(str(dae_path), dae_config)
+        document = ET.parse(dae_path)
+        ns = {"c": "http://www.collada.org/2005/11/COLLADASchema"}
+        if not document.findall(".//c:geometry/c:mesh", ns):
+            raise RuntimeError("Collada não contém geometria")
+
+        stl_plugin = app.modules["9_export_stl"]
+        stl_config = stl_plugin.STLConfig()
+        stl_config.setHuman(human)
+        stl_path = report.parent / "personagem-portátil.stl"
+        importlib.import_module("9_export_stl.mh2stl").exportStlBinary(str(stl_path), stl_config)
+        stl = stl_path.read_bytes()
+        triangles = struct.unpack_from("<I", stl, 80)[0]
+        if not triangles or len(stl) != 84 + 50 * triangles:
+            raise RuntimeError("STL binário contém contagem de triângulos inválida")
+
         report.write_text(json.dumps({
             "modifier": modifier.fullName,
             "mhm_roundtrip": True,
-            "obj_export": True,
+            "exports": ["obj", "fbx-binary", "collada", "stl-binary"],
             "plugins": sorted(name for name, module in app.modules.items() if module),
         }, indent=2), encoding="utf-8")
     finally:
