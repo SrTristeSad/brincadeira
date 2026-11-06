@@ -44,3 +44,36 @@ test("transformRectangle preserves integer bounding-box behavior", () => {
     matrix.transformRectangle(rectangle);
     assert.deepEqual(rectangle, { x: 7, y: -1, width: 6, height: 12 });
 });
+
+test("invert uses the identity fallback for all singular diagonal matrices", () => {
+    const coefficients = matrix => [matrix.a, matrix.b, matrix.c, matrix.d, matrix.tx, matrix.ty];
+    for (const values of [
+        [0, 0, 0, 2, 5, 7],
+        [2, 0, 0, 0, 5, 7],
+        [0, 0, 0, 0, 5, 7]
+    ]) {
+        const matrix = new Matrix(...values);
+        assert.strictEqual(matrix.invert(), matrix);
+        assert.deepEqual(coefficients(matrix), [1, 0, 0, 1, 0, 0]);
+    }
+});
+
+test("invert keeps the existing fallback for non-diagonal singular matrices", () => {
+    const matrix = new Matrix(1, 1, 1, 1, 5, 7);
+    matrix.invert();
+    assert.deepEqual(
+        [matrix.a, matrix.b, matrix.c, matrix.d, matrix.tx, matrix.ty],
+        [1, 0, 0, 1, 0, 0]
+    );
+});
+
+test("invert correctly restores points under shear and translation", () => {
+    const matrix = new Matrix(2, 1, 3, 4, 5, -3);
+    const inverse = new Matrix().copyFrom(matrix).invert();
+    const point = { x: 0, y: 0 };
+    const result = { x: 0, y: 0 };
+    matrix.transformPoint(4, 8, point);
+    inverse.transformPoint(point.x, point.y, result);
+    assert.ok(Math.abs(result.x - 4) < 1e-12);
+    assert.ok(Math.abs(result.y - 8) < 1e-12);
+});
