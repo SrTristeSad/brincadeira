@@ -9,6 +9,8 @@ FRAMES = (
     "normalmap-flat", "normalmap-tilted", "specular-white", "specular-black",
     "transparent-triangles", "transparent-triangles-reversed",
     "viewport-solid", "viewport-wireframe",
+    "map-specular-white", "map-specular-black", "map-transparency-none",
+    "map-transparency-grey", "map-transparency-clear",
 )
 
 

@@ -10,6 +10,8 @@ import os
 
 import numpy as np
 
+from vulkan_material_maps import parametros_mapa, mapa_transparencia_ativo
+
 
 def pixels_textura_rgba(dados):
     """Converte imagem CPU original (cinza, LA, RGB ou RGBA) em RGBA."""
@@ -96,7 +98,9 @@ def preparar_malha_original(obj, camera=None):
     face = np.asarray(face, dtype=np.uint32)
     material = getattr(obj, "material", None)
     total_transparentes = int(getattr(obj, "nTransparentPrimitives", 0))
-    if bool(getattr(material, "transparent", False)) or float(getattr(material, "opacity", 1.0)) < 1.0:
+    if (bool(getattr(material, "transparent", False))
+            or float(getattr(material, "opacity", 1.0)) < 1.0
+            or mapa_transparencia_ativo(material)):
         total_transparentes = len(face)
     total_transparentes = min(max(total_transparentes, 0), len(face))
     transparentes = np.arange(len(face)) >= len(face) - total_transparentes
@@ -288,7 +292,8 @@ def configuracao_raster_vulkan(obj, *, linhas=False):
     opacidade = float(getattr(material, "opacity", 1.0))
     if not np.isfinite(opacidade):
         raise ValueError("Material original: opacidade não finita")
-    transparente = bool(getattr(material, "transparent", False))
+    transparente = (bool(getattr(material, "transparent", False))
+                    or mapa_transparencia_ativo(material))
     # glmodule.drawObject() desativava glDepthMask para malhas com
     # transparentPrimitives ao usar glAlphaFunc(GL_GREATER, 0).
     # O Vulkan deve preservar o contrato da malha original mesmo
@@ -314,7 +319,7 @@ def objeto_translucido_vulkan(obj):
         raise ValueError("Opacidade não finita na ordenação Vulkan")
     return (bool(getattr(obj, "nTransparentPrimitives", 0))
             or bool(getattr(material, "transparent", False))
-            or opacity < 1.0)
+            or opacity < 1.0 or mapa_transparencia_ativo(material))
 
 
 def profundidade_camada_vulkan(obj, cam):
@@ -399,7 +404,7 @@ def arestas_wireframe(faces):
 class _MaterialWireframe:
     shader = None
     shaderParameters = {}
-    shaderConfig = {"normal": False, "diffuse": False}
+    shaderConfig = {"normal": False, "diffuse": False, "spec": False, "transparency": False}
     normalMapTexture = None
     transparent = False
 
@@ -487,6 +492,7 @@ struct Globals {
     luzes_posicao: array<vec4<f32>, 8>,
     luzes_cor: array<vec4<f32>, 8>,
     luzes_especular: array<vec4<f32>, 8>,
+    mapas_parametros: vec4<f32>,
 };
 @group(0) @binding(0) var<uniform> dados: Globals;
 @group(0) @binding(1) var mapa: texture_2d<f32>;
@@ -495,6 +501,8 @@ struct Globals {
 @group(0) @binding(4) var mapa_litsphere: texture_2d<f32>;
 @group(0) @binding(5) var mapa_ao: texture_2d<f32>;
 @group(0) @binding(6) var mapa_gradiente: texture_2d<f32>;
+@group(0) @binding(7) var mapa_especular: texture_2d<f32>;
+@group(0) @binding(8) var mapa_transparencia: texture_2d<f32>;
 struct Entrada {
     @location(0) pos: vec3<f32>,
     @location(1) normal: vec3<f32>,
@@ -520,6 +528,9 @@ struct Fragmento {
 fn cor_fragmento(i: Fragmento) -> vec4<f32> {
     let uv = vec2<f32>(i.uv.x, 1.0 - i.uv.y);
     let tex = textureSample(mapa, amostra, uv);
+    let spec_map = textureSample(mapa_especular, amostra, uv).rgb;
+    let spec_factor = mix(vec3<f32>(1.0), spec_map, dados.mapas_parametros.x);
+    let cor_especular = dados.especular.rgb * spec_factor;
     let usar_textura = dados.flags.y > 0.5;
     let rgb = select(vec3<f32>(1.0), tex.rgb, usar_textura);
     let alfa = select(1.0, tex.a, usar_textura);
@@ -570,7 +581,7 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
                     max(dados.especular.w, 0.001),
                 );
                 cor_skin += dados.luzes_especular[0].rgb
-                            * dados.especular.rgb * brilho;
+                            * cor_especular * brilho;
             }
         }
         return vec4<f32>(cor_skin, tex.a * dados.cor.a);
@@ -597,7 +608,7 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
                     max(dot(normal, half_dir), 0.0), expoente
                 );
                 color_phong += dados.luzes_especular[0].rgb
-                               * dados.especular.rgb * especular_phong;
+                               * cor_especular * especular_phong;
             }
         }
         return vec4<f32>(
@@ -621,7 +632,7 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
                 max(dados.especular.w, 0.001),
             );
             rgb_normalmap += dados.luzes_especular[0].rgb
-                             * dados.especular.rgb * especular_normal;
+                             * cor_especular * especular_normal;
         }
         return vec4<f32>(rgb_normalmap, 1.0);
     }
@@ -641,7 +652,8 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
                 max(dot(normal, meio), 0.0),
                 max(dados.shader_parametros.y, 0.0001),
             );
-            multiplier += dados.shader_parametros.w * smoothstep(
+            multiplier += dados.shader_parametros.w
+                          * dot(spec_factor, vec3<f32>(1.0 / 3.0)) * smoothstep(
                 dados.shader_parametros_extra.y - 0.01,
                 dados.shader_parametros_extra.y,
                 spec,
@@ -709,7 +721,7 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
             let meio = normalize(direcao + direcao_visao);
             let intensidade = pow(max(dot(normal, meio), 0.0),
                                   dados.especular.w);
-            reflexo += dados.luzes_especular[j].rgb * dados.especular.rgb
+            reflexo += dados.luzes_especular[j].rgb * cor_especular
                      * intensidade;
         }
     }
@@ -721,11 +733,19 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
 }
 
 @fragment fn fs_main(i: Fragmento) -> @location(0) vec4<f32> {
-    let resultado = cor_fragmento(i);
+    var resultado = cor_fragmento(i);
+    // O mapa separado representa transparência (branco = transparente),
+    // conforme TransparencyFactor do material/exportador original. Intensidade
+    // zero preserva o alfa anterior, sem confundir transparência com opacidade.
+    let uv = vec2<f32>(i.uv.x, 1.0 - i.uv.y);
+    let trans = textureSample(mapa_transparencia, amostra, uv).rgb;
+    resultado.a *= 1.0 - dados.mapas_parametros.y
+                         * dot(trans, vec3<f32>(1.0 / 3.0));
     // Contrato original: glAlphaFunc(GL_GREATER, 0.0) descarta pixels
     // totalmente transparentes em malhas com partes recortadas.
     // O descarte ocorre antes de qualquer escrita de profundidade.
-    if (dados.shader_preset.z > 0.5 && resultado.a <= 0.0) {
+    if ((dados.shader_preset.z > 0.5 || dados.mapas_parametros.y > 0.0)
+            && resultado.a <= 0.0) {
         discard;
     }
     return resultado;
@@ -1198,13 +1218,16 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
                     parametros_extras_shader_nativo(material_obj),
                     dtype=np.float32,
                 )
+                mapa_spec, forca_spec = parametros_mapa(material_obj, "specular")
+                mapa_trans, forca_trans = parametros_mapa(material_obj, "transparency")
+                mapas_parametros = np.array([forca_spec, forca_trans, 0.0, 0.0], np.float32)
                 uniforms = np.concatenate((
                     mvp.T.reshape(-1), modelo.T.reshape(-1),
                     normal_modelo.T.reshape(-1), view.T.reshape(-1),
                     cor, flags, ambiente, especular, emissiva, observador,
                     shader_preset, np.asarray(shader_parametros, np.float32),
                     shader_extra, posicoes.reshape(-1), cores.reshape(-1),
-                    cores_especulares.reshape(-1),
+                    cores_especulares.reshape(-1), mapas_parametros,
                 )).astype(np.float32)
                 buf_u = self.device.create_buffer_with_data(
                     data=uniforms, usage=wgpu.BufferUsage.UNIFORM
@@ -1220,6 +1243,8 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
                 textura_lit = self._textura(textura_litsphere)
                 textura_oclusa = self._textura(textura_ao)
                 textura_grad = self._textura(textura_gradiente)
+                textura_spec = self._textura(mapa_spec)
+                textura_trans = self._textura(mapa_trans)
                 bind = self.device.create_bind_group(
                     layout=pipeline.get_bind_group_layout(0),
                     entries=[
@@ -1245,6 +1270,8 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
                         wgpu.BindGroupEntry(
                             binding=6, resource=textura_grad.create_view()
                         ),
+                        wgpu.BindGroupEntry(binding=7, resource=textura_spec.create_view()),
+                        wgpu.BindGroupEntry(binding=8, resource=textura_trans.create_view()),
                     ],
                 )
                 passagem.set_bind_group(0, bind)

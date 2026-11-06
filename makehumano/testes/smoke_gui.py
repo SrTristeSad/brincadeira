@@ -76,6 +76,7 @@ def main():
         ambiente["MAKEHUMANO_VULKAN_NORMALMAP_FILE"] = str(marcador_normalmap)
         ambiente["MAKEHUMANO_VULKAN_RECORTE_FILE"] = str(marcador_recorte)
         ambiente["MAKEHUMANO_VULKAN_SKIN_SHADER_FILE"] = str(marcador_skin_shader)
+        ambiente["MAKEHUMANO_VULKAN_MATERIAL_MAPS_FILE"] = str(base / "material-maps.json")
         ambiente["WGPU_BACKEND_TYPE"] = "Vulkan"
         ambiente["LIBGL_ALWAYS_SOFTWARE"] = "1"
         ambiente["QT_X11_NO_MITSHM"] = "1"
@@ -167,6 +168,7 @@ def main():
                     if (
                         gui_pronta and quadro_vulkan and picking_valido
                         and (base / "functional.json").is_file()
+                        and (base / "material-maps.json").is_file()
                         and framebuffer_valido and render_valido and skin_valido
                         and xray_valido and litsphere_valido
                         and estilos_validos and normalmap_valido
