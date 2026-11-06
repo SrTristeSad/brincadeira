@@ -114,11 +114,11 @@ uma build bem-sucedida como prova de compatibilidade completa.
 
 ## Evidências desta etapa
 
-- [CI e pacotes da revisão funcional](https://github.com/SrTristeSad/brincadeira/actions/runs/42197108848)
-- [CPU, Vulkan e GUI com/sem PyOpenGL](https://github.com/SrTristeSad/brincadeira/actions/runs/42197108664)
-- [265 testes em Python 3.12 e 3.13](https://github.com/SrTristeSad/brincadeira/actions/runs/42197108502)
+- [CI e pacotes da revisão funcional](https://github.com/SrTristeSad/brincadeira/actions/runs/42200156312)
+- [CPU, Vulkan e GUI com/sem PyOpenGL](https://github.com/SrTristeSad/brincadeira/actions/runs/42200156326)
+- [280 testes em Python 3.12 e 3.13](https://github.com/SrTristeSad/brincadeira/actions/runs/42200156388)
 
-As builds acima correspondem ao código `806a981c87ae1ec100241fa24060d2a162e91d60`.
+As builds acima correspondem ao código `5262f5373e52d94ec5fc45e4d92824641a274ffd`.
 
 Consultar a conclusão dos jobs antes de aprovar um ZIP. O teste pelos fontes
 usa diretamente `codigo/makehuman/makehuman.py`, evitando deixar processos
