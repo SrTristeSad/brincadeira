@@ -4,8 +4,8 @@ A fase piloto usa interseção de triângulos projetados na CPU. O resultado
 mantém o contrato mh.getPickedColor() -> RGB de clrid(group), que a lógica
 original de gui3d/selection.py já utiliza. Nenhuma nova ferramenta é criada.
 
-Limitado a triângulos/quads, sem clipping de primitivas que cruzam near plane.
-Não é substituto definitivo do picking da GPU; a paridade será testada.
+Limitado a triângulos/quads, agora com clipping homogêneo dos planos Vulkan.
+Ainda não substitui o picking de GPU; a paridade será testada.
 """
 
 import numpy as np
@@ -14,6 +14,56 @@ from vulkan_scene import matriz_wgpu
 
 
 COR_VAZIA = (0, 0, 0)
+
+# Planos homogêneos do volume Vulkan (x,y em [-w,w]; z em [0,w]).
+# A última condição protege a divisão perspectiva quando w tende a zero.
+_PLANOS_CLIP = np.asarray([
+    [1, 0, 0, 1], [-1, 0, 0, 1],
+    [0, 1, 0, 1], [0, -1, 0, 1],
+    [0, 0, 1, 0], [0, 0, -1, 1],
+    [0, 0, 0, 1],
+], dtype=np.float64)
+_LIMITES_CLIP = np.asarray([0, 0, 0, 0, 0, 0, 1e-6], dtype=np.float64)
+
+
+def _recortar_triangulo(vertices):
+    """Recorta um triângulo homogêneo e o triangula em leque."""
+    poligono = list(vertices)
+    for plano, limite in zip(_PLANOS_CLIP, _LIMITES_CLIP):
+        if not poligono:
+            break
+        novo = []
+        anterior = poligono[-1]
+        distancia_anterior = float(anterior @ plano - limite)
+        for atual in poligono:
+            distancia_atual = float(atual @ plano - limite)
+            dentro_anterior = distancia_anterior >= 0
+            dentro_atual = distancia_atual >= 0
+            if dentro_anterior != dentro_atual:
+                t = distancia_anterior / (distancia_anterior - distancia_atual)
+                novo.append(anterior + t * (atual - anterior))
+            if dentro_atual:
+                novo.append(atual)
+            anterior = atual
+            distancia_anterior = distancia_atual
+        poligono = novo
+    return [np.stack((poligono[0], poligono[i], poligono[i + 1]))
+            for i in range(1, len(poligono) - 1)]
+
+
+def _triangulos_visiveis(clip, indices):
+    """Mantém triângulos internos vetorizados e recorta só os de borda."""
+    vertices = np.asarray(clip[indices], dtype=np.float64)
+    dentro = np.all(
+        vertices @ _PLANOS_CLIP.T >= _LIMITES_CLIP, axis=(1, 2)
+    )
+    if np.all(dentro):
+        return vertices
+    recortados = [trio for tri in vertices[~dentro]
+                  for trio in _recortar_triangulo(tri)]
+    if recortados:
+        return np.concatenate((vertices[dentro], np.stack(recortados)), axis=0)
+    return vertices[dentro]
 
 
 def _segmentos_faces(face, start, count):
@@ -65,11 +115,6 @@ def selecionar_cor(mundo, cameras, x, y, largura, altura):
             coords, np.ones((len(coords), 1), dtype=np.float32),
         ), axis=1)
         clip = vertices @ mvp.T
-        valido = clip[:, 3] > 1e-6
-        pontos = np.zeros((len(coords), 3), dtype=np.float32)
-        pontos[valido] = clip[valido, :3] / clip[valido, 3:4]
-        pontos[:, 0] = (pontos[:, 0] * 0.5 + 0.5) * largura
-        pontos[:, 1] = (0.5 - pontos[:, 1] * 0.5) * altura
 
         for i, (inicio, quantidade) in enumerate(obj.groups):
             tri = _segmentos_faces(face, inicio, quantidade)
@@ -77,11 +122,12 @@ def selecionar_cor(mundo, cameras, x, y, largura, altura):
                 continue
             if np.any(tri < 0) or np.any(tri >= len(coords)):
                 raise ValueError("Índice de face fora da malha do MakeHuman")
-            # Não usar pontos atrás da câmera ou antes do plano próximo.
-            tri = tri[np.all(valido[tri], axis=1)]
-            if not len(tri):
+            p = _triangulos_visiveis(clip, tri)
+            if not len(p):
                 continue
-            p = pontos[tri]
+            p = p[:, :, :3] / p[:, :, 3:4]
+            p[:, :, 0] = (p[:, :, 0] * 0.5 + 0.5) * largura
+            p[:, :, 1] = (0.5 - p[:, :, 1] * 0.5) * altura
             ax, ay = p[:, 0, 0], p[:, 0, 1]
             bx, by = p[:, 1, 0], p[:, 1, 1]
             cx, cy = p[:, 2, 0], p[:, 2, 1]
