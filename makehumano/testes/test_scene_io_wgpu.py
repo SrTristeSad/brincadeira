@@ -15,6 +15,13 @@ import numpy as np
 
 
 class ScenePersistence(unittest.TestCase):
+    def test_unknown_light_attribute_uses_normal_python_lookup(self):
+        light = Scene().lights[0]
+        self.assertFalse(hasattr(light, "optional_plugin_parameter"))
+        self.assertEqual(getattr(light, "optional_plugin_parameter", 7), 7)
+        with self.assertRaises(AttributeError):
+            _ = light.optional_plugin_parameter
+
     def test_original_light_controls_roundtrip(self):
         original = Scene()
         light = original.lights[0]
@@ -23,13 +30,14 @@ class ScenePersistence(unittest.TestCase):
         light.fov = 35.
         light.attenuation = .125
         light.areaLightSize = 7.
+        light.areaLights = 12
         light.specular = (.2, .4, .6)
         with tempfile.TemporaryDirectory() as directory:
             path = str(Path(directory) / "iluminação.mhscene")
             self.assertTrue(original.save(path))
             restored = Scene()
             self.assertTrue(restored.load(path))
-        for attribute in ("position", "focus", "fov", "attenuation", "areaLightSize"):
+        for attribute in ("position", "focus", "fov", "attenuation", "areaLightSize", "areaLights"):
             self.assertEqual(getattr(restored.lights[0], attribute), getattr(light, attribute))
         np.testing.assert_allclose(restored.lights[0].specular.values, light.specular.values)
         for actual, expected in zip(parametros_foco_atenuacao(restored), parametros_foco_atenuacao(original)):

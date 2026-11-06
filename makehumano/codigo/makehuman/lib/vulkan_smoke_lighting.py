@@ -76,6 +76,49 @@ def validar_luzes(cena, cameras, mundo, app, marker):
         if not np.array_equal(point, render()):
             raise RuntimeError("Luz pontual padrão deixou de ser compatível")
 
+        light.focus = center
+        light.areaLights = 8
+        light.areaLightSize = 0.
+        if not np.array_equal(point, render()):
+            raise RuntimeError("Área de tamanho zero alterou a luz pontual")
+        light.areaLightSize = float(np.linalg.norm(position-center)) * 1.2
+        area = render()
+        if np.array_equal(point, area) or not energy(area):
+            raise RuntimeError("Tamanho da área não alterou a iluminação")
+        if not np.array_equal(point[:, :, 3], area[:, :, 3]):
+            raise RuntimeError("Luz de área alterou a cobertura do personagem")
+        if not np.array_equal(area, render()):
+            raise RuntimeError("Amostragem de área mudou entre frames idênticos")
+        from vulkan_area_lights import amostrar_luzes
+        expanded, _ = amostrar_luzes(scene)
+        reference_scene = SimpleNamespace(environment=scene.environment, lights=[
+            SimpleNamespace(position=sample.position, focus=center, fov=180., attenuation=0.,
+                            color=tuple(c / len(expanded.lights) for c in light.color),
+                            specular=(0., 0., 0.)) for sample in expanded.lights])
+        cena.atualizar_iluminacao(reference_scene)
+        reference_area = render()
+        if np.max(np.abs(reference_area.astype(int)-area.astype(int))) > 1:
+            raise RuntimeError("Área não equivale à soma de luzes com energia normalizada")
+        cena.atualizar_iluminacao(scene)
+        light.areaLights = 2
+        two_samples = render()
+        if np.array_equal(two_samples, area):
+            raise RuntimeError("Samples não alterou a integração da área")
+        # Presets que originalmente usam a primeira luz devem integrar só
+        # as amostras desse emissor, sem passar a usar outros emissores.
+        from getpath import getSysDataPath
+        Object.material.shader = getSysDataPath("shaders/glsl/phong")
+        light.areaLights = 1
+        phong_point = render()
+        light.areaLights = 8
+        phong_area = render()
+        if np.array_equal(phong_point, phong_area) or not energy(phong_area):
+            raise RuntimeError("Preset Phong ignorou a área da primeira luz")
+        light.areaLightSize = 0.
+        if not np.array_equal(phong_point, render()):
+            raise RuntimeError("Área zero mudou o preset Phong pontual")
+        Object.material.shader = None
+
         # Exercita os eventos dos widgets originais; nenhum valor da cena
         # usada pelo usuário é modificado para esta regressão de Softness.
         item = app.modules["7_scene_editor"].LightSceneItem(SimpleNamespace(scene=app.scene), Light(), 0)
@@ -87,11 +130,23 @@ def validar_luzes(cena, cameras, mundo, app, marker):
         item.fov.callEvent("onChange", [30.])
         if item.light.attenuation != .25 or item.light.fov != 30.:
             raise RuntimeError("Eventos do editor de luz não atualizaram os parâmetros")
+        item.soft.callEvent("onChange", True)
+        if item.light.areaLights != 2:
+            raise RuntimeError("Soft light não ativou as amostras da área")
+        item.samples.callEvent("onChange", [8])
+        if item.light.areaLights != 8:
+            raise RuntimeError("Samples não atualizou a luz original")
+        item.soft.callEvent("onChange", False)
+        if item.light.areaLights != 1:
+            raise RuntimeError("Soft light não restaurou a luz pontual")
         app._smoke_light_item = item
         path = Path(marker)
         for name, pixels in (("light-point", point), ("light-attenuated", attenuated),
-                             ("light-spot", spot), ("light-spot-away", away)):
+                             ("light-spot", spot), ("light-spot-away", away),
+                             ("light-area", area), ("light-area-two", two_samples),
+                             ("light-area-phong", phong_area)):
             Image(data=pixels).save(str(path.parent / (name + ".png")))
-        path.write_text(json.dumps({"attenuation": True, "focus": True, "original_widgets": True}), encoding="utf-8")
+        path.write_text(json.dumps({"attenuation": True, "focus": True, "original_widgets": True,
+                                   "area": True, "normalized_energy": True, "repeatable": True}), encoding="utf-8")
     finally:
         cena.atualizar_iluminacao(previous)

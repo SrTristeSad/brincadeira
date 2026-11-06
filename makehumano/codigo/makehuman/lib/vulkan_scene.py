@@ -11,6 +11,7 @@ import os
 import numpy as np
 
 from vulkan_material_maps import parametros_mapa, mapa_transparencia_ativo
+from vulkan_area_lights import amostrar_luzes, MAX_LUZES_VULKAN
 
 
 def pixels_textura_rgba(dados):
@@ -489,12 +490,13 @@ struct Globals {
     shader_preset: vec4<f32>,
     shader_parametros: vec4<f32>,
     shader_parametros_extra: vec4<f32>,
-    luzes_posicao: array<vec4<f32>, 8>,
-    luzes_cor: array<vec4<f32>, 8>,
-    luzes_especular: array<vec4<f32>, 8>,
+    luzes_posicao: array<vec4<f32>, __CAPACIDADE_LUZES__>,
+    luzes_cor: array<vec4<f32>, __CAPACIDADE_LUZES__>,
+    luzes_especular: array<vec4<f32>, __CAPACIDADE_LUZES__>,
     mapas_parametros: vec4<f32>,
-    luzes_direcao: array<vec4<f32>, 8>,
-    luzes_atenuacao: array<vec4<f32>, 8>,
+    luzes_direcao: array<vec4<f32>, __CAPACIDADE_LUZES__>,
+    luzes_atenuacao: array<vec4<f32>, __CAPACIDADE_LUZES__>,
+    amostragem_luzes: vec4<f32>,
 };
 @group(0) @binding(0) var<uniform> dados: Globals;
 @group(0) @binding(1) var mapa: texture_2d<f32>;
@@ -537,7 +539,7 @@ fn fator_luz(indice: i32, mundo: vec3<f32>) -> f32 {
         let direcao = delta * inverseSqrt(max(distancia2, 0.000000000001));
         fator *= select(0.0, 1.0, dot(direcao, foco.xyz) >= foco.w);
     }
-    return fator;
+    return fator * dados.luzes_atenuacao[indice].y;
 }
 fn cor_fragmento(i: Fragmento) -> vec4<f32> {
     let uv = vec2<f32>(i.uv.x, 1.0 - i.uv.y);
@@ -600,8 +602,8 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
     if (dados.shader_preset.x > 5.5 && dados.shader_preset.x < 6.5) {
         let ao = textureSample(mapa_ao, amostra, uv);
         var cor_skin = dados.ambiente.rgb * dados.cor.rgb * tex.rgb;
-        if (dados.flags.z > 0.5) {
-            let luz_skin = normalize(dados.luzes_posicao[0].xyz - i.mundo);
+        for (var s: i32 = 0; s < i32(dados.amostragem_luzes.x); s = s + 1) {
+            let luz_skin = normalize(dados.luzes_posicao[s].xyz - i.mundo);
             let ndotl = max(dot(normal, luz_skin), 0.0);
             if (ndotl > 0.0) {
                 let gradiente_x = clamp(ndotl * ao.b, 0.01, 0.99);
@@ -609,14 +611,14 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
                     mapa_gradiente, amostra,
                     vec2<f32>(gradiente_x, 0.5),
                 ).rgb;
-                cor_skin += fator_luz(0, i.mundo) * ndotl * ao.b * gradiente * tex.rgb;
+                cor_skin += fator_luz(s, i.mundo) * ndotl * ao.b * gradiente * tex.rgb;
                 let meio = normalize(luz_skin + direcao_visao);
                 let brilho = pow(
                     max(dot(normal, meio), 0.0),
                     max(dados.especular.w, 0.001),
                 );
-                cor_skin += dados.luzes_especular[0].rgb
-                            * cor_especular * brilho * fator_luz(0, i.mundo);
+                cor_skin += dados.luzes_especular[s].rgb
+                            * cor_especular * brilho * fator_luz(s, i.mundo);
             }
         }
         return vec4<f32>(cor_skin, tex.a * dados.cor.a);
@@ -627,11 +629,11 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
         let ambiente_phong = dados.ambiente.rgb * dados.shader_parametros.xyz;
         let tex_phong = rgb * ao_factor;
         var color_phong = ambiente_phong * tex_phong * dados.cor.rgb;
-        if (dados.flags.z > 0.5) {
-            let light_dir = normalize(dados.luzes_posicao[0].xyz - i.mundo);
+        for (var s: i32 = 0; s < i32(dados.amostragem_luzes.x); s = s + 1) {
+            let light_dir = normalize(dados.luzes_posicao[s].xyz - i.mundo);
             let ndotl = max(dot(normal, light_dir), 0.0);
-            color_phong += dados.luzes_cor[0].rgb * tex_phong
-                           * dados.cor.rgb * ndotl * fator_luz(0, i.mundo);
+            color_phong += dados.luzes_cor[s].rgb * tex_phong
+                           * dados.cor.rgb * ndotl * fator_luz(s, i.mundo);
             if (ndotl > 0.0) {
                 let half_dir = normalize(light_dir + direcao_visao);
                 let expoente = max(1.0, dados.especular.w
@@ -639,8 +641,8 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
                 let especular_phong = pow(
                     max(dot(normal, half_dir), 0.0), expoente
                 );
-                color_phong += dados.luzes_especular[0].rgb
-                               * cor_especular * especular_phong * fator_luz(0, i.mundo);
+                color_phong += dados.luzes_especular[s].rgb
+                               * cor_especular * especular_phong * fator_luz(s, i.mundo);
             }
         }
         return vec4<f32>(
@@ -654,17 +656,17 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
     if (dados.shader_preset.x > 4.5 && dados.shader_preset.x < 5.5) {
         let tex_color = tex.rgb;
         var rgb_normalmap = dados.ambiente.rgb * dados.cor.rgb * tex_color;
-        if (dados.flags.z > 0.5) {
-            let direcao = normalize(dados.luzes_posicao[0].xyz - i.mundo);
+        for (var s: i32 = 0; s < i32(dados.amostragem_luzes.x); s = s + 1) {
+            let direcao = normalize(dados.luzes_posicao[s].xyz - i.mundo);
             let difusa = max(dot(direcao, normal), 0.0);
-            rgb_normalmap += dados.luzes_cor[0].rgb * dados.cor.rgb
-                             * tex_color * difusa * fator_luz(0, i.mundo);
+            rgb_normalmap += dados.luzes_cor[s].rgb * dados.cor.rgb
+                             * tex_color * difusa * fator_luz(s, i.mundo);
             let especular_normal = pow(
                 clamp(dot(reflect(-direcao, normal), direcao_visao), 0.0, 1.0),
                 max(dados.especular.w, 0.001),
             );
-            rgb_normalmap += dados.luzes_especular[0].rgb
-                             * cor_especular * especular_normal * fator_luz(0, i.mundo);
+            rgb_normalmap += dados.luzes_especular[s].rgb
+                             * cor_especular * especular_normal * fator_luz(s, i.mundo);
         }
         return vec4<f32>(rgb_normalmap, 1.0);
     }
@@ -677,21 +679,21 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
                              tex.a * dados.cor.a);
         }
         var multiplier = dados.shader_parametros.z;
-        if (dados.flags.z > 0.5) {
-            let light_dir = normalize(dados.luzes_posicao[0].xyz - i.mundo);
+        for (var s: i32 = 0; s < i32(dados.amostragem_luzes.x); s = s + 1) {
+            let light_dir = normalize(dados.luzes_posicao[s].xyz - i.mundo);
             let meio = normalize(light_dir + direcao_visao);
             let spec = pow(
                 max(dot(normal, meio), 0.0),
                 max(dados.shader_parametros.y, 0.0001),
             );
-            multiplier += fator_luz(0, i.mundo) * dados.shader_parametros.w
+            multiplier += fator_luz(s, i.mundo) * dados.shader_parametros.w
                           * dot(spec_factor, vec3<f32>(1.0 / 3.0)) * smoothstep(
                 dados.shader_parametros_extra.y - 0.01,
                 dados.shader_parametros_extra.y,
                 spec,
             );
             let diff = max(dot(normal, light_dir), 0.0);
-            multiplier += fator_luz(0, i.mundo) * dados.shader_parametros_extra.x * smoothstep(
+            multiplier += fator_luz(s, i.mundo) * dados.shader_parametros_extra.x * smoothstep(
                 dados.shader_parametros_extra.z - 0.01,
                 dados.shader_parametros_extra.z,
                 diff,
@@ -741,7 +743,7 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
                        + select(vec3<f32>(0.0), tex.rgb, usar_textura);
         return vec4<f32>(contorno * cor_xray, contorno);
     }
-    for (var j: i32 = 0; j < 8; j = j + 1) {
+    for (var j: i32 = 0; j < __CAPACIDADE_LUZES__; j = j + 1) {
         if (j >= i32(dados.flags.z)) {
             break;
         }
@@ -784,7 +786,7 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
     return resultado;
 }
 """
-        shader = self.device.create_shader_module(code=codigo)
+        shader = self.device.create_shader_module(code=codigo.replace("__CAPACIDADE_LUZES__", str(MAX_LUZES_VULKAN)))
         # Preserva a cobertura alpha dos materiais (inclusive textura alpha)
         # para que a máscara de produção venha da GPU, não da captura Qt.
         blend = wgpu.BlendState(
@@ -1124,11 +1126,13 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
         from vulkan_lighting import (
             dados_iluminacao_cena, cores_especulares_cena, parametros_foco_atenuacao,
         )
+        cena_amostrada, amostras_primeira = amostrar_luzes(self._cena_luzes)
         ambiente, posicoes, cores, total_luzes = dados_iluminacao_cena(
-            self._cena_luzes,
+            cena_amostrada, MAX_LUZES_VULKAN,
         )
-        cores_especulares = cores_especulares_cena(self._cena_luzes)
-        direcoes_luzes, atenuacoes_luzes = parametros_foco_atenuacao(self._cena_luzes)
+        cores_especulares = cores_especulares_cena(cena_amostrada, MAX_LUZES_VULKAN)
+        direcoes_luzes, atenuacoes_luzes = parametros_foco_atenuacao(cena_amostrada, MAX_LUZES_VULKAN)
+        amostragem_luzes = np.array([amostras_primeira, 0., 0., 0.], np.float32)
         self.objetos_desenhados = 0
         self.linhas_desenhadas = 0
         if mundo is not None:
@@ -1268,7 +1272,7 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
                     shader_preset, np.asarray(shader_parametros, np.float32),
                     shader_extra, posicoes.reshape(-1), cores.reshape(-1),
                     cores_especulares.reshape(-1), mapas_parametros,
-                    direcoes_luzes.reshape(-1), atenuacoes_luzes.reshape(-1),
+                    direcoes_luzes.reshape(-1), atenuacoes_luzes.reshape(-1), amostragem_luzes,
                 )).astype(np.float32)
                 buf_u = self.device.create_buffer_with_data(
                     data=uniforms, usage=wgpu.BufferUsage.UNIFORM

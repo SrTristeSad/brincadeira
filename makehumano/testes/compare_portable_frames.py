@@ -17,6 +17,7 @@ FRAMES = (
     "ao-phong-white", "ao-phong-black",
     "projection-3d", "projection-accumulated",
     "projection-perspective",
+    "light-area", "light-area-two", "light-area-phong",
 )
 
 

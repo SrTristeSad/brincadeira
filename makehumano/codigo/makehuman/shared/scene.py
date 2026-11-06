@@ -113,8 +113,6 @@ class SceneObject(object):
     def __getattr__(self, attr):
         if attr in object.__getattribute__(self, "_attributes"):
             return object.__getattribute__(self, "_" + attr)
-        elif hasattr(self, attr):
-            return object.__getattribute__(self, attr)
         else:
             raise AttributeError(
                 '"%s" type scene objects do not have any "%s" attribute.'
