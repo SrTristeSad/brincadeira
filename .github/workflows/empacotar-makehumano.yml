@@ -4,6 +4,10 @@ on:
   push:
     paths:
       - ".github/workflows/empacotar-makehumano.yml"
+      - "makehumano/codigo/**"
+      - "makehumano/empacotamento/**"
+      - "makehumano/testes/smoke_gui.py"
+      - "makehumano/motor_wgpu/requirements.txt"
   workflow_dispatch:
 
 permissions:
@@ -50,6 +54,10 @@ jobs:
             --paths makehumano/codigo/makehuman/shared \
             --paths makehumano/codigo/makehuman/apps \
             --paths makehumano/codigo/makehuman/apps/gui \
+            --paths makehumano/codigo/makehuman/plugins \
+            --additional-hooks-dir makehumano/empacotamento/hooks \
+            --exclude-module OpenGL \
+            --exclude-module IPython \
             --hidden-import mhmain \
             --hidden-import cProfile \
             --collect-all PyQt5 \
@@ -111,12 +119,13 @@ jobs:
               '@echo off\r\ncd /d "%~dp0"\r\n'
               'set WGPU_BACKEND_TYPE=Vulkan\r\n'
               'set "MAKEHUMANO_PORTABLE_ERROR_LOG=%~dp0MakeHumano-erro.txt"\r\n'
-              '"%~dp0MakeHumano.exe" %*\r\n'
+              'set MAKEHUMANO_CONSOLE_LOG=1\r\n'
+              '"%~dp0MakeHumano.exe" %* > "%~dp0MakeHumano-inicializacao.txt" 2>&1\r\n'
               'if errorlevel 1 (\r\n'
               'echo.\r\n'
               'echo Erro ao abrir MakeHumano.\r\n'
               'if exist "%~dp0MakeHumano-erro.txt" type "%~dp0MakeHumano-erro.txt"\r\n'
-              'echo Envie o arquivo MakeHumano-erro.txt ao relatar o problema.\r\n'
+              'echo Envie MakeHumano-erro.txt e MakeHumano-inicializacao.txt ao relatar o problema.\r\n'
               'pause\r\n'
               ')\r\n',
               encoding="utf-8",
@@ -171,7 +180,33 @@ jobs:
           rm -f autoteste.ok MakeHumano-erro.txt
           test -x ./Iniciar-MakeHumano.sh
 
-      - name: Verificar abertura da GUI congelada no Linux
+      # Lavapipe é apenas o driver Vulkan da CI; não é distribuído no ZIP.
+      - name: Instalar driver Vulkan de software para testar a GUI Windows
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          install: mingw-w64-x86_64-mesa
+
+      - name: Abrir GUI congelada e exercitar ferramentas no Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $mesa = "C:\msys64\mingw64"
+          $env:PATH = "$mesa\bin;$env:PATH"
+          $env:VK_DRIVER_FILES = "$mesa\share\vulkan\icd.d\lvp_icd.x86_64.json"
+          # PyInstaller muda a busca de DLLs: o loader deve estar ao lado do
+          # executável durante o teste. Removê-lo antes de publicar o pacote.
+          Copy-Item "$mesa\bin\vulkan-1.dll" dist/MakeHumano/
+          try {
+            Remove-Item Env:MAKEHUMANO_PORTABLE_SELFTEST -ErrorAction SilentlyContinue
+            python makehumano/testes/smoke_gui.py --executable dist/MakeHumano/MakeHumano.exe --log-dir portable-logs
+            if ($LASTEXITCODE -ne 0) { throw "Falha no smoke da GUI Windows" }
+          } finally {
+            Remove-Item dist/MakeHumano/vulkan-1.dll -ErrorAction SilentlyContinue
+          }
+
+      - name: Verificar GUI congelada e ferramentas no Linux
         if: runner.os == 'Linux'
         shell: bash
         run: |
@@ -183,33 +218,20 @@ jobs:
             libxcb-randr0 libxcb-render-util0 libxcb-xinput0 \
             libxcb-util1 libxcb-shape0 libxcb-xfixes0 \
             libxcb-sync1 libx11-xcb1 libfontconfig1
-          cd dist/MakeHumano
-          export WGPU_BACKEND_TYPE=Vulkan
-          export LIBGL_ALWAYS_SOFTWARE=1
-          export QT_X11_NO_MITSHM=1
-          export MAKEHUMANO_SMOKE_READY_FILE="$(pwd)/gui-congelada.ok"
-          export HOME="$(mktemp -d)"
-          xvfb-run -a -s "-screen 0 1280x800x24" ./MakeHumano > teste-gui.log 2>&1 &
-          processo=$!
-          trap 'kill "$processo" 2>/dev/null || true' EXIT
-          for tentativa in $(seq 1 55); do
-            if test -f gui-congelada.ok; then break; fi
-            if ! kill -0 "$processo" 2>/dev/null; then
-              echo "Executável portátil encerrou antes de abrir a GUI:"
-              tail -100 teste-gui.log
-              exit 1
-            fi
-            sleep 1
-          done
-          if ! test -f gui-congelada.ok; then
-            echo "GUI congelada não sinalizou abertura:"
-            tail -100 teste-gui.log
-            exit 1
-          fi
-          kill "$processo" 2>/dev/null || true
-          wait "$processo" || true
-          rm -f gui-congelada.ok teste-gui.log
-          echo "GUI portátil Linux abriu em Vulkan com recursos originais."
+          xvfb-run -a -s "-screen 0 1280x800x24" \
+            python makehumano/testes/smoke_gui.py \
+              --executable dist/MakeHumano/MakeHumano --log-dir portable-logs
+
+      - name: Preservar diagnóstico da GUI e análise PyInstaller
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Diagnostico-portatil-${{ matrix.nome }}
+          path: |
+            portable-logs/
+            build/MakeHumano/warn-MakeHumano.txt
+            dist/MakeHumano/MakeHumano-erro.txt
+          retention-days: 14
 
       - name: Disponibilizar o ZIP portátil
         uses: actions/upload-artifact@v4

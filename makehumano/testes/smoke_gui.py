@@ -6,6 +6,7 @@ Verifica se o carregamento da GUI, dos plugins e dos morph targets terminou.
 """
 
 from pathlib import Path
+import argparse
 import os
 import subprocess
 import sys
@@ -19,7 +20,11 @@ TIMEOUT_SECONDS = 90
 
 
 def main():
-    if not os.environ.get("DISPLAY"):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--executable", type=Path, help="Testar binário congelado")
+    parser.add_argument("--log-dir", type=Path, help="Preservar logs da CI")
+    args = parser.parse_args()
+    if sys.platform != "win32" and not os.environ.get("DISPLAY"):
         print("DISPLAY não definido. Execute com xvfb-run ou em desktop X11.", file=sys.stderr)
         return 2
 
@@ -41,6 +46,13 @@ def main():
         home = base / "home"
         home.mkdir()
         ambiente = os.environ.copy()
+        # MH_HOME_LOCATION funciona também no Windows, onde HOME não
+        # substitui a pasta Documentos consultada no registro pelo MakeHuman.
+        ambiente["MH_HOME_LOCATION"] = str(home)
+        ambiente["MAKEHUMANO_CONSOLE_LOG"] = "1"
+        ambiente.pop("MAKEHUMANO_PORTABLE_SELFTEST", None)
+        ambiente["MAKEHUMANO_PORTABLE_ERROR_LOG"] = str(base / "error.log")
+        ambiente["MAKEHUMANO_SMOKE_FUNCTIONAL_FILE"] = str(base / "functional.json")
         ambiente["HOME"] = str(home)
         ambiente["XDG_CONFIG_HOME"] = str(home / ".config")
         ambiente["MAKEHUMANO_SMOKE_READY_FILE"] = str(marker)
@@ -61,10 +73,12 @@ def main():
         ambiente["LIBGL_ALWAYS_SOFTWARE"] = "1"
         ambiente["QT_X11_NO_MITSHM"] = "1"
 
-        print(f"Iniciando GUI: {APP}", flush=True)
+        command = ([str(args.executable.resolve())] if args.executable else
+                   [sys.executable, "-u", str(APP)])
+        print(f"Iniciando GUI: {command}", flush=True)
         with logfile.open("wb") as log:
             processo = subprocess.Popen(
-                [sys.executable, "-u", str(APP)],
+                command,
                 cwd=ROOT,
                 env=ambiente,
                 stdout=log,
@@ -145,6 +159,7 @@ def main():
                     )
                     if (
                         gui_pronta and quadro_vulkan and picking_valido
+                        and (base / "functional.json").is_file()
                         and framebuffer_valido and render_valido and skin_valido
                         and xray_valido and litsphere_valido
                         and estilos_validos and normalmap_valido
@@ -166,6 +181,10 @@ def main():
                         processo.kill()
                         processo.wait()
 
+        if args.log_dir:
+            import shutil
+            args.log_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(base, args.log_dir, dirs_exist_ok=True)
         log_text = logfile.read_text(encoding="utf-8", errors="replace")
         print("--- LOG DE INICIALIZAÇÃO (últimos 15 mil caracteres) ---")
         print(log_text[-15000:])
@@ -179,6 +198,7 @@ def main():
                 "Traceback (most recent call last):",
                 "GPUValidationError",
                 "WGPUValidationError",
+                "Could not load ",
             )
             if any(erro in log_text for erro in erros_graficos):
                 print(

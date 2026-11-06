@@ -174,6 +174,9 @@ def get_platform_paths():
         stderr_filename = os.path.join(home, "makehuman-error.txt")
 
 def redirect_standard_streams():
+    # O smoke e o iniciador portátil precisam capturar também erros Qt/wgpu.
+    if os.environ.get("MAKEHUMANO_CONSOLE_LOG") == "1":
+        return
     import locale
     encoding = locale.getpreferredencoding()
     if stdout_filename:
@@ -573,7 +576,30 @@ def getCredits(richtext=False):
     text = _wordwrap(text)
     return( _block(text))
 
+def install_portable_error_handler():
+    """Registrar falhas de inicialização mesmo abrindo o .exe diretamente."""
+    error_path = os.environ.get("MAKEHUMANO_PORTABLE_ERROR_LOG")
+    if not error_path and isBuild():
+        error_path = os.path.join(getCwd(), "MakeHumano-erro.txt")
+    if not error_path:
+        return
+    previous_hook = sys.excepthook
+
+    def report(exc_type, exc_value, exc_traceback):
+        import traceback
+        try:
+            with open(error_path, "a", encoding="utf-8") as output:
+                traceback.print_exception(exc_type, exc_value, exc_traceback, file=output)
+        except OSError:
+            # Não esconder o erro original se o diretório não for gravável.
+            pass
+        previous_hook(exc_type, exc_value, exc_traceback)
+
+    sys.excepthook = report
+
+
 def main():
+    install_portable_error_handler()
     print(getCopyrightMessage(short=True) + "\n")
 
     try:
@@ -591,7 +617,7 @@ def main():
         import traceback
         bt = traceback.format_exc()
         print(bt, file=sys.stderr)
-        return
+        raise
 
     # Pass release info to debug dump using environment variables
     os.environ['MH_FROZEN'] = "Yes" if isBuild() else "No"
@@ -610,16 +636,7 @@ def main():
     # A GUI original usa Qt e Vulkan. No empacotamento portátil,
     # verificar também o carregamento de mhmain e suas dependências:
     # --license termina antes dessa etapa e não detecta módulos ausentes.
-    try:
-        from mhmain import MHApplication
-    except Exception:
-        import traceback
-        erro = traceback.format_exc()
-        arquivo_erro = os.environ.get("MAKEHUMANO_PORTABLE_ERROR_LOG")
-        if arquivo_erro:
-            with open(arquivo_erro, "w", encoding="utf-8") as arquivo:
-                arquivo.write(erro)
-        raise
+    from mhmain import MHApplication
     if os.environ.get("MAKEHUMANO_PORTABLE_SELFTEST") == "1":
         marcador = os.environ.get("MAKEHUMANO_PORTABLE_SELFTEST_FILE")
         if marcador:
