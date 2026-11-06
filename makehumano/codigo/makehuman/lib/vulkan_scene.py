@@ -8,6 +8,8 @@ e shaders customizados ainda precisam ser migrados antes de remover OpenGL.
 
 import numpy as np
 
+from vulkan_material import parametros_material_vulkan
+
 
 def preparar_malha_original(obj):
     """Retorna vértices float32 [n,12] e triângulos uint32 de Object3D.
@@ -122,7 +124,7 @@ class CenaVulkan:
         self.formato = self.contexto.get_preferred_format(self.adapter)
         self.contexto.configure(device=self.device, format=self.formato)
         codigo = """
-struct Globals { mvp: mat4x4<f32>, cor: vec4<f32> };
+struct Globals { mvp: mat4x4<f32>, cor: vec4<f32>, flags: vec4<f32> };
 @group(0) @binding(0) var<uniform> dados: Globals;
 @group(0) @binding(1) var mapa: texture_2d<f32>;
 @group(0) @binding(2) var amostra: sampler;
@@ -148,9 +150,12 @@ struct Fragmento {
 }
 @fragment fn fs_main(i: Fragmento) -> @location(0) vec4<f32> {
     let tex = textureSample(mapa, amostra, vec2<f32>(i.uv.x, 1.0-i.uv.y));
-    let luz = 0.30 + 0.70 * max(
+    var luz = 0.30 + 0.70 * max(
         dot(normalize(i.normal), normalize(vec3<f32>(0.4, 0.8, 0.5))), 0.0
     );
+    if (dados.flags.x > 0.5) {
+        luz = 1.0;
+    }
     return vec4<f32>(tex.rgb * i.cor.rgb * dados.cor.rgb * luz,
                      tex.a * i.cor.a * dados.cor.a);
 }
@@ -335,17 +340,11 @@ struct Fragmento {
                 passagem.set_pipeline(pipeline)
                 cam = cameras[obj.cameraMode]
                 mvp = matriz_wgpu(cam, obj)
-                material = getattr(obj, "material", None)
-                diffuse = getattr(
-                    getattr(material, "diffuseColor", None), "values",
-                    (1.0, 1.0, 1.0)
-                )
-                cor = np.array(
-                    [*np.asarray(diffuse, dtype=np.float32)[:3], 1.0],
-                    dtype=np.float32,
-                )
+                # Reaproveita flags/cor/opacity do material original.
+                # A composição alfa ainda requer pipeline de transparência.
+                material_uniforms, caminho_textura = parametros_material_vulkan(obj)
                 uniforms = np.concatenate(
-                    (mvp.T.reshape(-1), cor)
+                    (mvp.T.reshape(-1), material_uniforms)
                 ).astype(np.float32)
                 buf_u = self.device.create_buffer_with_data(
                     data=uniforms, usage=wgpu.BufferUsage.UNIFORM
@@ -356,7 +355,7 @@ struct Fragmento {
                 buf_i = self.device.create_buffer_with_data(
                     data=indices, usage=wgpu.BufferUsage.INDEX
                 )
-                textura = self._textura(getattr(obj, "texture", None))
+                textura = self._textura(caminho_textura)
                 bind = self.device.create_bind_group(
                     layout=pipeline.get_bind_group_layout(0),
                     entries=[
