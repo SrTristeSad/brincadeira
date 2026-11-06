@@ -55,6 +55,20 @@ class TestarBackendVulkanPadrao(unittest.TestCase):
                 source = (APP / relativo).read_text(encoding="utf-8")
                 self.assertNotIn("MAKEHUMANO_VULKAN_PILOT", source)
 
+    def test_smoke_inicia_gui_com_shaders_sem_aviso_glsl_bloqueante(self):
+        smoke = (ROOT / "testes" / "smoke_gui.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn('"--noshaders"', smoke)
+        self.assertNotIn("'--noshaders'", smoke)
+        app = (APP / "core" / "mhmain.py").read_text(encoding="utf-8")
+        self.assertNotIn(
+            "Only simple shading will be available.", app,
+        )
+        self.assertIn(
+            "presets WGSL nativos disponíveis", app,
+        )
+
     def test_dependencias_padrao_nao_instalam_pyopengl(self):
         for path in (ROOT / "codigo" / "requirements.txt",
                      ROOT / "motor_wgpu" / "requirements.txt"):
