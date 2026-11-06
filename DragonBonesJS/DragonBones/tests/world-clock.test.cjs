@@ -245,3 +245,19 @@ test("readding an animatable to its current owner does not duplicate updates", (
     clock.advanceTime(0.25);
     assert.deepEqual(child.updates, [0.25]);
 });
+
+test("moving a nested WorldClock detaches its previous owner", () => {
+    const original = new WorldClock();
+    const destination = new WorldClock();
+    const nested = new WorldClock();
+    const leaf = animatable();
+
+    nested.add(leaf);
+    original.add(nested);
+    destination.add(nested);
+    assert.equal(nested.clock, destination);
+
+    original.advanceTime(0.25);
+    destination.advanceTime(0.5);
+    assert.deepEqual(leaf.updates, [0.5]);
+});
