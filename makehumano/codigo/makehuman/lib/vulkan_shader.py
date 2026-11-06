@@ -6,6 +6,23 @@ suporte a shaders personalizados enquanto ainda não foram convertidos.
 """
 
 
+# Apenas presets portados e testados entram no seletor original.
+# Shader.supported() continua False: isso descreve compilação de GLSL,
+# que ainda não existe em Vulkan.
+PRESETS_NATIVOS = frozenset(("xray",))
+
+
+def nome_preset_nativo(caminho):
+    """Nome oficial de um preset WGSL, sem aceitar GLSL arbitrário."""
+    if not caminho:
+        return None
+    normalizado = str(caminho).replace("\\", "/").lower().rstrip("/")
+    if "/shaders/glsl/" not in normalizado:
+        return None
+    nome = normalizado.rsplit("/", 1)[-1]
+    return nome if nome in PRESETS_NATIVOS else None
+
+
 class Shader:
     @classmethod
     def supported(cls):
@@ -43,7 +60,7 @@ def configuracao_shader_nativo(material):
     # Só roteamos nomes da família oficial de shaders incorporados.
     if "/shaders/glsl/" not in normalizado:
         return 0, (0.0, 0.0, 0.0, 0.0), normalizado
-    if nome != "xray":
+    if nome_preset_nativo(caminho) != "xray":
         return 0, (0.0, 0.0, 0.0, 0.0), nome
 
     parametros = getattr(material, "shaderParameters", {}) or {}
