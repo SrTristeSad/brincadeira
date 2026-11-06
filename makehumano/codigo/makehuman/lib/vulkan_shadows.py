@@ -85,6 +85,7 @@ def triangulos_cena(mundo, cameras, production=False):
     from vulkan_scene import preparar_malha_original, mapa_transparencia_ativo
     from vulkan_texture import getTexture
     from vulkan_scene import pixels_textura_rgba
+    from vulkan_shader import nome_preset_nativo
     result = []
     for obj in mundo or ():
         material = getattr(obj, 'material', None)
@@ -94,6 +95,8 @@ def triangulos_cena(mundo, cameras, production=False):
             continue
         faces = np.asarray(obj.primitives)
         if faces.ndim != 2 or faces.shape[1] not in (3, 4) or not len(faces):
+            continue
+        if nome_preset_nativo(getattr(material, 'shader', None)) == 'xray':
             continue
         if (getattr(material, 'transparent', False)
                 or float(getattr(material, 'opacity', 1.)) < 1.

@@ -224,6 +224,18 @@ class MaterialEditorTaskView(gui3d.TaskView):
         def onActivate(event):
             mat.depthless = w10e.value
 
+        self.castShadowsValue = self.materialBox.addWidget(TruthValue("Cast shadows", mat.castShadows))
+        @self.castShadowsValue.mhEvent
+        def onActivate(event):
+            mat.castShadows = self.castShadowsValue.value
+            mh.redraw()
+
+        self.receiveShadowsValue = self.materialBox.addWidget(TruthValue("Receive shadows", mat.receiveShadows))
+        @self.receiveShadowsValue.mhEvent
+        def onActivate(event):
+            mat.receiveShadows = self.receiveShadowsValue.value
+            mh.redraw()
+
         w10f = self.materialBox.addWidget(TruthValue("Auto ethnic skin", mat.autoBlendSkin))
         @w10f.mhEvent
         def onActivate(event):

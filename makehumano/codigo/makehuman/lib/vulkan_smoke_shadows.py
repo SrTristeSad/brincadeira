@@ -62,6 +62,29 @@ def validar_sombras(cena, cameras, mundo, directory):
     light.fov = 180.
     light.attenuation = 0.
     scene = SimpleNamespace(environment=SimpleNamespace(ambience=(.1, .1, .1)), lights=[light])
+    # Eventos dos controles na interface original e persistência .mhmat.
+    from core import G
+    from material import Material
+    human = G.app.selectedHuman
+    original_flags = (human.material.castShadows, human.material.receiveShadows)
+    editor = G.app.getTask('Utilities', 'Material Editor')
+    try:
+        editor.listMaterialSettings(human)
+        for widget, attribute in ((editor.castShadowsValue, 'castShadows'),
+                                  (editor.receiveShadowsValue, 'receiveShadows')):
+            widget.value = False
+            widget.callEvent('onActivate', False)
+            if getattr(human.material, attribute):
+                raise RuntimeError('Controle de sombras não alterou o Material original')
+        material_path = Path(directory) / 'shadow-controls.mhmat'
+        human.material.toFile(str(material_path))
+        loaded = Material()
+        loaded.fromFile(str(material_path))
+        if loaded.castShadows or loaded.receiveShadows:
+            raise RuntimeError('Salvar/reabrir material perdeu controles de sombras')
+    finally:
+        human.material.castShadows, human.material.receiveShadows = original_flags
+        editor.reloadMaterial()
     previous = cena._cena_luzes
 
     def render(objects=None, production=False):
@@ -111,7 +134,8 @@ def validar_sombras(cena, cameras, mundo, directory):
         for name, image in [('shadow-off', off), ('shadow-point', on), ('shadow-area', soft)]:
             Image(data=image).save(str(path / (name+'.png')))
         (path/'shadows.json').write_text(json.dumps(dict(point=True, area_penumbra=True,
-            cast_receive=True, behind_receiver=True, production_exclusion=True,
+            cast_receive=True, original_widgets=True, mhmat_roundtrip=True,
+            behind_receiver=True, production_exclusion=True,
             mesh_preserved=True, partial_pixels=int(np.count_nonzero(partial)))), encoding='utf-8')
     finally:
         cena.atualizar_iluminacao(previous)
