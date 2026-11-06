@@ -46,3 +46,16 @@ class ScenePersistence(unittest.TestCase):
         scene = Scene()
         with patch("builtins.open", side_effect=PermissionError("read only")):
             self.assertFalse(scene.save("denied.mhscene"))
+
+    def test_truncated_scene_keeps_existing_environment_and_lights(self):
+        source = Scene()
+        source.environment.ambience = (.9, .8, .7)
+        scene = Scene()
+        lights, environment = scene.lights, scene.environment
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "truncated.mhscene"
+            self.assertTrue(source.save(str(path)))
+            path.write_bytes(path.read_bytes()[:-1])
+            self.assertFalse(scene.load(str(path)))
+        self.assertIs(scene.lights, lights)
+        self.assertIs(scene.environment, environment)
