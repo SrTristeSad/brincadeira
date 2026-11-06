@@ -103,11 +103,14 @@ def check_original_tools(app, report_path):
         finally:
             human.setSolid(solid_before)
 
+        from vulkan_smoke_rig import validar_rig_pose
+        rig_pose = validar_rig_pose(app, report.parent)
         report.write_text(json.dumps({
             "modifier": modifier.fullName,
             "mhm_roundtrip": True,
             "modifier_undo_redo": True,
             "wireframe": True,
+            "rig_pose": rig_pose,
             "exports": ["obj", "fbx-binary", "collada", "stl-binary"],
             "plugins": sorted(name for name, module in app.modules.items() if module),
         }, indent=2), encoding="utf-8")
