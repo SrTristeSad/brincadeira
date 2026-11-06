@@ -602,13 +602,50 @@ def criar_canvas_vulkan(canvas_original):
                         raise RuntimeError(
                             "Recorte alfa: camada opaca não alterou a imagem"
                         )
+                    # Camadas com o mesmo priority devem ter resultado
+                    # idêntico independentemente da ordem de entrada.
+                    # Fundo opaco + duas texturas com alpha parcial, com
+                    # distâncias diferentes da câmera original.
+                    vermelho_meio = Image(data=np.tile(
+                        np.array([255, 20, 20, 128], dtype=np.uint8),
+                        (4, 4, 1),
+                    ))
+                    azul_meio = Image(data=np.tile(
+                        np.array([20, 20, 255, 128], dtype=np.uint8),
+                        (4, 4, 1),
+                    ))
+                    base_opaca = ObjetoRecorteSmoke(
+                        verde, -2.0 * deslocamento, False, 0,
+                    )
+                    camada_longe = ObjetoRecorteSmoke(
+                        vermelho_meio, -deslocamento, True, 0,
+                    )
+                    camada_perto = ObjetoRecorteSmoke(
+                        azul_meio, deslocamento, True, 0,
+                    )
+                    composicao_1 = capturar_recorte([
+                        camada_perto, camada_longe, base_opaca,
+                    ])
+                    composicao_2 = capturar_recorte([
+                        base_opaca, camada_longe, camada_perto,
+                    ])
+                    if not np.array_equal(composicao_1, composicao_2):
+                        raise RuntimeError(
+                            "Mistura alpha depende da ordem de G.world"
+                        )
+                    if np.array_equal(
+                        composicao_1, capturar_recorte([base_opaca])
+                    ):
+                        raise RuntimeError(
+                            "Camadas translúcidas não alteraram o fundo"
+                        )
                     with open(recorte_marker, "w", encoding="utf-8") as f:
                         f.write(
                             "vulkan-recorte:160x120:"
-                            + str(diferencas) + "\n"
+                            + str(diferencas) + ":camadas-ok\n"
                         )
                     print(
-                        "MAKEHUMANO_VULKAN: alpha test, pixels="
+                        "MAKEHUMANO_VULKAN: alpha test e camadas RGB, pixels="
                         + str(diferencas), flush=True,
                     )
                 normal_marker = os.environ.get(
