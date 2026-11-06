@@ -78,8 +78,21 @@ def validar_pontos(cena, cameras, mundo, arquivo):
             f"GL_POINTS Vulkan: desenho inválido (pontos={cena.pontos_desenhados}, "
             f"pixels={cobertura})"
         )
+    # Testar o reuso na GPU real; mocks isolados não comprovam integração.
+    estado = cena._buffers._objetos[ponto]["principal"]
+    buffers_antes = tuple(estado[k] for k in ("vertices", "indices", "uniforms"))
+    rgba_segundo = cena.capturar_framebuffer(
+        [ponto], cameras, 160, 120, incluir_alfa=True,
+        cor_fundo=(0.0, 0.0, 0.0, 0.0),
+    )
+    buffers_depois = tuple(estado[k] for k in ("vertices", "indices", "uniforms"))
+    if not all(a is b for a, b in zip(buffers_antes, buffers_depois)):
+        raise RuntimeError("Cache Vulkan recriou buffers idênticos no segundo quadro")
+    if not np.array_equal(rgba, rgba_segundo):
+        raise RuntimeError("Cache Vulkan alterou pixels do mesmo GL_POINTS")
     Path(arquivo).write_text(
-        json.dumps({"pontos": cena.pontos_desenhados, "pixels": cobertura})
+        json.dumps({"pontos": cena.pontos_desenhados, "pixels": cobertura,
+                    "buffers_reutilizados": True})
         + "\n", encoding="utf-8",
     )
     print(f"MAKEHUMANO_VULKAN: GL_POINTS GPU OK pixels={cobertura}", flush=True)
