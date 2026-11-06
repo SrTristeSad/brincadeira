@@ -294,6 +294,7 @@ struct Globals {
     mvp: mat4x4<f32>,
     modelo: mat4x4<f32>,
     normal_modelo: mat4x4<f32>,
+    visao: mat4x4<f32>,
     cor: vec4<f32>,
     flags: vec4<f32>,
     ambiente: vec4<f32>,
@@ -309,6 +310,7 @@ struct Globals {
 @group(0) @binding(1) var mapa: texture_2d<f32>;
 @group(0) @binding(2) var amostra: sampler;
 @group(0) @binding(3) var mapa_normais: texture_2d<f32>;
+@group(0) @binding(4) var mapa_litsphere: texture_2d<f32>;
 struct Entrada {
     @location(0) pos: vec3<f32>,
     @location(1) normal: vec3<f32>,
@@ -363,6 +365,32 @@ struct Fragmento {
         }
     }
     let direcao_visao = normalize(dados.observador.xyz - i.mundo);
+    // Port do litsphere_fragment_shader.txt: iluminação capturada em
+    // textura indexada pela normal em espaço de câmera, sem luzes GLSL.
+    if (dados.shader_preset.x > 1.5 && dados.shader_preset.x < 2.5) {
+        let normal_visao = normalize(
+            (dados.visao * vec4<f32>(normal, 0.0)).xyz
+        );
+        let coords = normal_visao.xy * 0.495 + vec2<f32>(0.5);
+        // Qt/QImage lê a origem no topo; as UVs GLSL são bottom-up.
+        let lit_uv = vec2<f32>(coords.x, 1.0 - coords.y);
+        var iluminacao_lit = textureSample(mapa_litsphere, amostra, lit_uv).rgb;
+        if (dados.shader_parametros.y > 0.5) {
+            iluminacao_lit *= i.cor.rgb;
+        }
+        var cor_lit = iluminacao_lit;
+        var alfa_lit = 1.0;
+        if (dados.shader_parametros.z > 0.5) {
+            let aditivo = dados.shader_parametros.x;
+            let media = (iluminacao_lit.r + iluminacao_lit.g
+                         + iluminacao_lit.b) / 3.0;
+            cor_lit = (1.0 - aditivo) * iluminacao_lit * tex.rgb
+                      * (2.0 - media)
+                      + aditivo * (iluminacao_lit + tex.rgb);
+            alfa_lit = tex.a;
+        }
+        return vec4<f32>(cor_lit, alfa_lit * dados.cor.a);
+    }
     // Port do shader GLSL xray_fragment_shader.txt do MakeHuman.
     // Conserva o fade de contorno e os parâmetros de material originais.
     if (dados.shader_preset.x > 0.5 && dados.shader_preset.x < 1.5) {
@@ -780,10 +808,22 @@ struct Fragmento {
                         tamanho_destino=tamanho,
                     )
                 cor, flags = parametros_material_vulkan(obj)
-                from vulkan_shader import configuracao_shader_nativo
-                modo_shader, shader_parametros, shader_pendente = (
-                    configuracao_shader_nativo(getattr(obj, "material", None))
+                from vulkan_shader import (
+                    configuracao_shader_nativo, textura_litsphere_nativa,
                 )
+                material_obj = getattr(obj, "material", None)
+                modo_shader, shader_parametros, shader_pendente = (
+                    configuracao_shader_nativo(material_obj)
+                )
+                textura_litsphere = (
+                    textura_litsphere_nativa(material_obj)
+                    if modo_shader == 2 else None
+                )
+                if modo_shader == 2 and textura_litsphere is None:
+                    # Nunca declarar uma LitSphere branca como se fosse pele.
+                    raise ValueError(
+                        "Material LitSphere não contém litsphereTexture"
+                    )
                 if (shader_pendente and shader_pendente
                         not in self._shaders_pendentes):
                     self._shaders_pendentes.add(shader_pendente)
@@ -818,7 +858,7 @@ struct Fragmento {
                 )
                 uniforms = np.concatenate((
                     mvp.T.reshape(-1), modelo.T.reshape(-1),
-                    normal_modelo.T.reshape(-1),
+                    normal_modelo.T.reshape(-1), view.T.reshape(-1),
                     cor, flags, ambiente, especular, emissiva, observador,
                     shader_preset, np.asarray(shader_parametros, np.float32),
                     posicoes.reshape(-1), cores.reshape(-1),
@@ -834,6 +874,7 @@ struct Fragmento {
                 )
                 textura = self._textura(getattr(obj, "texture", None))
                 textura_normal = self._textura(caminho_normal)
+                textura_lit = self._textura(textura_litsphere)
                 bind = self.device.create_bind_group(
                     layout=pipeline.get_bind_group_layout(0),
                     entries=[
@@ -849,6 +890,9 @@ struct Fragmento {
                         ),
                         wgpu.BindGroupEntry(
                             binding=3, resource=textura_normal.create_view()
+                        ),
+                        wgpu.BindGroupEntry(
+                            binding=4, resource=textura_lit.create_view()
                         ),
                     ],
                 )
