@@ -34,14 +34,14 @@ em `motor_wgpu`. O estado abaixo distingue testes exercitados de paridade final.
 
 ## Validação local
 
-A suíte completa executou **321 testes sem falhas** (um específico do Windows é pulado localmente), usando Python 3.12,
+A suíte completa executou **326 testes sem falhas** (um específico do Windows é pulado localmente), usando Python 3.12,
 NumPy 2.5.4 e Qt 5.15.14. Os testes Qt de gravação PNG verificam os canais,
 alfa e imagens com largura não alinhada. Os dados binários verificam Unicode
 em grupos de malha, tags de proxies e metadados de licença. A criação local do
 pacote Linux e a importação congelada também foram exercitadas; os testes GPU
 e GUI são executados nos runners dos workflows vinculados ao commit.
 
-A comparação adicional de 50 PNGs entre fontes Windows e executável exige
+A comparação adicional de 53 PNGs entre fontes Windows e executável exige
 igualdade exata de pixels no mesmo driver. As capturas são sincronizadas com
 fim de startup para não comparar iluminação ainda não carregada. Essa
 verificação detecta diferenças do empacotamento; não substitui equivalência
@@ -60,10 +60,11 @@ com o renderer original nem validação em outra GPU.
    por gradiente de altura, com prioridade para normal maps. AO agora respeita
    intensidade no material básico e no Phong. A interface pode expor parâmetros
    cujos efeitos não são integralmente implementados.
-3. **Iluminação avançada:** sombras de oclusores opacos estão integradas ao
-   Vulkan, incluindo penumbra por amostras de área e controles originais de
+3. **Iluminação avançada:** sombras de oclusores estão integradas ao
+   Vulkan, incluindo recorte alpha, transmissão escalar por camadas,
+   penumbra por amostras de área e controles originais de
    Material. A BVH acompanha morphs/poses/displacement sem alterar a malha.
-   Faltam recorte alpha/transmissão, avaliação ampliada do viés e desempenho
+   Faltam refração/transmissão colorida, avaliação ampliada do viés e desempenho
    em GPUs físicas. LitSphere e Xray conservam sua iluminação própria.
    Não há paridade comprovada com renderizadores externos originais.
    Ver [etapa de sombras](SOMBRAS-VULKAN.md).

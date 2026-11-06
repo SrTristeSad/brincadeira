@@ -285,5 +285,7 @@ receiveShadows estão expostos no Material Editor e persistem em .mhmat.
 Sombras atenuam difusa/especular diretas, preservando ambiente/emissão e os
 modelos próprios de LitSphere/Xray. Atualizações de morph, pose e displacement
 reajustam a árvore; estados idênticos reutilizam buffers. Texturas recortadas
-e materiais translúcidos ainda não lançam sombras. Consulte
+e materiais translúcidos agora usam cobertura por UV e transmissão escalar,
+incluindo mapas de transparência e alfa de vértice. A multiplicação por camadas
+não depende da ordem; refração e transmissão colorida continuam pendentes. Consulte
 [SOMBRAS-VULKAN.md](SOMBRAS-VULKAN.md) para arquitetura, testes e limites.

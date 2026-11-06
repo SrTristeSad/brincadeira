@@ -51,7 +51,8 @@ exige simultaneamente:
 - BVH original com animação de dois quadros, recarga e comparação das poses locais dos 163 ossos mesmo após skinning;
 - FBX/Collada com esqueleto, leitura independente de ossos, índices, pesos e matrizes;
 - mapas especulares, transparência, bump e AO, incluindo intensidade zero, altura constante e prioridade dos normal maps;
-- sombras de superfícies opacas, penumbra de área, controles originais Cast/Receive e persistência .mhmat;
+- sombras opacas/recortadas, alfa de textura/vértice, opacidade, mapa de transparência e transmissão escalar por camadas;
+- penumbra de área, controles originais Cast/Receive e persistência .mhmat;
 - foco, ângulo, atenuação e emissão de área, incluindo energia normalizada, tamanho zero e eventos dos widgets originais;
 - MSAA 4x, bordas diagonais e controle original Alpha to Coverage;
 - salvamento e recarregamento `.mhm`, com comparação das coordenadas;
@@ -60,7 +61,7 @@ exige simultaneamente:
 - resposta do controle wireframe, com arestas pretas e imagem diferente da superfície sólida;
 - processo ainda vivo e ausência de traceback ou erro de render no log;
 - segunda abertura do portátil com `--multisampling`, desde a inicialização;
-- no Windows, igualdade exata de 50 capturas PNG entre fontes e executável. As
+- no Windows, igualdade exata de 53 capturas PNG entre fontes e executável. As
   capturas só são geradas após terminar a carga da iluminação, plugins e targets.
 
 Isso **não** comprova equivalência visual dos shaders, todos os controles da
@@ -119,26 +120,26 @@ uma build bem-sucedida como prova de compatibilidade completa.
 
 ## Evidências desta etapa
 
-- [CI e pacotes da revisão funcional](https://github.com/SrTristeSad/brincadeira/actions/runs/42257728380)
-- [CPU, Vulkan e GUI com/sem PyOpenGL](https://github.com/SrTristeSad/brincadeira/actions/runs/42257728593)
-- [Suíte de testes em Python 3.12 e 3.13](https://github.com/SrTristeSad/brincadeira/actions/runs/42257728535)
+- [CI e pacotes da revisão funcional](https://github.com/SrTristeSad/brincadeira/actions/runs/42262233631)
+- [CPU, Vulkan e GUI com/sem PyOpenGL](https://github.com/SrTristeSad/brincadeira/actions/runs/42262233526)
+- [Suíte de testes em Python 3.12 e 3.13](https://github.com/SrTristeSad/brincadeira/actions/runs/42262233800)
 
-As builds acima correspondem ao código `dc3ec040c5305cfa764d13093614ad7e5afb6926`.
+As builds acima correspondem ao código `bceafdc6d0d743525f02813612e68a632979de87`.
 
 Windows e Linux concluíram a abertura real e os testes funcionais, tanto no
-modo padrão quanto com `--multisampling`. As 50 capturas Windows foram
+modo padrão quanto com `--multisampling`. As 53 capturas Windows foram
 comparadas novamente após baixar os diagnósticos: igualdade exata entre
-fontes e executável. A otimização de reajuste da BVH preservou as 50 capturas
-Linux da primeira implementação de sombras, nos dois modos. A suíte local de
-321 casos passou (um caso específico de Windows excluído no Linux). A CI
+fontes e executável. A extensão alpha preservou as 50 capturas
+da revisão anterior no Windows e no Linux, nos dois modos. A suíte local de
+326 casos passou (um caso específico de Windows excluído no Linux). A CI
 também verifica Python 3.12/3.13; os links acima identificam o código dos pacotes.
 
-- [ZIP Windows desta revisão](https://github.com/SrTristeSad/brincadeira/actions/runs/42257728380/artifacts/13524435592)
-- [ZIP Linux desta revisão](https://github.com/SrTristeSad/brincadeira/actions/runs/42257728380/artifacts/13523965487)
-- [Diagnóstico Windows](https://github.com/SrTristeSad/brincadeira/actions/runs/42257728380/artifacts/13523971123)
+- [ZIP Windows desta revisão](https://github.com/SrTristeSad/brincadeira/actions/runs/42262233631/artifacts/13526285898)
+- [ZIP Linux desta revisão](https://github.com/SrTristeSad/brincadeira/actions/runs/42262233631/artifacts/13524789440)
+- [Diagnóstico Windows](https://github.com/SrTristeSad/brincadeira/actions/runs/42262233631/artifacts/13526325846)
 
 SHA-256 do ZIP Windows:
-`009235138da66f17554adbbe2f23bd67fee11eedb52928fc6123b6e5424b520f`.
+`3bb1e94a9540781e6b86913ce12d5c42d37f0f8fcf186acc9e95dc2f811122f6`.
 O ZIP foi baixado e verificado: integridade, executável, Python 3.12, Qt,
 wgpu-native, malha base, rig oficial e módulos novos (UV/BVH/sombras) presentes; nenhum driver
 de CI incluído. A validação Windows usa Vulkan por software e ainda não
