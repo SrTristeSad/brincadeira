@@ -373,6 +373,115 @@ def criar_canvas_vulkan(canvas_original):
                             "MAKEHUMANO_VULKAN: xray WGSL, pixels="
                             + str(cobertura), flush=True,
                         )
+                skin_shader_marker = os.environ.get(
+                    "MAKEHUMANO_VULKAN_SKIN_SHADER_FILE"
+                )
+                if skin_shader_marker and not os.path.exists(skin_shader_marker):
+                    # Shader de pele GLSL (não confundir com mh.renderSkin UV).
+                    # Compara duas gradientMaps na mesma malha MakeHuman.
+                    import numpy as np
+                    from image import Image
+                    from types import SimpleNamespace
+
+                    candidatos = [
+                        obj for obj in G.world
+                        if obj.visibility and obj.solid
+                        and len(obj.primitives) > 100
+                    ]
+                    if not candidatos:
+                        raise RuntimeError(
+                            "Skin shader: nenhuma malha original disponível"
+                        )
+                    corpo = max(candidatos, key=lambda o: len(o.primitives))
+                    oclusao = Image(data=np.full(
+                        (8, 8, 4), 255, dtype=np.uint8,
+                    ))
+                    vermelho = Image(data=np.tile(
+                        np.array([255, 30, 30, 255], dtype=np.uint8),
+                        (1, 16, 1),
+                    ))
+                    azul = Image(data=np.tile(
+                        np.array([30, 30, 255, 255], dtype=np.uint8),
+                        (1, 16, 1),
+                    ))
+
+                    class MaterialSkinShaderSmoke:
+                        shader = "data/shaders/glsl/skin"
+                        shaderConfig = {
+                            "diffuse": True, "ambientOcclusion": True,
+                        }
+
+                        def __init__(self, original, gradiente):
+                            self.original = original
+                            self.shaderParameters = {
+                                "ambientOcclusionMap": oclusao,
+                                "gradientMap": gradiente,
+                            }
+
+                        def __getattr__(self, nome):
+                            return getattr(self.original, nome)
+
+                    class ObjetoSkinShaderSmoke:
+                        def __init__(self, original, gradiente):
+                            self.original = original
+                            self.material = MaterialSkinShaderSmoke(
+                                original.material, gradiente,
+                            )
+
+                        def __getattr__(self, nome):
+                            return getattr(self.original, nome)
+
+                    iluminacao_anterior = self._cena._cena_luzes
+                    self._cena.atualizar_iluminacao(
+                        SimpleNamespace(
+                            environment=SimpleNamespace(
+                                ambience=(0.1, 0.1, 0.1),
+                            ),
+                            lights=[SimpleNamespace(
+                                position=(100.0, 200.0, 200.0),
+                                color=(1.0, 1.0, 1.0),
+                            )],
+                        ),
+                    )
+                    try:
+                        vermelho_rgba = self._cena.capturar_framebuffer(
+                            [ObjetoSkinShaderSmoke(corpo, vermelho)],
+                            G.cameras, 160, 120, incluir_alfa=True,
+                            cor_fundo=(0, 0, 0, 0),
+                        )
+                        azul_rgba = self._cena.capturar_framebuffer(
+                            [ObjetoSkinShaderSmoke(corpo, azul)],
+                            G.cameras, 160, 120, incluir_alfa=True,
+                            cor_fundo=(0, 0, 0, 0),
+                        )
+                    finally:
+                        self._cena.atualizar_iluminacao(iluminacao_anterior)
+
+                    if vermelho_rgba.shape != (120, 160, 4):
+                        raise RuntimeError("Skin shader: RGBA inválido")
+                    visiveis = (
+                        (vermelho_rgba[:, :, 3] > 0)
+                        & (azul_rgba[:, :, 3] > 0)
+                    )
+                    diferentes = int(np.count_nonzero(
+                        visiveis & np.any(
+                            vermelho_rgba[:, :, :3] != azul_rgba[:, :, :3],
+                            axis=2,
+                        )
+                    ))
+                    if not diferentes:
+                        raise RuntimeError(
+                            "Skin shader: gradientes não modificaram as cores"
+                        )
+                    with open(skin_shader_marker, "w", encoding="utf-8") as f:
+                        f.write(
+                            "vulkan-skin-shader:160x120:"
+                            + str(diferentes) + "\n"
+                        )
+                    print(
+                        "MAKEHUMANO_VULKAN: skin shader WGSL pixels="
+                        + str(diferentes), flush=True,
+                    )
                 normal_marker = os.environ.get(
                     "MAKEHUMANO_VULKAN_NORMALMAP_FILE"
                 )
