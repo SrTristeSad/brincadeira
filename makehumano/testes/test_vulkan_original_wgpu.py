@@ -30,7 +30,7 @@ from vulkan_scene import (
 from vulkan_texture import Texture as TextureVulkan
 from vulkan_skin import preparar_skin, normalizar_cor_fundo
 from vulkan_lighting import dados_iluminacao_cena
-from vulkan_shader import configuracao_shader_nativo
+from vulkan_shader import configuracao_shader_nativo, nome_preset_nativo, PRESETS_NATIVOS
 
 
 def objeto_original(face=None):
@@ -733,6 +733,16 @@ class TestarPresetXrayOriginalVulkan(unittest.TestCase):
         )
         self.assertEqual(modo, 0)
         self.assertIsNotNone(pendente)
+
+    def test_seletor_so_oferece_preset_portado(self):
+        self.assertEqual(PRESETS_NATIVOS, frozenset(("xray",)))
+        self.assertEqual(
+            nome_preset_nativo("/data/shaders/glsl/xray"), "xray",
+        )
+        self.assertIsNone(
+            nome_preset_nativo("/data/shaders/glsl/litsphere")
+        )
+        self.assertIsNone(nome_preset_nativo("/custom/xray"))
 
     def test_parametro_invalido_nao_e_aceito_pelo_renderer(self):
         with self.assertRaises(ValueError):
