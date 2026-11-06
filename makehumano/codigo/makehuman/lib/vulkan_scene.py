@@ -204,6 +204,31 @@ def aparencia_material_vulkan(obj):
     return especular_uniform, emissiva_uniform, float(np.clip(opacidade, 0.0, 1.0))
 
 
+def configuracao_raster_vulkan(obj, *, linhas=False):
+    """Converte as regras de face e profundidade da geometria original.
+
+    cull: 0 = ambas as faces; >0 = remover backfaces; <0 = remover
+    frontfaces. Objetos sem profundidade ignoram Z, sem gravá-lo;
+    materiais transparentes deixam o depth buffer intacto.
+    """
+    cull = getattr(obj, "cull", 0)
+    if cull is None:
+        cull = 0
+    modo_cull = "back" if cull > 0 else "front" if cull < 0 else "none"
+    sem_profundidade = bool(getattr(obj, "depthless", False))
+    material = getattr(obj, "material", None)
+    opacidade = float(getattr(material, "opacity", 1.0))
+    if not np.isfinite(opacidade):
+        raise ValueError("Material original: opacidade não finita")
+    transparente = bool(getattr(material, "transparent", False))
+    escrever_profundidade = (
+        not linhas and not sem_profundidade
+        and not transparente and opacidade >= 1.0
+    )
+    comparacao = "always" if sem_profundidade else "less-equal"
+    return modo_cull, escrever_profundidade, comparacao
+
+
 class CenaVulkan:
     """Renderização piloto de objetos G.world na própria janela MakeHuman."""
 
@@ -390,6 +415,62 @@ struct Fragmento {
         self.linhas_desenhadas = 0
         self._primitivas_pendentes = set()
         self._cena_luzes = None
+        self._shader_malhas = shader
+        self._blend_malhas = blend
+        self._pipelines_malhas = {
+            (False, "none", True, "less-equal"): self.pipeline,
+            (True, "none", False, "less-equal"): self.pipeline_linhas,
+        }
+
+    def _pipeline_objeto(self, obj, linhas):
+        """Cache de variantes Vulkan para culling e depth do MakeHuman."""
+        wgpu = self.wgpu
+        config = configuracao_raster_vulkan(obj, linhas=linhas)
+        chave = (bool(linhas), *config)
+        cached = self._pipelines_malhas.get(chave)
+        if cached is not None:
+            return cached
+        modo_cull, grava_z, compara_z = config
+        novo = self.device.create_render_pipeline(
+            layout=wgpu.AutoLayoutMode.auto,
+            vertex=wgpu.VertexState(
+                module=self._shader_malhas, entry_point="vs_main",
+                buffers=[wgpu.VertexBufferLayout(
+                    array_stride=48, step_mode="vertex",
+                    attributes=[
+                        wgpu.VertexAttribute(
+                            format="float32x3", offset=0, shader_location=0,
+                        ),
+                        wgpu.VertexAttribute(
+                            format="float32x3", offset=12, shader_location=1,
+                        ),
+                        wgpu.VertexAttribute(
+                            format="float32x2", offset=24, shader_location=2,
+                        ),
+                        wgpu.VertexAttribute(
+                            format="float32x4", offset=32, shader_location=3,
+                        ),
+                    ],
+                )],
+            ),
+            primitive=wgpu.PrimitiveState(
+                topology="line-list" if linhas else "triangle-list",
+                cull_mode="none" if linhas else modo_cull,
+            ),
+            depth_stencil=wgpu.DepthStencilState(
+                format="depth24plus",
+                depth_write_enabled=grava_z,
+                depth_compare=compara_z,
+            ),
+            fragment=wgpu.FragmentState(
+                module=self._shader_malhas, entry_point="fs_main",
+                targets=[wgpu.ColorTargetState(
+                    format=self.formato, blend=self._blend_malhas,
+                )],
+            ),
+        )
+        self._pipelines_malhas[chave] = novo
+        return novo
 
     def atualizar_iluminacao(self, cena):
         """Guarda a cena original para os próximos passes de renderização."""
@@ -606,7 +687,7 @@ struct Fragmento {
                     continue
                 primitiva = np.asarray(obj.primitives)
                 linhas = primitiva.ndim == 2 and primitiva.shape[1] == 2
-                pipeline = self.pipeline_linhas if linhas else self.pipeline
+                pipeline = self._pipeline_objeto(obj, linhas)
                 passagem.set_pipeline(pipeline)
                 cam = cameras[obj.cameraMode]
                 if alvo is None:
