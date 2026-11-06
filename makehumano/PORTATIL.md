@@ -44,6 +44,7 @@ exige simultaneamente:
 - displacement alterando silhueta e picking, intensidade zero, atualização do mapa e preservação da malha;
 - ferramenta mapImageGL original na malha real, pintura visível na viewport sem sobrescrever o arquivo;
 - execução dos seis presets oficiais WGSL, normal maps e composição alfa;
+- seleção dos olhos oficiais high/low-poly, undo/redo, morph visível, ajuste ao corpo e MHM por UUID;
 - alteração real da malha pelo modificador `macrodetails/Age`, undo e redo no histórico original;
 - rig oficial e T-pose deformando a malha e a imagem, undo/redo e roundtrip MHM com rig/pose;
 - reprodução de dois quadros e parada sem looping, verificando coordenadas do personagem;
@@ -61,7 +62,7 @@ exige simultaneamente:
 - resposta do controle wireframe, com arestas pretas e imagem diferente da superfície sólida;
 - processo ainda vivo e ausência de traceback ou erro de render no log;
 - segunda abertura do portátil com `--multisampling`, desde a inicialização;
-- no Windows, igualdade exata de 53 capturas PNG entre fontes e executável. As
+- no Windows, igualdade exata de 55 capturas PNG entre fontes e executável. As
   capturas só são geradas após terminar a carga da iluminação, plugins e targets.
 
 Isso **não** comprova equivalência visual dos shaders, todos os controles da
@@ -120,28 +121,28 @@ uma build bem-sucedida como prova de compatibilidade completa.
 
 ## Evidências desta etapa
 
-- [CI e pacotes da revisão funcional](https://github.com/SrTristeSad/brincadeira/actions/runs/42262233631)
-- [CPU, Vulkan e GUI com/sem PyOpenGL](https://github.com/SrTristeSad/brincadeira/actions/runs/42262233526)
-- [Suíte de testes em Python 3.12 e 3.13](https://github.com/SrTristeSad/brincadeira/actions/runs/42262233800)
+- [CI e pacotes da revisão funcional](https://github.com/SrTristeSad/brincadeira/actions/runs/42266669528)
+- [CPU, Vulkan e GUI com/sem PyOpenGL](https://github.com/SrTristeSad/brincadeira/actions/runs/42266669426)
+- [Suíte de testes em Python 3.12 e 3.13](https://github.com/SrTristeSad/brincadeira/actions/runs/42266669550)
 
-As builds acima correspondem ao código `bceafdc6d0d743525f02813612e68a632979de87`.
+As builds acima correspondem ao código `0d107e4b877be9e36d792c103bffb7952ed6deeb`.
 
 Windows e Linux concluíram a abertura real e os testes funcionais, tanto no
-modo padrão quanto com `--multisampling`. As 53 capturas Windows foram
+modo padrão quanto com `--multisampling`. As 55 capturas Windows foram
 comparadas novamente após baixar os diagnósticos: igualdade exata entre
-fontes e executável. A extensão alpha preservou as 50 capturas
+fontes e executável. A compactação das máscaras preservou as 53 capturas
 da revisão anterior no Windows e no Linux, nos dois modos. A suíte local de
-326 casos passou (um caso específico de Windows excluído no Linux). A CI
+327 casos passou (um caso específico de Windows excluído no Linux). A CI
 também verifica Python 3.12/3.13; os links acima identificam o código dos pacotes.
 
-- [ZIP Windows desta revisão](https://github.com/SrTristeSad/brincadeira/actions/runs/42262233631/artifacts/13526285898)
-- [ZIP Linux desta revisão](https://github.com/SrTristeSad/brincadeira/actions/runs/42262233631/artifacts/13524789440)
-- [Diagnóstico Windows](https://github.com/SrTristeSad/brincadeira/actions/runs/42262233631/artifacts/13526325846)
+- [ZIP Windows desta revisão](https://github.com/SrTristeSad/brincadeira/actions/runs/42266669528/artifacts/13526774905)
+- [ZIP Linux desta revisão](https://github.com/SrTristeSad/brincadeira/actions/runs/42266669528/artifacts/13527825965)
+- [Diagnóstico Windows](https://github.com/SrTristeSad/brincadeira/actions/runs/42266669528/artifacts/13527965948)
 
 SHA-256 do ZIP Windows:
-`3bb1e94a9540781e6b86913ce12d5c42d37f0f8fcf186acc9e95dc2f811122f6`.
+`d9ec68230dcd1d47c44cbbdb6bc2719faf78cada2803f87a835d1af4fd798f43`.
 O ZIP foi baixado e verificado: integridade, executável, Python 3.12, Qt,
-wgpu-native, malha base, rig oficial e módulos novos (UV/BVH/sombras) presentes; nenhum driver
+wgpu-native, malha base, rig oficial e módulos novos (UV/BVH/sombras/proxies) presentes; nenhum driver
 de CI incluído. A validação Windows usa Vulkan por software e ainda não
 comprova compatibilidade com GPUs físicas.
 

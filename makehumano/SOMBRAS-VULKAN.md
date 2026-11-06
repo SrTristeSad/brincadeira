@@ -51,7 +51,13 @@ Na base original de 36.972 triângulos, a árvore e os triângulos empacotados
 ocupam aproximadamente 2,6 MB. Uma medição CPU local levou cerca de 500 ms
 para particionar e 16 ms para reajustar após deformação; a medição isola a
 árvore, sem upload de texturas, e não mede FPS. O total de memória citado não
-inclui os novos descritores de cobertura (80 bytes por triângulo) e pixels RGBA8. Os buffers de cobertura têm cache separado: alterar
+inclui os novos descritores de cobertura (80 bytes por triângulo) e máscaras compactadas. Alfa usa um byte por texel; mapas de transparência
+armazenam a soma RGB exata (0..765) em uint16, usando dois bytes por texel.
+A divisão por 765 ocorre no shader, sem quantizar previamente a média para
+8 bits. Palavras de 32 bits agrupam quatro alfas ou duas somas, com padding
+somente no fim da imagem. O descritor registra o formato e o offset em palavras.
+Isso reduz em 75% o payload de alfa e em 50% o de transparência em relação a
+RGBA8; não redimensiona imagens nem reduz sua precisão de origem. Os buffers de cobertura têm cache separado: alterar
 textura/opacidade não exige reenviar geometria. Texturas usadas somente pelo
 alfa e inteiramente opacas não ocupam o buffer de pixels. O tamanho dos
 buffers de cobertura é validado contra o limite do dispositivo, com erro explícito em
@@ -103,25 +109,25 @@ e executável. O teste portátil completo é repetido com MSAA 4x.
 
 ## Evidências da revisão
 
-Código empacotado: `bceafdc6d0d743525f02813612e68a632979de87`.
+Código empacotado: `0d107e4b877be9e36d792c103bffb7952ed6deeb`.
 
-- [Windows/Linux: GUI real, ferramentas e MSAA](https://github.com/SrTristeSad/brincadeira/actions/runs/42262233631)
-- [CPU, Vulkan e GUI original sem PyOpenGL](https://github.com/SrTristeSad/brincadeira/actions/runs/42262233526)
-- [ZIP Windows de testes](https://github.com/SrTristeSad/brincadeira/actions/runs/42262233631/artifacts/13526285898)
-- [Diagnóstico Windows com PNGs e JSON](https://github.com/SrTristeSad/brincadeira/actions/runs/42262233631/artifacts/13526325846)
+- [Windows/Linux: GUI real, ferramentas e MSAA](https://github.com/SrTristeSad/brincadeira/actions/runs/42266669528)
+- [CPU, Vulkan e GUI original sem PyOpenGL](https://github.com/SrTristeSad/brincadeira/actions/runs/42266669426)
+- [ZIP Windows de testes](https://github.com/SrTristeSad/brincadeira/actions/runs/42266669528/artifacts/13526774905)
+- [Diagnóstico Windows com PNGs e JSON](https://github.com/SrTristeSad/brincadeira/actions/runs/42266669528/artifacts/13527965948)
 
 Os portáteis Windows e Linux concluíram os testes padrão e MSAA. Os três
 relatórios Windows (fontes, portátil e portátil MSAA) confirmam oclusão,
 penumbra, controles, persistência, exclusão de produção e geometria preservada.
-A fixture tem 271 pixels de penumbra parcial. São 53 capturas idênticas entre
+A fixture tem 271 pixels de penumbra parcial. São 55 capturas idênticas entre
 fontes e executável Windows, comparação repetida após baixar os diagnósticos.
-A extensão alpha conservou as 50 capturas da revisão anterior, no Windows
+A compactação conservou as 53 capturas da revisão anterior, no Windows
 e no Linux, nos modos padrão e MSAA. Os relatórios também confirmam recorte
 UV, edição de textura, alfa de vértice, opacidade, mapa de transparência e
-transmissão por camadas sem dependência da ordem. A suíte local contém 326 casos sem falhas, com um
+transmissão por camadas sem dependência da ordem. A suíte local contém 327 casos sem falhas, com um
 caso exclusivo de separadores Windows excluído no Linux.
 
 O ZIP Windows foi baixado e auditado (integridade, Python, Qt, wgpu-native,
 recursos e módulos de sombras; sem drivers da CI). SHA-256:
-`3bb1e94a9540781e6b86913ce12d5c42d37f0f8fcf186acc9e95dc2f811122f6`.
+`d9ec68230dcd1d47c44cbbdb6bc2719faf78cada2803f87a835d1af4fd798f43`.
 A CI usa Vulkan por software, não GPU Windows física.

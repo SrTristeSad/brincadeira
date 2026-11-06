@@ -34,14 +34,14 @@ em `motor_wgpu`. O estado abaixo distingue testes exercitados de paridade final.
 
 ## Validação local
 
-A suíte completa executou **326 testes sem falhas** (um específico do Windows é pulado localmente), usando Python 3.12,
+A suíte completa executou **327 testes sem falhas** (um específico do Windows é pulado localmente), usando Python 3.12,
 NumPy 2.5.4 e Qt 5.15.14. Os testes Qt de gravação PNG verificam os canais,
 alfa e imagens com largura não alinhada. Os dados binários verificam Unicode
 em grupos de malha, tags de proxies e metadados de licença. A criação local do
 pacote Linux e a importação congelada também foram exercitadas; os testes GPU
 e GUI são executados nos runners dos workflows vinculados ao commit.
 
-A comparação adicional de 53 PNGs entre fontes Windows e executável exige
+A comparação adicional de 55 PNGs entre fontes Windows e executável exige
 igualdade exata de pixels no mesmo driver. As capturas são sincronizadas com
 fim de startup para não comparar iluminação ainda não carregada. Essa
 verificação detecta diferenças do empacotamento; não substitui equivalência
@@ -74,7 +74,10 @@ com o renderer original nem validação em outra GPU.
    Ainda faltam cabelos reais, mais drivers e comparação de cobertura entre GPUs.
 5. **Recursos de roupas e cabelos:** este checkout contém a base, olhos e os
    carregadores originais, mas `data/hair` só contém `clear.thumb` e não há uma
-   biblioteca de roupas completa. Não inventar ou substituir esses ativos.
+   biblioteca de roupas completa. Os olhos oficiais high/low-poly são
+   exercitados no carregador original, com morph visível, undo/redo e UUID
+   preservado no MHM. Isso não valida cabelos ou roupas ausentes. Não inventar
+   ou substituir esses ativos.
    A validação integral requer exemplos reais licenciados, inclusive cabelos
    recortados e roupas sobrepostas, exercitados nos carregadores originais.
 6. **Exportação ampliada:** o smoke valida malha/olhos nos quatro formatos e

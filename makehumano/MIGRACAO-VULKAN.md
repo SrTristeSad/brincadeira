@@ -289,3 +289,28 @@ e materiais translúcidos agora usam cobertura por UV e transmissão escalar,
 incluindo mapas de transparência e alfa de vértice. A multiplicação por camadas
 não depende da ordem; refração e transmissão colorida continuam pendentes. Consulte
 [SOMBRAS-VULKAN.md](SOMBRAS-VULKAN.md) para arquitetura, testes e limites.
+
+
+### Máscaras compactadas e proxies oficiais
+
+O buffer de pixels de sombra usa alpha8 ou soma RGB uint16, em vez de
+quatro canais RGBA para cada texel. Somar os três bytes antes de empacotar
+preserva os valores exatos de transparência e permite filtro bilinear no
+shader. Os testes verificam padding de larguras/contagens ímpares e reutilização
+por papel (alfa ou mapa), além de pintura/recarga e os contratos dos presets.
+
+O smoke passa por 3_libraries_eye_chooser e ProxyAction originais para trocar
+os olhos oficiais high/low-poly, desfazer/refazer a seleção, aplicar o morph
+head/head-scale-vert-decr|incr e validar ajuste à malha humana, alteração visível
+no Vulkan e undo/redo. Salva/reabre MHM pelo UUID do proxy e exige imagem e
+coordenadas preservadas. Seleção, materiais, modificador e histórico são
+restaurados. Os assets originais não são alterados. O carregador de proxies
+é compartilhado com outras bibliotecas, mas estes testes não comprovam
+roupas/cabelos ausentes neste checkout.
+
+
+Validação desta revisão: olhos high-poly com 1.064 vértices e low-poly com
+96 vértices; carregador, histórico, morph visível, UUID no MHM e imagem após
+recarga aprovados nos portáteis Windows/Linux, nos modos padrão e MSAA. As
+55 capturas Windows são idênticas entre fontes e executável; as 53 anteriores
+permaneceram idênticas nos dois sistemas e modos após a compactação.
