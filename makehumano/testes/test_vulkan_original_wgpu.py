@@ -30,6 +30,7 @@ from vulkan_scene import (
 from vulkan_texture import Texture as TextureVulkan
 from vulkan_skin import preparar_skin, normalizar_cor_fundo
 from vulkan_lighting import dados_iluminacao_cena
+from vulkan_shader import configuracao_shader_nativo
 
 
 def objeto_original(face=None):
@@ -687,6 +688,63 @@ class TestarMatrizNormalOriginalVulkan(unittest.TestCase):
         modelo[2, 2] = float("nan")
         with self.assertRaises(ValueError):
             matriz_normal_vulkan(modelo)
+
+
+class TestarPresetXrayOriginalVulkan(unittest.TestCase):
+    def _material(self, **dados):
+        valores = dict(
+            shader="/data/shaders/glsl/xray",
+            ambientColor=SimpleNamespace(values=(0.1, 0.2, 0.3)),
+            shaderParameters={},
+            shaderConfig={"diffuse": False, "vertexColors": False},
+        )
+        valores.update(dados)
+        return SimpleNamespace(**valores)
+
+    def test_material_xray_original_e_reconhecido(self):
+        arquivo = (
+            RAIZ / "codigo" / "makehuman" / "data" / "materials" / "xray.mhmat"
+        )
+        self.assertIn("shader data/shaders/glsl/xray", arquivo.read_text())
+        modo, params, pendente = configuracao_shader_nativo(self._material())
+        self.assertEqual(modo, 1)
+        self.assertIsNone(pendente)
+        np.testing.assert_allclose(params, [0.2, 1.0, 0.7, 0.0])
+
+    def test_shader_xray_parametros_do_mhmat(self):
+        material = self._material(
+            shaderParameters={"edgefalloff": "3.5", "intensity": ["0.4"]},
+            shaderConfig={"vertexColors": True},
+        )
+        modo, params, _ = configuracao_shader_nativo(material)
+        self.assertEqual(modo, 1)
+        np.testing.assert_allclose(params, [0.2, 3.5, 0.4, 1.0])
+
+    def test_outros_shaders_glsl_nao_sao_marcados_como_portados(self):
+        for nome in ("litsphere", "phong", "toon", "normalmap", "skin"):
+            with self.subTest(shader=nome):
+                modo, _, pendente = configuracao_shader_nativo(
+                    self._material(shader="/data/shaders/glsl/" + nome)
+                )
+                self.assertEqual(modo, 0)
+                self.assertEqual(pendente, nome)
+        modo, _, pendente = configuracao_shader_nativo(
+            self._material(shader="/outra-pasta/xray")
+        )
+        self.assertEqual(modo, 0)
+        self.assertIsNotNone(pendente)
+
+    def test_parametro_invalido_nao_e_aceito_pelo_renderer(self):
+        with self.assertRaises(ValueError):
+            configuracao_shader_nativo(
+                self._material(shaderParameters={"edgefalloff": "nan"})
+            )
+        with self.assertRaises(ValueError):
+            configuracao_shader_nativo(
+                self._material(ambientColor=SimpleNamespace(
+                    values=(1, float("nan"), 0)
+                ))
+            )
 
 
 if __name__ == "__main__":
