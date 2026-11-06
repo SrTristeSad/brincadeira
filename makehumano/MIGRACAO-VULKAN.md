@@ -21,6 +21,9 @@
 | `mh.renderAlphaMask` | Canal alfa do framebuffer, convertido para `Image` RGB | Smoke do alfa |
 | `mh.renderSkin` | `vulkan_skin.render_skin`: linhas, triângulos e quads UV | Smoke UV mínimo |
 | `mh.Texture` | `vulkan_texture.Texture` em memória CPU | Implementação provisória |
+| Material `.mhmat` | Difusa, opacidade, brilho especular, emissão, back/front cull, depthless | Pipeline WGSL; equivalência visual pendente |
+| Normal maps `.mhmat` | Textura e intensidade originais; base tangente derivada de UVs no fragmento | Implementado; validação GPU e comparação visual pendentes |
+| Iluminação `.mhscene` | Até oito luzes pontuais, ambiente e reflexo Blinn-Phong | Aproximação; falta atenuação/foco/especular de cena |
 | Shaders personalizados GLSL | `vulkan_shader.Shader` anuncia suporte indisponível | **Pendente** |
 
 ## Arquitetura
@@ -56,7 +59,9 @@ python -m unittest discover -s makehumano/testes -p 'test_*wgpu.py' -v
 ## Pendências que impedem o lançamento
 
 - Converter shaders GLSL personalizados e seus uniforms/atributos para WGSL.
-- Reproduzir transparência, culling, ordenação e iluminação conforme os materiais e configurações originais.
+- Concluir a equivalência de transparência e ordenação de superfícies translúcidas, especialmente materiais sobrepostos; variantes de culling/depthless já foram adicionadas.
+- Reproduzir atenuação/especular/foco das luzes de cena, normal maps sob escalas não uniformes e outros comportamentos avançados de materiais.
+- Criar testes comparativos de imagens, incluindo reflexos, alfa, normal maps e culling, porque o smoke só verifica inicialização e integridade básica.
 - Completar paridade de `renderSkin` para formatos de imagem, texturas dinâmicas e render pass acumulativo.
 - A inicialização e o smoke da GUI já não precisam de PyOpenGL; investigar e retirar módulos legados remanescentes no repositório.
 - Validar interações, rendering de produção, plugins, arquivos e exportações em cenários reais.
