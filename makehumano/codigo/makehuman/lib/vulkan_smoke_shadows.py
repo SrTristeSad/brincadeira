@@ -172,12 +172,12 @@ def validar_sombras(cena, cameras, mundo, directory):
         # UVs independentes assimétricas verificam também a origem superior.
         from vulkan_scene import matriz_wgpu
         mvp = matriz_wgpu(camera, receiver, tamanho_origem=(G.windowWidth, G.windowHeight), tamanho_destino=(160, 120))
-        for u, v, expected_fraction in ((.25, .75, 0.), (.25, .25, 1.), (.75, .75, 1.)):
+        for u, v, uv_fraction in ((.25, .75, 0.), (.25, .25, 1.), (.75, .75, 1.)):
             offset = scale*np.array([(4./3.)*.28*(2*u-1)-2./3., (4./3.)*.28*(2*v-1), 0.])
             point = center+basis@offset
             clip = mvp@np.array([*point, 1.])
             x, y = np.floor((clip[:2]/clip[3]*[.5, -.5]+[.5, .5])*[160, 120]).astype(int)
-            expected = on[y, x, :3].astype(float)+expected_fraction*(off[y, x, :3].astype(float)-on[y, x, :3])
+            expected = on[y, x, :3].astype(float)+uv_fraction*(off[y, x, :3].astype(float)-on[y, x, :3])
             if np.max(np.abs(cutout[y, x, :3].astype(float)-expected)) > 3.:
                 raise RuntimeError(f'Sombra recortada ignorou UV/orientação em {u}, {v}')
         rgba[:, :, 3] = 0
