@@ -8,7 +8,7 @@ e shaders customizados ainda precisam ser migrados antes de remover OpenGL.
 
 import numpy as np
 
-from vulkan_material import parametros_material_vulkan
+from vulkan_material import parametros_material_vulkan, usa_transparencia_vulkan
 
 
 def preparar_malha_original(obj):
@@ -156,80 +156,75 @@ struct Fragmento {
     if (dados.flags.x > 0.5) {
         luz = 1.0;
     }
-    return vec4<f32>(tex.rgb * i.cor.rgb * dados.cor.rgb * luz,
-                     tex.a * i.cor.a * dados.cor.a);
+    let alfa = tex.a * i.cor.a * dados.cor.a;
+    if (dados.flags.y > 0.5 && alfa <= 0.0) {
+        discard;
+    }
+    return vec4<f32>(tex.rgb * i.cor.rgb * dados.cor.rgb * luz, alfa);
 }
 """
         shader = self.device.create_shader_module(code=codigo)
-        self.pipeline = self.device.create_render_pipeline(
-            layout=wgpu.AutoLayoutMode.auto,
-            vertex=wgpu.VertexState(
-                module=shader, entry_point="vs_main",
-                buffers=[wgpu.VertexBufferLayout(
-                    array_stride=48, step_mode="vertex",
-                    attributes=[
-                        wgpu.VertexAttribute(
-                            format="float32x3", offset=0, shader_location=0
-                        ),
-                        wgpu.VertexAttribute(
-                            format="float32x3", offset=12, shader_location=1
-                        ),
-                        wgpu.VertexAttribute(
-                            format="float32x2", offset=24, shader_location=2
-                        ),
-                        wgpu.VertexAttribute(
-                            format="float32x4", offset=32, shader_location=3
-                        ),
-                    ],
-                )],
+        # Os três pipelines usam a mesma geometria da cena original; apenas
+        # topologia, blend e escrita de profundidade variam entre eles.
+        def criar_pipeline(topologia, escrever_depth, blend=None):
+            return self.device.create_render_pipeline(
+                layout=wgpu.AutoLayoutMode.auto,
+                vertex=wgpu.VertexState(
+                    module=shader, entry_point="vs_main",
+                    buffers=[wgpu.VertexBufferLayout(
+                        array_stride=48, step_mode="vertex",
+                        attributes=[
+                            wgpu.VertexAttribute(
+                                format="float32x3", offset=0, shader_location=0
+                            ),
+                            wgpu.VertexAttribute(
+                                format="float32x3", offset=12, shader_location=1
+                            ),
+                            wgpu.VertexAttribute(
+                                format="float32x2", offset=24, shader_location=2
+                            ),
+                            wgpu.VertexAttribute(
+                                format="float32x4", offset=32, shader_location=3
+                            ),
+                        ],
+                    )],
+                ),
+                primitive=wgpu.PrimitiveState(
+                    topology=topologia, cull_mode="none"
+                ),
+                depth_stencil=wgpu.DepthStencilState(
+                    format="depth24plus",
+                    depth_write_enabled=escrever_depth,
+                    depth_compare="less-equal",
+                ),
+                fragment=wgpu.FragmentState(
+                    module=shader, entry_point="fs_main",
+                    targets=[wgpu.ColorTargetState(
+                        format=self.formato, blend=blend
+                    )],
+                ),
+            )
+
+        self.pipeline = criar_pipeline("triangle-list", True)
+        # A grade de referência original (back_grid) usa GL_LINES.
+        self.pipeline_linhas = criar_pipeline("line-list", False)
+        # O motor legado ativa blending e evita escrever no depth buffer
+        # para malhas com primitivas transparentes. A composição alfa
+        # usa cores não pré-multiplicadas, como o shader do piloto.
+        alfa_blend = wgpu.BlendState(
+            color=wgpu.BlendComponent(
+                operation="add",
+                src_factor="src-alpha",
+                dst_factor="one-minus-src-alpha",
             ),
-            primitive=wgpu.PrimitiveState(
-                topology="triangle-list", cull_mode="none"
-            ),
-            depth_stencil=wgpu.DepthStencilState(
-                format="depth24plus", depth_write_enabled=True,
-                depth_compare="less-equal"
-            ),
-            fragment=wgpu.FragmentState(
-                module=shader, entry_point="fs_main",
-                targets=[wgpu.ColorTargetState(format=self.formato)],
+            alpha=wgpu.BlendComponent(
+                operation="add",
+                src_factor="one",
+                dst_factor="one-minus-src-alpha",
             ),
         )
-        # A grade de referência original (back_grid) usa GL_LINES.
-        # Mantê-la com seus mesmos índices, cores e transformações.
-        self.pipeline_linhas = self.device.create_render_pipeline(
-            layout=wgpu.AutoLayoutMode.auto,
-            vertex=wgpu.VertexState(
-                module=shader, entry_point="vs_main",
-                buffers=[wgpu.VertexBufferLayout(
-                    array_stride=48, step_mode="vertex",
-                    attributes=[
-                        wgpu.VertexAttribute(
-                            format="float32x3", offset=0, shader_location=0
-                        ),
-                        wgpu.VertexAttribute(
-                            format="float32x3", offset=12, shader_location=1
-                        ),
-                        wgpu.VertexAttribute(
-                            format="float32x2", offset=24, shader_location=2
-                        ),
-                        wgpu.VertexAttribute(
-                            format="float32x4", offset=32, shader_location=3
-                        ),
-                    ],
-                )],
-            ),
-            primitive=wgpu.PrimitiveState(
-                topology="line-list", cull_mode="none"
-            ),
-            depth_stencil=wgpu.DepthStencilState(
-                format="depth24plus", depth_write_enabled=False,
-                depth_compare="less-equal"
-            ),
-            fragment=wgpu.FragmentState(
-                module=shader, entry_point="fs_main",
-                targets=[wgpu.ColorTargetState(format=self.formato)],
-            ),
+        self.pipeline_transparente = criar_pipeline(
+            "triangle-list", False, blend=alfa_blend
         )
         self.amostra = self.device.create_sampler(
             mag_filter="linear", min_filter="linear"
@@ -336,13 +331,18 @@ struct Fragmento {
                     continue
                 primitiva = np.asarray(obj.primitives)
                 linhas = primitiva.ndim == 2 and primitiva.shape[1] == 2
-                pipeline = self.pipeline_linhas if linhas else self.pipeline
-                passagem.set_pipeline(pipeline)
                 cam = cameras[obj.cameraMode]
                 mvp = matriz_wgpu(cam, obj)
-                # Reaproveita flags/cor/opacity do material original.
-                # A composição alfa ainda requer pipeline de transparência.
                 material_uniforms, caminho_textura = parametros_material_vulkan(obj)
+                # Não altera a ordem do G.world: a prioridade pertence à
+                # aplicação original. Sem sorting 3D adicional no piloto.
+                if linhas:
+                    pipeline = self.pipeline_linhas
+                elif usa_transparencia_vulkan(obj, material_uniforms):
+                    pipeline = self.pipeline_transparente
+                else:
+                    pipeline = self.pipeline
+                passagem.set_pipeline(pipeline)
                 uniforms = np.concatenate(
                     (mvp.T.reshape(-1), material_uniforms)
                 ).astype(np.float32)
