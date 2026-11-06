@@ -198,7 +198,6 @@ def main():
                 "Traceback (most recent call last):",
                 "GPUValidationError",
                 "WGPUValidationError",
-                "Could not load ",
             )
             if any(erro in log_text for erro in erros_graficos):
                 print(

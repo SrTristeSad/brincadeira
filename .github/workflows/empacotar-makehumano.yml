@@ -150,7 +150,11 @@ jobs:
           $env:MAKEHUMANO_PORTABLE_SELFTEST_FILE = Join-Path $pasta "autoteste.ok"
           $env:MAKEHUMANO_PORTABLE_ERROR_LOG = Join-Path $pasta "MakeHumano-erro.txt"
           $exe = Join-Path $pasta "MakeHumano.exe"
-          $processo = Start-Process -FilePath $exe -WorkingDirectory $pasta -Wait -PassThru
+          $processo = Start-Process -FilePath $exe -WorkingDirectory $pasta -PassThru
+          if (!$processo.WaitForExit(60000)) {
+            $processo.Kill()
+            throw "Autoteste de importação excedeu 60 segundos"
+          }
           if ($processo.ExitCode -ne 0) {
             if (Test-Path $env:MAKEHUMANO_PORTABLE_ERROR_LOG) {
               Get-Content $env:MAKEHUMANO_PORTABLE_ERROR_LOG
@@ -183,6 +187,7 @@ jobs:
       # Lavapipe é apenas o driver Vulkan da CI; não é distribuído no ZIP.
       - name: Instalar driver Vulkan de software para testar a GUI Windows
         if: runner.os == 'Windows'
+        id: mesa
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
@@ -192,7 +197,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $mesa = "C:\msys64\mingw64"
+          $mesa = "${{ steps.mesa.outputs.msys2-location }}\mingw64"
           $env:PATH = "$mesa\bin;$env:PATH"
           $env:VK_DRIVER_FILES = "$mesa\share\vulkan\icd.d\lvp_icd.x86_64.json"
           # PyInstaller muda a busca de DLLs: o loader deve estar ao lado do
