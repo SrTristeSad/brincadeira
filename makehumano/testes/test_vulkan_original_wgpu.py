@@ -32,7 +32,8 @@ from vulkan_skin import preparar_skin, normalizar_cor_fundo
 from vulkan_lighting import dados_iluminacao_cena
 from vulkan_shader import (configuracao_shader_nativo, nome_preset_nativo,
                            textura_litsphere_nativa,
-                           parametros_extras_shader_nativo, PRESETS_NATIVOS)
+                           parametros_extras_shader_nativo,
+                           textura_normalmap_nativa, PRESETS_NATIVOS)
 
 
 def objeto_original(face=None):
@@ -905,11 +906,71 @@ class TestarShadersPhongToonOriginal(unittest.TestCase):
             self.assertEqual(
                 nome_preset_nativo("/data/shaders/glsl/" + nome), nome,
             )
-        for nome in ("normalmap", "skin"):
+        for nome in ("skin",):
             self.assertIsNone(
                 nome_preset_nativo("/data/shaders/glsl/" + nome),
             )
+        self.assertEqual(
+            nome_preset_nativo("/data/shaders/glsl/normalmap"), "normalmap",
+        )
         self.assertIsNone(nome_preset_nativo("/plugin/arbitrario/toon"))
+
+
+class TestarPresetNormalMapOriginalVulkan(unittest.TestCase):
+    def _material(self, **kwargs):
+        valores = dict(
+            shader="/makehuman/data/shaders/glsl/normalmap",
+            shaderParameters={},
+            shaderConfig={"normal": True, "diffuse": True},
+            normalMapTexture=None,
+        )
+        valores.update(kwargs)
+        return SimpleNamespace(**valores)
+
+    def test_registra_o_preset_glsl_original(self):
+        codigo = (
+            RAIZ / "codigo" / "makehuman" / "data" / "shaders"
+            / "glsl" / "normalmap_fragment_shader.txt"
+        ).read_text(encoding="utf-8")
+        self.assertIn("uniform sampler2D normalmapTexture", codigo)
+        modo, controles, pendente = configuracao_shader_nativo(
+            self._material()
+        )
+        self.assertEqual(modo, 5)
+        self.assertIsNone(pendente)
+        np.testing.assert_array_equal(controles, [0, 0, 0, 0])
+        self.assertEqual(
+            nome_preset_nativo("/data/shaders/glsl/normalmap"), "normalmap"
+        )
+
+    def test_usa_imagem_cpu_ou_caminho_do_material_original(self):
+        imagem = SimpleNamespace(
+            width=2, height=2,
+            data=np.full((2, 2, 4), 128, dtype=np.uint8),
+        )
+        self.assertIs(
+            textura_normalmap_nativa(
+                self._material(shaderParameters={"normalmapTexture": imagem})
+            ), imagem,
+        )
+        with tempfile.TemporaryDirectory() as pasta:
+            caminho = Path(pasta) / "normal.png"
+            caminho.write_bytes(b"conteudo")
+            self.assertEqual(
+                textura_normalmap_nativa(
+                    self._material(normalMapTexture=str(caminho))
+                ), str(caminho),
+            )
+
+    def test_sem_mapa_nao_habilita_textura_ficticia(self):
+        self.assertIsNone(textura_normalmap_nativa(self._material()))
+        with self.assertRaises(ValueError):
+            textura_normalmap_nativa(
+                self._material(normalMapTexture="/nao/existe/normal.png")
+            )
+
+    def test_nao_registra_shader_customizado_com_mesmo_nome(self):
+        self.assertIsNone(nome_preset_nativo("/plugins/custom/normalmap"))
 
 
 if __name__ == "__main__":
