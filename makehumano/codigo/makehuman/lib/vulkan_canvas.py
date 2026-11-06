@@ -373,6 +373,110 @@ def criar_canvas_vulkan(canvas_original):
                             "MAKEHUMANO_VULKAN: xray WGSL, pixels="
                             + str(cobertura), flush=True,
                         )
+                normal_marker = os.environ.get(
+                    "MAKEHUMANO_VULKAN_NORMALMAP_FILE"
+                )
+                if normal_marker and not os.path.exists(normal_marker):
+                    # Compara duas normais amostradas na MESMA malha.
+                    # A iluminação artificial é limitada ao teste e
+                    # restaurada, sem alterar a cena real do MakeHuman.
+                    import numpy as np
+                    from types import SimpleNamespace
+                    from image import Image
+
+                    candidatos = [
+                        obj for obj in G.world
+                        if obj.visibility and obj.solid
+                        and len(obj.primitives) > 100
+                    ]
+                    if not candidatos:
+                        raise RuntimeError(
+                            "Normalmap: nenhuma malha original disponível"
+                        )
+                    corpo = max(candidatos, key=lambda o: len(o.primitives))
+                    mapa_flat = Image(data=np.tile(
+                        np.array([128, 128, 255, 255], dtype=np.uint8),
+                        (8, 8, 1),
+                    ))
+                    mapa_inclinado = Image(data=np.tile(
+                        np.array([255, 128, 128, 255], dtype=np.uint8),
+                        (8, 8, 1),
+                    ))
+
+                    class MaterialNormalSmoke:
+                        shader = "data/shaders/glsl/normalmap"
+                        shaderConfig = {"normal": True, "diffuse": True}
+
+                        def __init__(self, original, imagem):
+                            self.original = original
+                            self.normalMapTexture = imagem
+                            self.shaderParameters = {
+                                "normalmapTexture": imagem,
+                            }
+
+                        def __getattr__(self, nome):
+                            return getattr(self.original, nome)
+
+                    class ObjetoNormalSmoke:
+                        def __init__(self, original, imagem):
+                            self.original = original
+                            self.material = MaterialNormalSmoke(
+                                original.material, imagem,
+                            )
+
+                        def __getattr__(self, nome):
+                            return getattr(self.original, nome)
+
+                    iluminacao_anterior = self._cena._cena_luzes
+                    self._cena.atualizar_iluminacao(
+                        SimpleNamespace(
+                            environment=SimpleNamespace(
+                                ambience=(0.1, 0.1, 0.1),
+                            ),
+                            lights=[SimpleNamespace(
+                                position=(100.0, 200.0, 200.0),
+                                color=(1.0, 1.0, 1.0),
+                            )],
+                        )
+                    )
+                    try:
+                        flat = self._cena.capturar_framebuffer(
+                            [ObjetoNormalSmoke(corpo, mapa_flat)],
+                            G.cameras, 160, 120, incluir_alfa=True,
+                            cor_fundo=(0, 0, 0, 0),
+                        )
+                        inclinado = self._cena.capturar_framebuffer(
+                            [ObjetoNormalSmoke(corpo, mapa_inclinado)],
+                            G.cameras, 160, 120, incluir_alfa=True,
+                            cor_fundo=(0, 0, 0, 0),
+                        )
+                    finally:
+                        self._cena.atualizar_iluminacao(iluminacao_anterior)
+
+                    if flat.shape != (120, 160, 4):
+                        raise RuntimeError("Normalmap: RGBA com tamanho errado")
+                    visiveis = (flat[:, :, 3] > 0) & (
+                        inclinado[:, :, 3] > 0
+                    )
+                    diferentes = int(np.count_nonzero(
+                        visiveis & np.any(
+                            flat[:, :, :3] != inclinado[:, :, :3],
+                            axis=2,
+                        )
+                    ))
+                    if not diferentes:
+                        raise RuntimeError(
+                            "Normalmap: mudar a normal não alterou as cores"
+                        )
+                    with open(normal_marker, "w", encoding="utf-8") as saida:
+                        saida.write(
+                            "vulkan-normalmap:160x120:"
+                            + str(diferentes) + "\n"
+                        )
+                    print(
+                        "MAKEHUMANO_VULKAN: normalmap WGSL pixels="
+                        + str(diferentes), flush=True,
+                    )
                 estilos_marker = os.environ.get(
                     "MAKEHUMANO_VULKAN_ESTILOS_FILE"
                 )
