@@ -84,6 +84,21 @@ class TestarMalhasDaGuiOriginal(unittest.TestCase):
         self.assertEqual(vertices.shape, (5, 12))
         self.assertEqual(indices.tolist(), [0, 1, 1, 2, 2, 3])
 
+    def test_pontos_auxiliares_mantem_indices_e_cores(self):
+        origem = objeto_original([[0], [3], [4]])
+        vertices, indices = preparar_malha_original(origem)
+        self.assertEqual(vertices.shape, (5, 12))
+        self.assertEqual(indices.dtype, np.uint32)
+        self.assertEqual(indices.tolist(), [0, 3, 4])
+        np.testing.assert_allclose(
+            vertices[0, 8:12], [1, 128 / 255, 0, 1],
+        )
+
+    def test_pontos_rejeitam_indices_fora_da_malha(self):
+        origem = objeto_original([[1], [99]])
+        with self.assertRaisesRegex(ValueError, "índice de face fora da malha"):
+            preparar_malha_original(origem)
+
     def test_quads_degenerados_do_original_sao_triangulos(self):
         origem = objeto_original([[0, 1, 2, 0]])
         _, indices = preparar_malha_original(origem)

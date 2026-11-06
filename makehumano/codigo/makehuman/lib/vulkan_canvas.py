@@ -106,15 +106,13 @@ def criar_canvas_vulkan(canvas_original):
 
         def grabScreen(self, x, y, width, height, filename=None,
                        productionRender=False):
-            """Captura a viewport já apresentada, sem glReadPixels.
+            """Captura a janela ou renderiza a cena de produção em Vulkan.
 
-            A API de produção pede outro passe de renderização; não a
-            substituímos por uma imagem da janela de forma silenciosa.
+            Na captura normal, preserva os pixels apresentados pelo widget.
+            productionRender usa um novo passe offscreen e respeita
+            excludeFromProduction sem alterar a viewport ou criar OpenGL.
+            Ambos os caminhos retornam o mesmo recorte RGB em coordenadas Qt.
             """
-            if productionRender:
-                raise NotImplementedError(
-                    "Captura de produção em Vulkan requer render offscreen"
-                )
             if width <= 0 or height <= 0:
                 raise RuntimeError("width or height is 0")
             if not self.isVisible():
@@ -123,19 +121,30 @@ def criar_canvas_vulkan(canvas_original):
             from vulkan_capture import recortar_captura_rgb
             import numpy as np
 
-            imagem = self.grab().toImage()
-            if imagem.isNull():
-                raise RuntimeError("Captura Qt da viewport Vulkan indisponível")
-            imagem = imagem.convertToFormat(imagem.Format_RGB888)
-            # QLabel/QWidget pode devolver pixels físicos em HiDPI.
-            # As coordenadas do MakeHuman são as dimensões lógicas do canvas.
-            if (imagem.width(), imagem.height()) != (self.width(), self.height()):
-                imagem = imagem.scaled(self.width(), self.height())
-            largura, altura = imagem.width(), imagem.height()
-            stride = imagem.bytesPerLine()
-            bruto = imagem.bits().asstring(imagem.byteCount())
-            pixels = np.frombuffer(bruto, dtype=np.uint8).reshape(altura, stride)
-            pixels = pixels[:, :largura * 3].reshape(altura, largura, 3)
+            if productionRender:
+                largura = int(G.windowWidth)
+                altura = int(G.windowHeight)
+                if min(largura, altura) < 1:
+                    raise RuntimeError("Viewport sem dimensões para captura Vulkan")
+                pixels = self._garantir_cena().capturar_framebuffer(
+                    G.world, G.cameras, largura, altura,
+                    productionRender=True, cor_fundo=G.clearColor,
+                )
+            else:
+                imagem = self.grab().toImage()
+                if imagem.isNull():
+                    raise RuntimeError("Captura Qt da viewport Vulkan indisponível")
+                imagem = imagem.convertToFormat(imagem.Format_RGB888)
+                # QLabel/QWidget pode devolver pixels físicos em HiDPI.
+                # As coordenadas do MakeHuman são dimensões lógicas.
+                if (imagem.width(), imagem.height()) != (self.width(), self.height()):
+                    imagem = imagem.scaled(self.width(), self.height())
+                largura, altura = imagem.width(), imagem.height()
+                stride = imagem.bytesPerLine()
+                bruto = imagem.bits().asstring(imagem.byteCount())
+                pixels = np.frombuffer(bruto, dtype=np.uint8).reshape(altura, stride)
+                pixels = pixels[:, :largura * 3].reshape(altura, largura, 3)
+
             recorte = recortar_captura_rgb(pixels, x, y, width, height)
             resultado = Image(data=recorte)
             if filename is not None:
@@ -327,6 +336,32 @@ def criar_canvas_vulkan(canvas_original):
                         alfa.data[:, :, 0] != alfa.data[:, :, 2]
                     ).any():
                         raise RuntimeError("Máscara alfa Vulkan não é cinza")
+                    # A captura pública de produção deve renderizar uma
+                    # nova cena Vulkan, sem depender do bitmap do widget.
+                    from pathlib import Path
+                    from image import Image
+                    import numpy as np
+                    captura_png = str(Path(render_marker).with_suffix(".png"))
+                    pos_x = G.windowWidth // 2 - 80
+                    pos_y = G.windowHeight // 2 - 60
+                    captura = mh.grabScreen(
+                        pos_x, pos_y, 160, 120,
+                        filename=captura_png, productionRender=True,
+                    )
+                    if (captura.data.shape != (120, 160, 3)
+                            or captura.data.dtype.name != "uint8"):
+                        raise RuntimeError(
+                            "grabScreen de produção Vulkan: imagem RGB inválida"
+                        )
+                    if not os.path.isfile(captura_png):
+                        raise RuntimeError(
+                            "grabScreen de produção Vulkan: PNG não foi salvo"
+                        )
+                    gravada = Image(path=captura_png)
+                    if not np.array_equal(captura.data, gravada.data):
+                        raise RuntimeError(
+                            "grabScreen de produção Vulkan: PNG não corresponde ao RGB"
+                        )
                     with open(render_marker, "w", encoding="utf-8") as saida:
                         saida.write(
                             "vulkan-render:160x120:"
@@ -1069,6 +1104,9 @@ def criar_canvas_vulkan(canvas_original):
                     from vulkan_smoke_displacement import validar_displacement
                     validar_displacement(self._cena, G.cameras, G.world,
                                          str(Path(caminho).parent / "displacement.json"))
+                    from vulkan_smoke_points import validar_pontos
+                    validar_pontos(self._cena, G.cameras, G.world,
+                                   str(Path(caminho).parent / "points.json"))
                     with open(caminho, "w", encoding="utf-8") as saida:
                         saida.write(
                             "vulkan-makehuman-original:"

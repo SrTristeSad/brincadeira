@@ -57,6 +57,42 @@ class TextureWorkingCopy(unittest.TestCase):
             self.assertIs(getTexture(path), texture)
             np.testing.assert_array_equal(texture.data, new)
 
+    def test_substituicao_atomica_mesmo_mtime_e_tamanho_recarrega(self):
+        """PNG substituído por editor externo não pode manter pixels obsoletos."""
+        import struct
+        import zlib
+
+        def png_constante(valor):
+            def bloco(nome, conteudo):
+                return (struct.pack(">I", len(conteudo)) + nome + conteudo
+                        + struct.pack(">I", zlib.crc32(nome + conteudo)))
+            cabecalho = struct.pack(">IIBBBBB", 4, 4, 8, 6, 0, 0, 0)
+            rgba = bytes((valor, valor, valor, 255))
+            linhas = (b"\x00" + rgba * 4) * 4
+            return (b"\x89PNG\r\n\x1a\n"
+                    + bloco(b"IHDR", cabecalho)
+                    + bloco(b"IDAT", zlib.compress(linhas, level=0))
+                    + bloco(b"IEND", b""))
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "texture.png"
+            novo_caminho = Path(directory) / "texture-nova.png"
+            path.write_bytes(png_constante(254))
+            texture = getTexture(path)
+            self.assertEqual(int(texture.data[0, 0, 0]), 254)
+            anterior = path.stat()
+            novo_caminho.write_bytes(png_constante(255))
+            self.assertEqual(novo_caminho.stat().st_size, anterior.st_size)
+            os.utime(novo_caminho, ns=(anterior.st_atime_ns, anterior.st_mtime_ns))
+            os.replace(novo_caminho, path)
+            depois = path.stat()
+            self.assertEqual(depois.st_mtime_ns, anterior.st_mtime_ns)
+            self.assertEqual(depois.st_size, anterior.st_size)
+            self.assertTrue(depois.st_ino != anterior.st_ino
+                            or depois.st_ctime_ns != anterior.st_ctime_ns)
+            self.assertIs(getTexture(path), texture)
+            self.assertEqual(int(texture.data[0, 0, 0]), 255)
+
     def test_relative_and_absolute_paths_share_working_copy_and_reload(self):
         # relpath não pode cruzar volumes no Windows (workspace D:, TEMP C:).
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:

@@ -13,6 +13,7 @@ import numpy as np
 from vulkan_material_maps import parametros_mapa, mapa_transparencia_ativo
 from vulkan_area_lights import amostrar_luzes, MAX_LUZES_VULKAN
 from vulkan_displacement import posicoes_render
+from vulkan_buffers import CacheBuffersVulkan
 
 
 def pixels_textura_rgba(dados):
@@ -53,7 +54,7 @@ def assinatura_textura(caminho):
 
 
 def preparar_malha_original(obj, camera=None):
-    """Retorna vértices float32 [n,12] e triângulos uint32 de Object3D.
+    """Retorna vértices float32 [n,12] e índices uint32 de Object3D.
 
     O objeto aqui é lib/object3d.Object3D (já desenhado por glmodule), não
     um novo parser de base.obj. Respeita os índices UV desenrolados e as
@@ -90,7 +91,7 @@ def preparar_malha_original(obj, camera=None):
             np.ascontiguousarray(vertices),
             np.empty(0, dtype=np.uint32),
         )
-    if face.ndim != 2 or face.shape[1] not in (2, 3, 4):
+    if face.ndim != 2 or face.shape[1] not in (1, 2, 3, 4):
         raise ValueError(
             "Object3D original: primitiva não triangular não suportada "
             + str(face.shape)
@@ -114,7 +115,11 @@ def preparar_malha_original(obj, camera=None):
         transparentes = np.tile(transparentes, 2)
     else:
         indices = face
-    if face.shape[1] == 2:
+    if face.shape[1] == 1:
+        # Pontos auxiliares do MakeHuman usam índices unitários (GL_POINTS).
+        # Não criar geometria sintética nem descartar esses índices.
+        pass
+    elif face.shape[1] == 2:
         # O grid e outras linhas auxiliares têm pares de vértices.
         indices = indices[indices[:, 0] != indices[:, 1]]
     else:
@@ -899,12 +904,14 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
             mag_filter="linear", min_filter="linear"
         )
         self._texturas = {}
+        self._buffers = CacheBuffersVulkan(self.device, wgpu)
         self._depth = None
         self._depth_size = None
         self._cor_msaa = None
         self.frames = 0
         self.objetos_desenhados = 0
         self.linhas_desenhadas = 0
+        self.pontos_desenhados = 0
         self._primitivas_pendentes = set()
         self._cena_luzes = None
         self._shaders_pendentes = set()
@@ -915,13 +922,15 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
             (True, "none", False, "less-equal"): self.pipeline_linhas,
         }
 
-    def _pipeline_objeto(self, obj, linhas):
-        """Cache de variantes Vulkan para culling e depth do MakeHuman."""
+    def _pipeline_objeto(self, obj, linhas, *, pontos=False):
+        """Cache de variantes Vulkan para triângulos, linhas e pontos."""
         wgpu = self.wgpu
-        config = configuracao_raster_vulkan(obj, linhas=linhas)
+        auxiliar = bool(linhas or pontos)
+        config = configuracao_raster_vulkan(obj, linhas=auxiliar)
         preenchimento_wireframe = bool(getattr(obj, "_wireframe_preenchimento", False))
-        a2c = alpha_to_coverage_vulkan(obj, self.amostras, linhas=linhas)
-        chave = (self.amostras, a2c, bool(linhas), preenchimento_wireframe, *config)
+        a2c = alpha_to_coverage_vulkan(obj, self.amostras, linhas=auxiliar)
+        chave = (self.amostras, a2c, bool(linhas), bool(pontos),
+                 preenchimento_wireframe, *config)
         cached = self._pipelines_malhas.get(chave)
         if cached is not None:
             return cached
@@ -951,8 +960,9 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
                 )],
             ),
             primitive=wgpu.PrimitiveState(
-                topology="line-list" if linhas else "triangle-list",
-                cull_mode="none" if linhas else modo_cull,
+                topology=("point-list" if pontos else "line-list"
+                          if linhas else "triangle-list"),
+                cull_mode="none" if auxiliar else modo_cull,
             ),
             depth_stencil=wgpu.DepthStencilState(
                 format="depth24plus",
@@ -1210,6 +1220,7 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
         amostragem_luzes = np.array([amostras_primeira, 0., shadow_count, shadow_bias], np.float32)
         self.objetos_desenhados = 0
         self.linhas_desenhadas = 0
+        self.pontos_desenhados = 0
         if mundo is not None:
             for obj in passes_wireframe(ordenar_objetos_vulkan(mundo, cameras)):
                 if not obj.visibility:
@@ -1221,9 +1232,8 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
                 except ValueError as erro:
                     if "primitiva não triangular" not in str(erro):
                         raise
-                    # Ainda não há pipeline de linhas/points do overlay Qt.
-                    # A migração será considerada parcial até esse caso
-                    # receber tratamento explícito; não lançar exceção em loop.
+                    # Primitivas não reconhecidas continuam explícitas no log;
+                    # o backend não cria triângulos fictícios para ocultá-las.
                     if obj.name not in self._primitivas_pendentes:
                         self._primitivas_pendentes.add(obj.name)
                         print(
@@ -1236,7 +1246,8 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
                     continue
                 primitiva = np.asarray(obj.primitives)
                 linhas = primitiva.ndim == 2 and primitiva.shape[1] == 2
-                pipeline = self._pipeline_objeto(obj, linhas)
+                pontos = primitiva.ndim == 2 and primitiva.shape[1] == 1
+                pipeline = self._pipeline_objeto(obj, linhas, pontos=pontos)
                 passagem.set_pipeline(pipeline)
                 cam = cameras[obj.cameraMode]
                 if alvo is None:
@@ -1353,14 +1364,19 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
                     cores_especulares.reshape(-1), mapas_parametros,
                     direcoes_luzes.reshape(-1), atenuacoes_luzes.reshape(-1), amostragem_luzes,
                 )).astype(np.float32)
-                buf_u = self.device.create_buffer_with_data(
-                    data=uniforms, usage=wgpu.BufferUsage.UNIFORM
-                )
-                buf_v = self.device.create_buffer_with_data(
-                    data=vertices, usage=wgpu.BufferUsage.VERTEX
-                )
-                buf_i = self.device.create_buffer_with_data(
-                    data=indices, usage=wgpu.BufferUsage.INDEX
+                # Não recriar buffers GPU a cada movimento de câmera ou
+                # morph. Passes de wireframe usam chaves distintas porque
+                # ambos são codificados antes de submeter o render pass.
+                origem_buffers = obj.original if isinstance(
+                    obj, _PasseWireframe
+                ) else obj
+                passe_buffers = (
+                    "wireframe-linhas" if linhas
+                    else "wireframe-preenchimento"
+                ) if isinstance(obj, _PasseWireframe) else "principal"
+                buf_v, buf_i, buf_u = self._buffers.atualizar(
+                    origem_buffers, vertices, indices, uniforms,
+                    passe=passe_buffers,
                 )
                 textura = self._textura(getattr(obj, "texture", None))
                 textura_normal = self._textura(caminho_normal)
@@ -1411,6 +1427,8 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
                 self.objetos_desenhados += 1
                 if linhas:
                     self.linhas_desenhadas += len(indices) // 2
+                if pontos:
+                    self.pontos_desenhados += len(indices)
         passagem.end()
         self.device.queue.submit([encoder.finish()])
         self.frames += 1

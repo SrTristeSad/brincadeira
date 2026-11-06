@@ -16,7 +16,7 @@
 | Render da cena `G.world` | `vulkan_scene.CenaVulkan` | Funcional no smoke da GUI |
 | `mh.getPickedColor` | `vulkan_picking.selecionar_cor` | Seleção CPU |
 | Profundidade de câmera | `vulkan_picking.selecionar_profundidade` | Seleção CPU |
-| `mh.grabScreen` | `vulkan_canvas.CanvasVulkan.grabScreen` | Captura de viewport Qt |
+| `mh.grabScreen` | `vulkan_canvas.CanvasVulkan.grabScreen` | Qt na viewport; `productionRender=True` usa render offscreen Vulkan, com recorte e PNG |
 | `mh.renderToBuffer` | Framebuffer offscreen Vulkan com resolução independente | Smoke de produção |
 | `mh.renderAlphaMask` | Canal alfa do framebuffer, convertido para `Image` RGB | Smoke do alfa |
 | `mh.renderSkin` | `vulkan_skin.render_skin`: linhas, triângulos e quads UV | Smoke UV mínimo |
@@ -90,9 +90,9 @@ de compatibilidade e os limites dos testes.
 - Reproduzir atenuação/foco e luzes de área da cena, outros comportamentos avançados de materiais. A cor especular independente de `Light.specular` já chega aos shaders WGSL e é exercitada por comparação GPU. A transformação de normais já usa inversa-transposta do modelo.
 - Criar testes comparativos de imagens, incluindo reflexos, alfa, normal maps e culling, porque o smoke só verifica inicialização e integridade básica.
 - Completar paridade de `renderSkin` para formatos de imagem, texturas dinâmicas e render pass acumulativo.
-- A inicialização e o smoke da GUI já não precisam de PyOpenGL; investigar e retirar módulos legados remanescentes no repositório.
+- O motor `lib/glmodule.py` foi removido da branch experimental; a API imediata histórica `Object3D.draw/pick` falha explicitamente em vez de importar PyOpenGL. A CI verifica que nenhum módulo da aplicação original importa `glmodule` ou `OpenGL`; plugins externos com esses imports requerem migração.
 - Validar interações, rendering de produção, plugins, arquivos e exportações em cenários reais.
-- O backend Vulkan já é o padrão sem chave de piloto; concluir paridade e retirar os arquivos OpenGL obsoletos.
+- O backend Vulkan já é o padrão sem chave de piloto; `glmodule.py` foi retirado. Ainda falta paridade completa com shaders personalizados, materiais, plugins e drivers de GPU.
 - Validar imagens comparativamente (CPU/smoke não verificam aparência pixel a pixel).
 
 **Nenhum destes itens deve ser mascarado por um retorno fictício ou fallback silencioso.**

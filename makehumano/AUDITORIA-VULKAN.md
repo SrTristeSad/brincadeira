@@ -47,6 +47,71 @@ fim de startup para não comparar iluminação ainda não carregada. Essa
 verificação detecta diferenças do empacotamento; não substitui equivalência
 com o renderer original nem validação em outra GPU.
 
+## Correções adicionais de compatibilidade (branch experimental)
+
+- **Picking em limites da câmera:** recorte homogêneo dos triângulos
+  contra os seis planos de clip Vulkan antes de dividir por `w`.
+  Preserva as partes visíveis dos triângulos que cruzam o plano próximo
+  ou o enquadramento lateral, mantendo RGB por FaceGroup, profundidade e culling.
+  Foram adicionados casos de regressão de near/far, lateral e profundidade.
+- **Texturas substituídas externamente:** a cópia CPU do material agora
+  verifica `mtime_ns`, `ctime_ns`, tamanho, dispositivo e inode.
+  Assim, a substituição atômica de um PNG com mesmo mtime e tamanho
+  não deixa pixels antigos na viewport. Há regressão com PNG válido
+  substituído via `os.replace`.
+
+- **Primitivas auxiliares de ponto:** objetos originais com índices
+  `N×1` agora usam `point-list` na pipeline Vulkan, mantendo índices,
+  coordenadas e cores RGBA. O smoke da GUI gera um ponto temporário sobre
+  a geometria da cena original, renderiza em framebuffer real, verifica
+  cobertura de alfa e registra `points.json` sem modificar o personagem.
+  A rasterização de pontos tem tamanho padrão de um pixel; tamanhos
+  personalizados de GL_POINTS ainda não possuem equivalência comprovada.
+
+Estas correções são parciais: não demonstram paridade visual com OpenGL,
+compatibilidade de cabelos/roupas ausentes nem execução em GPUs físicas.
+Conferir a CI do PR de compatibilidade antes de considerá-las aprovadas.
+
+## Reutilização de buffers de geometria GPU
+
+A viewport Vulkan agora aplica o cache `vulkan_buffers.CacheBuffersVulkan`
+ao desenho real de `G.world`, incorporando a ideia do PR #3 na versão
+avançada. Buffers VERTEX/INDEX/UNIFORM reaproveitam sua alocação enquanto
+o tamanho permanece estável; modificadores e poses ainda enviam as posições
+atuais; câmeras/luzes/materiais ainda enviam os uniforms atuais. Índices
+mudados in-place são comparados e reenviados, incluindo troca de máscaras de
+faces com o mesmo número de índices. O cache usa `WeakKeyDictionary` e
+chaves independentes para a superfície e as arestas do modo wireframe
+(`Ctrl+F`), evitando sobrescrever recursos antes da submissão do desenho.
+Objetos temporários sem suporte a weakref usam a rota sem cache.
+
+Há testes para reuso, invalidação, máscaras, crescimento de buffers, passagens
+wireframe e descarte de objetos. A CI deve validar também a execução real da
+GUI no Vulkan. Isto é uma **redução de alocações GPU**, não uma medição de
+FPS nem demonstração de equivalência com o renderer OpenGL original.
+
+## Comparação visual reproduzível OpenGL × Vulkan
+
+Foi incluído `testes/comparar_opengl_vulkan.py`, com testes de regressão
+para RGBA, tolerância por canal, proporção de pixels divergentes e cobertura
+alfa (interseção/união). Não reescala nem alinha automaticamente as capturas,
+pois isso esconderia diferenças reais. O comparador pode emitir JSON e mapa
+ampliado de diferenças, retornando código 1 quando o limite configurado é
+excedido. Exemplo, a partir da raiz do repositório:
+
+```bash
+python makehumano/testes/comparar_opengl_vulkan.py original.png atual.png \
+  --tolerancia 3 --fracao-maxima 0.01 \
+  --json comparacao.json --diferenca diferencas.png
+```
+
+É obrigatório fornecer capturas do **mesmo personagem, câmera, iluminação,
+resolução e materiais**, uma produzida pelo OpenGL original e outra pelo
+Vulkan atual. O repositório não contém referências aprovadas para afirmar
+paridade. Os testes de métricas validam o comparador, **não** a equivalência
+visual dos seis shaders; a decisão de aprovação depende dessas referências
+reais e revisão humana.
+
 ## Bloqueadores reais restantes
 
 1. **Validação Windows em GPUs reais:** Vulkan por software no runner é um teste
@@ -87,11 +152,15 @@ com o renderer original nem validação em outra GPU.
    recarregado, comparando poses locais dos 163 ossos. Animações FBX/Collada,
    demais opções BVH, rigs alternativos, proxies/roupas e demais opções
    ainda precisam ser reabertos em consumidores independentes.
-7. **Legado gráfico restante:** `lib/glmodule.py` ainda contém a implementação
-   obsoleta e os métodos históricos `Object3D.draw/pick` a referenciam. O
-   renderer ativo e os serviços `mh` passam pelo Vulkan. Retirar esse arquivo
-   exige resolver/aposentar explicitamente esses contratos, sem fingir que
-   redraw da cena equivale a uma chamada de desenho dentro de um render pass.
+7. **Legado gráfico removido do repositório original:** `lib/glmodule.py`
+   foi excluído da branch experimental após varredura dos módulos da GUI,
+   plugins e testes. `Object3D.draw/pick` conservam os métodos históricos,
+   mas falham com `NotImplementedError` e explicação de migração, pois
+   desenho imediato não equivale ao redraw de uma cena Vulkan.
+   `debugdump.appendGL` continua disponível como nome histórico e
+   informa o backend Vulkan sem importar PyOpenGL. O smoke e as suítes
+   estáticas devem validar que não há imports do motor antigo.
+   Plugins externos com chamadas imediatas continuam sem equivalência.
 8. **GLSL personalizado:** não existe tradução genérica para WGSL. Os presets
    oficiais possuem rotas nativas; scripts GLSL externos continuam pendentes.
 9. **Interações completas:** os smokes chamam APIs originais e verificam pixels;
