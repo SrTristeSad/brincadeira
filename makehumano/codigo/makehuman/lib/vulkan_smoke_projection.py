@@ -98,6 +98,7 @@ def validar_projecao_original(cena, cameras, mundo, directory):
         return cena.capturar_framebuffer(mundo, cameras, 160, 120,
                                          incluir_alfa=True, cor_fundo=(0, 0, 0, 0))
 
+    original_viewport = viewport()
     try:
         human.material = material
         material = human.material
@@ -126,3 +127,5 @@ def validar_projecao_original(cena, cameras, mundo, directory):
         human.material = original_material
         reloadTexture(str(destination))
         cena.invalidar_texturas()
+    if not np.array_equal(original_viewport, viewport()):
+        raise RuntimeError("Teste de projeção não restaurou a aparência original do personagem")

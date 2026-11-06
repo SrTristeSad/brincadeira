@@ -116,11 +116,11 @@ def validar_displacement(cena, cameras, mundo, marker):
     if not np.array_equal(reference, render()):
         raise RuntimeError("Invalidação do cache não atualizou displacement")
     np.testing.assert_array_equal(positions, original)
-    np.testing.assert_array_equal(body.verts, previous_coords)
     Image(data=reference).save(str(path.parent / "displacement-off.png"))
     Image(data=moved).save(str(path.parent / "displacement-on.png"))
     from vulkan_smoke_projection import validar_projecao_original
     validar_projecao_original(cena, cameras, mundo, path.parent)
+    np.testing.assert_array_equal(body.verts, previous_coords)
     path.write_text(json.dumps({"geometry": True, "picking": True, "depth": True,
                                "file_refresh": True, "original_mesh_preserved": True,
-                               "original_projection": True}), encoding="utf-8")
+                               "original_projection": True, "material_restored": True}), encoding="utf-8")
