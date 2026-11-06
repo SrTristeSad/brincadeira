@@ -230,14 +230,15 @@ namespace dragonBones {
          * @language zh_CN
          */
         public clear(): void {
-            for (const animatable of this._animatebles) {
+            // Keep the array length stable while advanceTime() may be iterating.
+            // Nulling entries releases references and lets the next tick compact it.
+            for (let i = 0, l = this._animatebles.length; i < l; ++i) {
+                const animatable = this._animatebles[i];
+                this._animatebles[i] = null;
                 if (animatable !== null) {
                     animatable.clock = null;
                 }
             }
-
-            // Drop all references, including those without a clock setter.
-            this._animatebles.length = 0;
         }
         /**
          * @inheritDoc

@@ -103,3 +103,26 @@ test("WorldClock.clear detaches nested clocks without clearing their own content
     child.advanceTime(0.3);
     assert.deepEqual(leaf.updates, [0.3]);
 });
+
+test("WorldClock.clear is safe when called during advanceTime", () => {
+    const clock = new WorldClock();
+    const first = {
+        clock: null,
+        updates: 0,
+        advanceTime() {
+            this.updates += 1;
+            clock.clear();
+        },
+    };
+    const later = animatable();
+    clock.add(first);
+    clock.add(later);
+    clock.advanceTime(0.1);
+    assert.equal(first.updates, 1);
+    assert.deepEqual(later.updates, []);
+    assert.equal(first.clock, null);
+    assert.equal(later.clock, null);
+    clock.advanceTime(0.2);
+    assert.equal(first.updates, 1);
+    assert.deepEqual(later.updates, []);
+});

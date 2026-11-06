@@ -16,7 +16,7 @@ Foi importado apenas o núcleo `DragonBones/` em TypeScript, sem adicionar novas
 Alterações iniciais:
 
 1. Protegidas hierarquias de `WorldClock` contra ciclos em `add()` e no setter `clock`.
-2. Corrigido `WorldClock.clear()` para soltar as referências dos objetos removidos, evitando atualizações inesperadas.
+2. Corrigido `WorldClock.clear()` para soltar referências sem interromper de forma insegura uma atualização em andamento.
 3. Protegido o pool de `BaseObject` contra limpeza dupla e colisões com propriedades herdadas do JavaScript.
 4. Corrigida a sequência de compilação do núcleo (`tsc` antes de `uglifyjs`).
 5. Adicionados testes de regressão de `WorldClock` e `BaseObject`.
