@@ -24,6 +24,7 @@ from vulkan_offscreen import (
 from vulkan_scene import (
     CenaVulkan, preparar_malha_original, matriz_wgpu, assinatura_textura,
     parametros_material_vulkan, pixels_textura_rgba, aparencia_material_vulkan,
+    configuracao_raster_vulkan,
 )
 from vulkan_texture import Texture as TextureVulkan
 from vulkan_skin import preparar_skin, normalizar_cor_fundo
@@ -559,6 +560,54 @@ class TestarAparenciaAvancadaDeMaterialVulkan(unittest.TestCase):
             aparencia_material_vulkan(
                 self._obj(specularColor=SimpleNamespace(values=(1, float("nan"), 0))),
             )
+
+
+class TestarRegrasDeRasterOriginalVulkan(unittest.TestCase):
+    def _obj(self, cull=0, depthless=False, opacity=1.0, transparent=False):
+        return SimpleNamespace(
+            cull=cull, depthless=depthless,
+            material=SimpleNamespace(opacity=opacity, transparent=transparent),
+        )
+
+    def test_material_opaco_respeita_cull_back_e_z(self):
+        self.assertEqual(
+            configuracao_raster_vulkan(self._obj(cull=1)),
+            ("back", True, "less-equal"),
+        )
+
+    def test_cull_front_e_face_dupla(self):
+        self.assertEqual(
+            configuracao_raster_vulkan(self._obj(cull=-1)),
+            ("front", True, "less-equal"),
+        )
+        self.assertEqual(
+            configuracao_raster_vulkan(self._obj(cull=0)),
+            ("none", True, "less-equal"),
+        )
+
+    def test_transparencia_nao_grava_z_mais_respeita_teste(self):
+        self.assertEqual(
+            configuracao_raster_vulkan(self._obj(transparent=True)),
+            ("none", False, "less-equal"),
+        )
+        self.assertEqual(
+            configuracao_raster_vulkan(self._obj(opacity=0.4)),
+            ("none", False, "less-equal"),
+        )
+
+    def test_depthless_ignora_z_e_overlay_de_linhas_nao_grava(self):
+        self.assertEqual(
+            configuracao_raster_vulkan(self._obj(depthless=True)),
+            ("none", False, "always"),
+        )
+        self.assertEqual(
+            configuracao_raster_vulkan(self._obj(), linhas=True),
+            ("none", False, "less-equal"),
+        )
+
+    def test_opacidade_invalida_e_rejeitada(self):
+        with self.assertRaises(ValueError):
+            configuracao_raster_vulkan(self._obj(opacity=float("nan")))
 
 
 if __name__ == "__main__":
