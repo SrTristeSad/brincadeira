@@ -23,9 +23,9 @@
 | `mh.Texture` | `vulkan_texture.Texture` em memória CPU | Implementação provisória |
 | Material `.mhmat` | Difusa, opacidade, brilho especular, emissão, back/front cull, depthless | Pipeline WGSL; equivalência visual pendente |
 | Malhas com `transparentPrimitives` | Desativa escrita de profundidade e descarta fragmentos de alfa zero (`glAlphaFunc(GL_GREATER, 0)` original) | Smoke GPU de camadas sobrepostas; alpha-to-coverage/MSAA pendentes |
-| Camadas translúcidas | Composição de opacos antes de transparências, ordenação back-to-front pelo centro da malha dentro de cada bloco de `priority`/`cameraMode`; overlays `depthless` por último | Smoke GPU com duas camadas alpha em ordens de entrada invertidas; ordenação por triângulo pendente |
+| Camadas translúcidas | Composição de opacos antes de transparências, ordenação back-to-front pelo centro da malha dentro de cada bloco de `priority`/`cameraMode`; overlays `depthless` por último | Smoke GPU com duas camadas alpha em ordens de entrada invertidas; ordenação adicional de triângulos alpha dentro da malha em espaço de câmera, sem modificar os índices originais; interseções cíclicas continuam pendentes |
 | Normal maps `.mhmat` | Textura e intensidade originais; base tangente derivada de UVs no fragmento | Pipeline validada na CI; comparação visual pendente |
-| Iluminação `.mhscene` | Até oito luzes pontuais, ambiente e reflexo Blinn-Phong | Aproximação; falta atenuação/foco/especular de cena |
+| Iluminação `.mhscene` | Até oito luzes pontuais, ambiente e reflexo Blinn-Phong | Cores difusa e especular independentes preservadas; falta atenuação/foco e luzes de área |
 | Shader xray original (.mhmat) | WGSL nativo com `edgefalloff`, `intensity`, cor ambiente e alfa de contorno | Execução GPU validada; comparar imagem |
 | Shader LitSphere (pele padrão) | WGSL usa normal em espaço de câmera, textura de LitSphere original e `AdditiveShading`; `autoBlendSkin` usa `EthnicSkinBlender` original | Captura GPU e testes de parâmetros; equivalência visual pendente |
 | Shader Phong original | WGSL usa o primeiro ponto de luz da cena, ambiente, difusa, especular e emissão do material original | Port da base; falta AO e comparação visual |
@@ -36,6 +36,10 @@
 | Seleção do shader no editor de materiais | Seis presets oficiais são reconhecidos; os parâmetros xray/LitSphere/Toon são editáveis na interface original | Validar interações e requisitos de textura para skin/normalmap |
 | Equivalência dos shaders GLSL | Os seis presets têm caminhos WGSL; normalmap/skin e recursos avançados ainda não reproduzem integralmente os shaders legados | **Parcial** |
 | Shaders GLSL arbitrários | `vulkan_shader.Shader.supported()` permanece falso; nenhum compilador GLSL genérico | **Pendente** |
+
+| Imagens e ativos binários com NumPy 2 | `tobytes`/`frombuffer` e índices UTF-8; conversão QImage unificada | Roundtrip PNG/RGBA e dados binários validados |
+| Wireframe original (`Ctrl+F`) | Superfície sem textura + arestas pretas por passes Vulkan; quads não recebem diagonais extras | Teste CPU e comparação GPU sólido/wireframe |
+| Imports históricos `texture` e `shader` | Encaminham às implementações Vulkan, sem importar PyOpenGL | Corpos OpenGL removidos; GLSL personalizado continua sem suporte |
 
 ## Arquitetura
 
@@ -68,11 +72,22 @@ Para testes de CPU:
 python -m unittest discover -s makehumano/testes -p 'test_*wgpu.py' -v
 ```
 
+## Executáveis portáteis
+
+O empacotamento e o teste do binário congelado estão documentados em
+[PORTATIL.md](PORTATIL.md). O smoke agora exercita também um modificador,
+salvamento/recarregamento MHM e exportações OBJ, FBX binário, Collada e STL binário pelas ferramentas originais. Capturas dos presets, transparência, normais, especular e wireframe ficam no artefato de diagnóstico.
+A validação Windows utiliza Vulkan por software na CI; compatibilidade com
+GPUs e drivers reais continua necessária antes de um lançamento.
+
+Consulte também a [auditoria prática](AUDITORIA-VULKAN.md) para os bloqueadores
+de compatibilidade e os limites dos testes.
+
 ## Pendências que impedem o lançamento
 
 - Alcançar equivalência **visual** dos seis presets oficiais WGSL. Normalmap deriva tangentes no fragmento, Skin usa gradiente de uma linha em textura 2D, e Phong incorporou AO; diferenças com o GLSL original ainda precisam ser quantificadas. GLSL arbitrário continua sem compilação.
-- Aperfeiçoar a transparência de cabelos e roupas entrelaçadas: já existe ordenação back-to-front pelo centro da malha e smoke para duas camadas; faltam ordenação de triângulos dentro da mesma malha, `alphaToCoverage`/MSAA e equivalência visual no modelo completo.
-- Reproduzir atenuação/especular/foco das luzes de cena, outros comportamentos avançados de materiais. A transformação de normais já usa inversa-transposta do modelo.
+- Aperfeiçoar a transparência de cabelos e roupas entrelaçadas: já existe ordenação back-to-front pelo centro da malha e smoke para duas camadas; há ordenação por triângulo dentro da malha, com comparação GPU para ordem invertida; faltam interseções cíclicas, `alphaToCoverage`/MSAA e equivalência visual no modelo completo.
+- Reproduzir atenuação/foco e luzes de área da cena, outros comportamentos avançados de materiais. A cor especular independente de `Light.specular` já chega aos shaders WGSL e é exercitada por comparação GPU. A transformação de normais já usa inversa-transposta do modelo.
 - Criar testes comparativos de imagens, incluindo reflexos, alfa, normal maps e culling, porque o smoke só verifica inicialização e integridade básica.
 - Completar paridade de `renderSkin` para formatos de imagem, texturas dinâmicas e render pass acumulativo.
 - A inicialização e o smoke da GUI já não precisam de PyOpenGL; investigar e retirar módulos legados remanescentes no repositório.
