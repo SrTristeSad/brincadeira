@@ -191,3 +191,24 @@ implementa transparência OIT nem garante paridade entre todos os drivers.
 O smoke alterna 1x/4x no mesmo renderer, verifica cobertura parcial nas
 bordas, a resposta do controle de A2C, alfa zero e o retorno exato ao modo
 anterior. Preserva capturas dos quatro cenários para comparação do portátil.
+
+### Rig, pose e reprodução originais
+
+O smoke usa os plugins `3_libraries_skeleton` e `3_libraries_pose` para
+selecionar `default.mhskel`, aplicar `tpose.bvh` e desfazer/refazer as ações
+originais. Verifica pesos normalizados, deformação das coordenadas e dos
+pixels, além de salvar/reabrir um MHM com referências ao rig/pose. Restaura
+rig, pose, animações e histórico ao terminar, sem alterar os assets oficiais.
+
+Um track temporário de repouso/T-pose testa skinning em dois quadros e a
+retenção do último quadro sem looping. Corrigidos `setLooping`, interpolação
+no último quadro e `sparsify`: a redução de fps seleciona por tempo, mantém
+contagem inteira e invalida o bake sem tratar matrizes de skinning como poses.
+As poses BVH oficiais também são verificadas em CPU com NumPy atual.
+
+O rig em repouso é exportado pelos exportadores originais FBX/Collada.
+`portable_rig_validation.py` relê registros e arrays FBX (inclusive zlib),
+ossos, clusters, pesos e matrizes de vínculo. No Collada, verifica joints,
+controladores, limites dos índices e normalização dos pesos. Isso é validação
+estrutural independente; não substitui importação em Blender/outro consumidor
+nem comprova exportação de animações completas.

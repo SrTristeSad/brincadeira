@@ -24,18 +24,21 @@ em `motor_wgpu`. O estado abaixo distingue testes exercitados de paridade final.
 | Softness alterava a atenuação no editor original | Evento agora atualiza `areaLightSize`, com regressão nos widgets reais; emissão de área agora amostrada no Vulkan |
 | Samples/Soft light sem efeito no renderer | Emissão de área integrada, tamanho zero restaura luz pontual, energia comparada à soma explícita de luzes |
 | Atributos opcionais de SceneObject causavam recursão | Consulta de atributo inexistente agora levanta AttributeError, com regressão de hasattr/getattr |
+| Reprodução sem looping voltava ao primeiro quadro | Setter e interpolação corrigidos; teste de deformação real retém o último quadro |
+| Reduzir fps falhava na propriedade sem setter | Reamostragem por tempo com quadros inteiros, poses originais e invalidação do cache de skinning |
+| Rig/pose/exportação com ossos sem cobertura | Plugins oficiais, undo/redo, roundtrip MHM, capturas Vulkan e leitura de pesos/matrizes dos arquivos exportados |
 | Plugins/exportadores só carregavam | Smoke altera geometria, salva/reabre MHM e exporta OBJ/FBX/DAE/STL, verificando estrutura dos arquivos |
 
 ## Validação local
 
-A suíte completa executou **265 testes com sucesso**, usando Python 3.12,
+A suíte completa executou **280 testes com sucesso**, usando Python 3.12,
 NumPy 2.5.4 e Qt 5.15.14. Os testes Qt de gravação PNG verificam os canais,
 alfa e imagens com largura não alinhada. Os dados binários verificam Unicode
 em grupos de malha, tags de proxies e metadados de licença. A criação local do
 pacote Linux e a importação congelada também foram exercitadas; os testes GPU
 e GUI são executados nos runners dos workflows vinculados ao commit.
 
-A comparação adicional de 39 PNGs entre fontes Windows e executável exige
+A comparação adicional de 41 PNGs entre fontes Windows e executável exige
 igualdade exata de pixels no mesmo driver. As capturas são sincronizadas com
 fim de startup para não comparar iluminação ainda não carregada. Essa
 verificação detecta diferenças do empacotamento; não substitui equivalência
@@ -70,8 +73,10 @@ com o renderer original nem validação em outra GPU.
    biblioteca de roupas completa. Não inventar ou substituir esses ativos.
    A validação integral requer exemplos reais licenciados, inclusive cabelos
    recortados e roupas sobrepostas, exercitados nos carregadores originais.
-6. **Exportação ampliada:** o smoke valida malha/olhos nos quatro formatos;
-   animações, rigs alternativos, proxies/roupas e todas as opções de exportação
+6. **Exportação ampliada:** o smoke valida malha/olhos nos quatro formatos e
+   o rig oficial em repouso no FBX binário/Collada, relendo ossos, matrizes e
+   pesos. Rig/pose oficiais também são salvos/reabertos em MHM.
+   Animações exportadas, rigs alternativos, proxies/roupas e demais opções
    ainda precisam ser reabertos em consumidores independentes.
 7. **Legado gráfico restante:** `lib/glmodule.py` ainda contém a implementação
    obsoleta e os métodos históricos `Object3D.draw/pick` a referenciam. O
@@ -82,7 +87,7 @@ com o renderer original nem validação em outra GPU.
    oficiais possuem rotas nativas; scripts GLSL externos continuam pendentes.
 9. **Interações completas:** os smokes chamam APIs originais e verificam pixels;
    incluem undo/redo do modificador original, mas não cobrem toda sequência
-   de mouse/teclado, poses e todas as
+   de mouse/teclado e todas as
    ferramentas de projeção. `renderSkin` agora verifica coordenadas 3D/4D,
    matrizes de textura/objeto, composição sobre Texture existente e destino LA;
    faltam sequências completas da ferramenta com malhas e imagens externas.

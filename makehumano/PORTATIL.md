@@ -43,6 +43,9 @@ exige simultaneamente:
 - projeção UV com coordenadas 3D/4D e matrizes, pintura acumulada e destino luminância/alfa;
 - execução dos seis presets oficiais WGSL, normal maps e composição alfa;
 - alteração real da malha pelo modificador `macrodetails/Age`, undo e redo no histórico original;
+- rig oficial e T-pose deformando a malha e a imagem, undo/redo e roundtrip MHM com rig/pose;
+- reprodução de dois quadros e parada sem looping, verificando coordenadas do personagem;
+- FBX/Collada com esqueleto, leitura independente de ossos, índices, pesos e matrizes;
 - mapas especulares, transparência, bump e AO, incluindo intensidade zero, altura constante e prioridade dos normal maps;
 - foco, ângulo, atenuação e emissão de área, incluindo energia normalizada, tamanho zero e eventos dos widgets originais;
 - MSAA 4x, bordas diagonais e controle original Alpha to Coverage;
@@ -52,12 +55,13 @@ exige simultaneamente:
 - resposta do controle wireframe, com arestas pretas e imagem diferente da superfície sólida;
 - processo ainda vivo e ausência de traceback ou erro de render no log;
 - segunda abertura do portátil com `--multisampling`, desde a inicialização;
-- no Windows, igualdade exata de 39 capturas PNG entre fontes e executável. As
+- no Windows, igualdade exata de 41 capturas PNG entre fontes e executável. As
   capturas só são geradas após terminar a carga da iluminação, plugins e targets.
 
 Isso **não** comprova equivalência visual dos shaders, todos os controles da
 interface ou todos os formatos/opções de exportação. Os quatro formatos citados
-são exportados com a malha original e olhos padrão; animações, roupas externas e
+são exportados com a malha original e olhos padrão, e FBX/Collada também
+com o rig oficial em repouso. Animações exportadas, roupas externas e
 importação desses arquivos em outras aplicações ainda exigem validação.
 
 No Windows, a CI instala Mesa/Lavapipe e seu loader Vulkan para renderizar por

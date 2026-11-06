@@ -1,7 +1,6 @@
 """Exercitar rig/pose oficiais nos plugins e exportadores originais."""
 import importlib
 from pathlib import Path
-import xml.etree.ElementTree as ET
 import numpy as np
 
 
@@ -100,35 +99,20 @@ def validar_rig_pose(app, directory):
         fbx_config.setHuman(human)
         fbx_path = directory / "personagem-com-rig.fbx"
         importlib.import_module("9_export_fbx.mh2fbx").exportFbx(str(fbx_path), fbx_config)
-        fbx = fbx_path.read_bytes()
-        if not fbx.startswith(b"Kaydara FBX Binary  \x00\x1a\x00") or any(
-                token not in fbx for token in (b"LimbNode", b"Deformer", b"Cluster", b"TransformLink")):
-            raise RuntimeError("FBX não contém esqueleto e deformadores de skinning")
+        from portable_rig_validation import validar_fbx_rig, validar_collada_rig
+        fbx_validation = validar_fbx_rig(fbx_path, bones)
         dae_config = app.modules["9_export_collada"].DaeConfig()
         dae_config.setHuman(human)
         dae_path = directory / "personagem-com-rig.dae"
         importlib.import_module("9_export_collada.mh2collada").exportCollada(str(dae_path), dae_config)
-        document = ET.parse(dae_path)
-        ns = {"c": "http://www.collada.org/2005/11/COLLADASchema"}
-        if len(document.findall('.//c:node[@type="JOINT"]', ns)) < bones:
-            raise RuntimeError("Collada perdeu ossos do rig")
-        skins = document.findall(".//c:controller/c:skin", ns)
-        if not skins:
-            raise RuntimeError("Collada não contém controladores de skinning")
-        for skin in skins:
-            vertex_weights = skin.find("c:vertex_weights", ns)
-            counts = np.fromstring(vertex_weights.find("c:vcount", ns).text, sep=" ", dtype=int)
-            pairs = np.fromstring(vertex_weights.find("c:v", ns).text, sep=" ", dtype=int)
-            if len(counts) != int(vertex_weights.attrib["count"]) or len(pairs) != 2*int(counts.sum()):
-                raise RuntimeError("Collada contém índices/pesos incompatíveis com os vértices")
-            if np.any(counts <= 0) or np.any(pairs < 0):
-                raise RuntimeError("Collada contém vértices sem pesos ou índices inválidos")
+        dae_validation = validar_collada_rig(dae_path, bones)
         Image(data=rest_image).save(str(directory / "rig-rest.png"))
         Image(data=posed_image).save(str(directory / "rig-tpose.png"))
         return {"bones": bones, "weighted_vertices": int(np.count_nonzero(totals)),
                 "pose_deforms_mesh": True, "rig_pose_undo_redo": True,
                 "animation_playback": True, "non_looping_holds_last": True,
-                "mhm_rig_pose_roundtrip": True, "skinned_exports": ["fbx-binary", "collada"]}
+                "mhm_rig_pose_roundtrip": True, "skinned_exports": ["fbx-binary", "collada"],
+                "fbx_validation": fbx_validation, "collada_validation": dae_validation}
     finally:
         pose_library.loadPose(None)
         rig_library.chooseSkeleton(original_rig)
