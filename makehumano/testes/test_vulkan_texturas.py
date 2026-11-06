@@ -17,6 +17,9 @@ from vulkan_texturas import CacheTexturasVulkan, assinatura_arquivo
 
 
 class ImagemFalsa:
+    # Constante oferecida pela classe QImage real (não pelo módulo QtGui).
+    Format_RGBA8888 = 17
+
     def __init__(self, caminho=None):
         try:
             self.dados = Path(caminho).read_bytes() if caminho else None
