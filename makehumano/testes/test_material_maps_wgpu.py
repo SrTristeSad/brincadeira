@@ -21,6 +21,17 @@ class MaterialMaps(unittest.TestCase):
         mat = self.material(specularMapTexture=image, specularMapIntensity=.4)
         self.assertEqual(parametros_mapa(mat, "specular"), (image, .4))
 
+    def test_original_bump_controls_and_shader_parameters(self):
+        image = object()
+        self.assertEqual(parametros_mapa(self.material(bumpMapTexture=image, bumpMapIntensity=.5), "bump"), (image, .5))
+        self.assertEqual(parametros_mapa(self.material(shaderParameters={
+            "bumpmapTexture": image, "bumpmapIntensity": [.25]}), "bump"), (image, .25))
+
+    def test_disabled_bump_does_not_load_missing_map(self):
+        for values in ({"shaderConfig": {"bump": False}}, {"bumpMapIntensity": 0}):
+            with self.subTest(values=values):
+                self.assertEqual(parametros_mapa(self.material(bumpMapTexture="missing.png", **values), "bump"), (None, 0))
+
     def test_dynamic_shader_parameters_and_scalar_list(self):
         image = object()
         mat = self.material(shaderParameters={"transparencymapTexture": image,

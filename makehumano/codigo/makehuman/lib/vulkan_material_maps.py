@@ -3,6 +3,7 @@ import math
 import os
 
 _MAPAS = {
+    "bump": ("bump", "bumpMapTexture", "bumpmapTexture", "bumpMapIntensity", "bumpmapIntensity"),
     "specular": ("spec", "specularMapTexture", "specularmapTexture", "specularMapIntensity", "specularmapIntensity"),
     "transparency": ("transparency", "transparencyMapTexture", "transparencymapTexture", "transparencyMapIntensity", "transparencymapIntensity"),
 }

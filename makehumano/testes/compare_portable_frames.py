@@ -12,6 +12,7 @@ FRAMES = (
     "map-specular-white", "map-specular-black", "map-transparency-none",
     "map-transparency-grey", "map-transparency-clear",
     "light-point", "light-attenuated", "light-spot", "light-spot-away",
+    "bump-disabled", "bump-enabled",
 )
 
 

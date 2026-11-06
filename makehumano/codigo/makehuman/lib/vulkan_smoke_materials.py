@@ -112,6 +112,45 @@ def validar_mapas(cena, cameras, mundo, marker):
                              ("map-transparency-none", opaque), ("map-transparency-grey", half),
                              ("map-transparency-clear", clear)):
             Image(data=pixels).save(str(path.parent / (name + ".png")))
-        path.write_text(json.dumps({"specular": True, "transparency": True, "zero_intensity": True}), encoding="utf-8")
+
+        scene.lights[0].color = (1., 1., 1.)
+        scene.lights[0].specular = (0., 0., 0.)
+        material = Material()
+        material.diffuseColor = SimpleNamespace(values=(1., 1., 1.))
+        material.shaderConfig = {"normal": False, "bump": True, "diffuse": False,
+                                 "spec": False, "transparency": False}
+        baseline = render(material)
+        for flat in (black, white):
+            material.bumpMapTexture = flat
+            if not np.array_equal(baseline, render(material)):
+                raise RuntimeError("Altura constante alterou a iluminação do material")
+        # Padrão de teste de altura: nunca altera os assets do personagem.
+        values = np.round(127.5 + 127.5 * np.sin(np.arange(64) * np.pi / 8)).astype(np.uint8)
+        pixels = np.full((64, 64, 4), 255, np.uint8)
+        pixels[:, :, :3] = values[None, :, None]
+        material.bumpMapTexture = Image(data=pixels)
+        bumped = render(material)
+        if np.array_equal(baseline, bumped):
+            raise RuntimeError("Bump map não alterou a iluminação")
+        if not np.array_equal(baseline[:, :, 3], bumped[:, :, 3]):
+            raise RuntimeError("Bump map alterou a cobertura da geometria")
+        material.bumpMapIntensity = 0.
+        if not np.array_equal(baseline, render(material)):
+            raise RuntimeError("Bump com intensidade zero alterou o material")
+        material.bumpMapIntensity = 1.
+        material.shaderConfig["bump"] = False
+        if not np.array_equal(baseline, render(material)):
+            raise RuntimeError("Configuração bump desligada alterou o material")
+        material.shaderConfig["normal"] = True
+        material.normalMapTexture = Image(data=np.tile(np.array([128, 128, 255, 255], np.uint8), (4, 4, 1)))
+        normal_only = render(material)
+        material.shaderConfig["bump"] = True
+        if not np.array_equal(normal_only, render(material)):
+            raise RuntimeError("Bump substituiu o normal map prioritário do material original")
+        Image(data=baseline).save(str(path.parent / "bump-disabled.png"))
+        Image(data=bumped).save(str(path.parent / "bump-enabled.png"))
+        path.write_text(json.dumps({"specular": True, "transparency": True,
+                                   "zero_intensity": True, "bump": True,
+                                   "normal_precedence": True}), encoding="utf-8")
     finally:
         cena.atualizar_iluminacao(previous)

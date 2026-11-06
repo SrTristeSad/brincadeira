@@ -404,7 +404,7 @@ def arestas_wireframe(faces):
 class _MaterialWireframe:
     shader = None
     shaderParameters = {}
-    shaderConfig = {"normal": False, "diffuse": False, "spec": False, "transparency": False}
+    shaderConfig = {"normal": False, "bump": False, "diffuse": False, "spec": False, "transparency": False}
     normalMapTexture = None
     transparent = False
 
@@ -505,6 +505,7 @@ struct Globals {
 @group(0) @binding(6) var mapa_gradiente: texture_2d<f32>;
 @group(0) @binding(7) var mapa_especular: texture_2d<f32>;
 @group(0) @binding(8) var mapa_transparencia: texture_2d<f32>;
+@group(0) @binding(9) var mapa_altura: texture_2d<f32>;
 struct Entrada {
     @location(0) pos: vec3<f32>,
     @location(1) normal: vec3<f32>,
@@ -570,6 +571,24 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
                     + bitangente * sample_normal.y
                 )
             );
+        }
+    }
+    // Gradiente de altura na superfície em coordenadas de mundo. Derivadas
+    // fora do ramo evitam controle de fluxo não uniforme no fragment shader.
+    let altura = dot(textureSample(mapa_altura, amostra, uv).rgb,
+                     vec3<f32>(1.0 / 3.0));
+    let dhdx = dpdx(altura);
+    let dhdy = dpdy(altura);
+    let dp_dx = dpdx(i.mundo);
+    let dp_dy = dpdy(i.mundo);
+    if (dados.mapas_parametros.z > 0.0) {
+        let r1 = cross(dp_dy, normal);
+        let r2 = cross(normal, dp_dx);
+        let det = dot(dp_dx, r1);
+        if (abs(det) > 0.000000000001) {
+            let gradiente = sign(det) * (dhdx * r1 + dhdy * r2);
+            normal = normalize(abs(det) * normal
+                     - dados.mapas_parametros.z * gradiente);
         }
     }
     let direcao_visao = normalize(dados.observador.xyz - i.mundo);
@@ -1236,7 +1255,11 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
                 )
                 mapa_spec, forca_spec = parametros_mapa(material_obj, "specular")
                 mapa_trans, forca_trans = parametros_mapa(material_obj, "transparency")
-                mapas_parametros = np.array([forca_spec, forca_trans, 0.0, 0.0], np.float32)
+                # Material._updateShaderConfig prioriza normal maps sobre bump.
+                mapa_bump, forca_bump = (None, 0.0)
+                if caminho_normal is None:
+                    mapa_bump, forca_bump = parametros_mapa(material_obj, "bump")
+                mapas_parametros = np.array([forca_spec, forca_trans, forca_bump, 0.0], np.float32)
                 uniforms = np.concatenate((
                     mvp.T.reshape(-1), modelo.T.reshape(-1),
                     normal_modelo.T.reshape(-1), view.T.reshape(-1),
@@ -1262,6 +1285,7 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
                 textura_grad = self._textura(textura_gradiente)
                 textura_spec = self._textura(mapa_spec)
                 textura_trans = self._textura(mapa_trans)
+                textura_altura = self._textura(mapa_bump)
                 bind = self.device.create_bind_group(
                     layout=pipeline.get_bind_group_layout(0),
                     entries=[
@@ -1289,6 +1313,7 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
                         ),
                         wgpu.BindGroupEntry(binding=7, resource=textura_spec.create_view()),
                         wgpu.BindGroupEntry(binding=8, resource=textura_trans.create_view()),
+                        wgpu.BindGroupEntry(binding=9, resource=textura_altura.create_view()),
                     ],
                 )
                 passagem.set_bind_group(0, bind)
