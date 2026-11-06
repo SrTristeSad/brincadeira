@@ -12,7 +12,7 @@ import numpy as np
 
 from vulkan_material_maps import parametros_mapa, mapa_transparencia_ativo
 from vulkan_area_lights import amostrar_luzes, MAX_LUZES_VULKAN
-from vulkan_displacement import posicoes_render, invalidar_displacement
+from vulkan_displacement import posicoes_render
 
 
 def pixels_textura_rgba(dados):
@@ -972,22 +972,28 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
 
     def invalidar_texturas(self, caminho=None):
         """Invalida texturas da cena; a próxima renderização recarrega na GPU."""
-        invalidar_displacement(caminho)
         if caminho is None:
             self._texturas.clear()
         else:
             self._texturas.pop(str(caminho), None)
 
     def _textura(self, caminho):
+        from image import Image
+        from vulkan_texture import getTexture
+        resource = caminho
+        file_path = isinstance(caminho, (str, os.PathLike))
+        if isinstance(caminho, Image) or (file_path and os.path.isfile(caminho)):
+            resource = getTexture(caminho)
         dinamica = (
-            caminho is not None and hasattr(caminho, "data")
-            and hasattr(caminho, "width") and hasattr(caminho, "height")
+            resource is not None and hasattr(resource, "data")
+            and hasattr(resource, "width") and hasattr(resource, "height")
         )
         if dinamica:
-            chave = ("imagem", id(caminho))
-            origem = np.asarray(caminho.data)
+            chave = str(caminho) if file_path else ("imagem", id(caminho))
+            origem = np.asarray(resource.data)
             assinatura = (
-                getattr(caminho, "modified", None), origem.shape,
+                getattr(resource, "modified", None), origem.shape,
+                assinatura_textura(caminho) if file_path else None,
             )
         else:
             chave = str(caminho or "")

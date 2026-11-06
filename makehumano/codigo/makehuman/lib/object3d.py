@@ -320,6 +320,12 @@ class Object3D(object):
     def texture(self):
         return self.object.texture
 
+    @property
+    def textureTex(self):
+        """Texture CPU original, compartilhada pela viewport e projeção UV."""
+        from texture import getTexture
+        return getTexture(self.texture)
+
     @classmethod
     def attach(cls, mesh):
         if mesh.object3d:

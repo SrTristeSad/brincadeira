@@ -221,7 +221,8 @@ def mapImageGL(srcImg, mesh, leftTop, rightBottom):
     texmat = matrix.scale((1/(right - left), 1/(top - bottom), 1)) * matrix.translate((-left, -bottom, 0)) * texmat
     texmat = np.asarray(texmat)
 
-    texco = mesh.r_coord
+    from vulkan_displacement import posicoes_render
+    texco = posicoes_render(mesh.object3d)
 
     alpha = np.sum(mesh.r_vnorm * camera[None,:], axis=-1)
     alpha = np.maximum(alpha, 0)

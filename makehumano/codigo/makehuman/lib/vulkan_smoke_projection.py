@@ -64,3 +64,65 @@ def validar_projecao(marker):
     projected.save(str(path / "projection-3d.png"))
     perspective.save(str(path / "projection-perspective.png"))
     result.save(str(path / "projection-accumulated.png"))
+
+
+def validar_projecao_original(cena, cameras, mundo, directory):
+    """Chama a ferramenta original com a malha real, sem fallback CPU."""
+    from core import G
+    from image import Image
+    from projection import mapImageGL
+    from vulkan_texture import reloadTexture
+    human = G.app.selectedHuman
+    # O setter original copia campos para o Material existente; guardar a
+    # referência não preservaria o estado que será alterado pelo teste.
+    original_material = human.material.clone()
+    material = original_material.clone()
+    path = Path(directory)
+    destination = path / "projection-working-copy.png"
+    Image(data=np.full((512, 512, 4), 255, np.uint8)).save(str(destination))
+    original_bytes = destination.read_bytes()
+    source = np.full((8, 8, 4), 255, np.uint8)
+    source[:, :4] = [255, 0, 0, 255]
+    source[:, 4:] = [0, 0, 255, 255]
+    source = Image(data=source)
+    material.shader = None
+    material.autoBlendSkin = False
+    material.diffuseColor = (1., 1., 1.)
+    material.diffuseTexture = str(destination)
+    material.shadeless = True
+    material.displacementMapTexture = None
+    material.displacementMapIntensity = 0.
+    material.configureShading(diffuse=True, displacement=True)
+
+    def viewport():
+        return cena.capturar_framebuffer(mundo, cameras, 160, 120,
+                                         incluir_alfa=True, cor_fundo=(0, 0, 0, 0))
+
+    try:
+        human.material = material
+        material = human.material
+        mesh = human.meshData
+        if mesh.object3d.textureTex is None:
+            raise RuntimeError("A ferramenta original não obteve a Texture do personagem")
+        before = viewport()
+        projected = mapImageGL(source, mesh, (0., 0.), (float(G.windowWidth), float(G.windowHeight)))
+        painted = viewport()
+        if np.array_equal(before, painted):
+            raise RuntimeError("Viewport ignorou a pintura da ferramenta original em memória")
+        if destination.read_bytes() != original_bytes:
+            raise RuntimeError("Projeção sobrescreveu o arquivo de origem da textura")
+        reloadTexture(str(destination))
+        if not np.array_equal(before, viewport()):
+            raise RuntimeError("Recarregar textura não descartou a cópia pintada em memória")
+        material.displacementMapTexture = Image(data=np.full((4, 4, 4), 255, np.uint8))
+        material.displacementMapIntensity = .5
+        displaced = mapImageGL(source, mesh, (0., 0.), (float(G.windowWidth), float(G.windowHeight)))
+        if np.array_equal(projected.data, displaced.data):
+            raise RuntimeError("Projeção original ignorou as coordenadas deslocadas")
+        projected.save(str(path / "projection-original.png"))
+        displaced.save(str(path / "projection-displaced.png"))
+        Image(data=painted).save(str(path / "projection-painted-viewport.png"))
+    finally:
+        human.material = original_material
+        reloadTexture(str(destination))
+        cena.invalidar_texturas()

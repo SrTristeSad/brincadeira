@@ -3,44 +3,26 @@
 Não altera os arrays editáveis do MakeHuman nem aplica novos morph targets.
 Altura preta é zero; branca desloca uma unidade local vezes a intensidade.
 """
-from collections import OrderedDict
 import os
 import numpy as np
 from vulkan_material_maps import parametros_mapa
 
-_arquivos = OrderedDict()
-_LIMITE_CACHE = 128 * 1024 * 1024
-
-
-def invalidar_displacement(caminho=None):
-    if caminho is None:
-        _arquivos.clear()
-    else:
-        path = os.path.abspath(os.fspath(caminho))
-        for key in list(_arquivos):
-            if key[0] == path:
-                del _arquivos[key]
-
 
 def _pixels(recurso):
     if isinstance(recurso, (str, os.PathLike)):
-        path = os.path.abspath(os.fspath(recurso))
-        stat = os.stat(path)
-        key = (path, stat.st_mtime_ns, stat.st_size)
-        if key in _arquivos:
-            _arquivos.move_to_end(key)
-            return _arquivos[key]
-        from image import Image
-        pixels = Image(path=path).data
-        invalidar_displacement(path)
-        while _arquivos and sum(p.nbytes for p in _arquivos.values()) + pixels.nbytes > _LIMITE_CACHE:
-            _arquivos.popitem(last=False)
-        # Um único mapa maior que o orçamento é mantido para não decodificar
-        # o mesmo arquivo a cada frame; mapas menores dividem o orçamento.
-        _arquivos[key] = pixels
-        return pixels
+        # Mesmo cache CPU usado pela pintura/projeção original. Atualizações
+        # em memória e recarga de arquivo devem mover render e picking juntos.
+        from vulkan_texture import getTexture
+        texture = getTexture(recurso)
+        if texture is None:
+            raise ValueError("Displacement: textura não disponível")
+        return texture.data
     if isinstance(recurso, np.ndarray):
         return recurso
+    from image import Image
+    if isinstance(recurso, Image):
+        from vulkan_texture import getTexture
+        return getTexture(recurso).data
     return np.asarray(getattr(recurso, "data", None))
 
 

@@ -114,14 +114,17 @@ def getTexture(path, cache=None):
     if not os.path.isfile(path):
         log.error("Arquivo de textura inexistente: %s", path)
         return None
-    mtime = os.stat(path).st_mtime_ns
+    stat = os.stat(path)
+    mtime = stat.st_mtime_ns
     cached = cache.get(path)
     if cached is None:
         cached = Texture(path)
         cache[path] = cached
-    elif getattr(cached, "_source_version", None) != mtime:
+    elif (getattr(cached, "_source_version", None) != mtime
+          or getattr(cached, "_source_size", None) != stat.st_size):
         cached.loadImage(path)
     cached._source_version = mtime
+    cached._source_size = stat.st_size
     return cached
 
 
@@ -131,5 +134,7 @@ def reloadTextures():
 
 
 def reloadTexture(path):
+    if isinstance(path, os.PathLike):
+        path = os.fspath(path)
     _textureCache.pop(path, None)
     _invalidar(path)
