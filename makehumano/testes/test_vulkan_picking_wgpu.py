@@ -124,5 +124,55 @@ class TestarPickingOriginal(unittest.TestCase):
         )
 
 
+    def test_recorte_no_plano_proximo_com_vertice_atras_da_camera(self):
+        """Um vértice com w negativo não pode ocultar o triângulo inteiro."""
+        original = objeto(
+            "atravessa_near", indices=[[0, 1, 2]],
+            grupos=[(0, 1)], cores=[(12, 34, 56)],
+        )
+        original.verts = np.array([
+            [-0.7, -0.7, -1.4], [0.7, -0.7, 0.4],
+            [0.0, 0.8, 0.4],
+        ], dtype=np.float32)
+        cam = camera()
+        projecao = np.eye(4, dtype=np.float32)
+        projecao[3, 2] = 1.0  # w = z + 1; primeiro vértice atrás da câmera
+        cam.getMatrices = lambda _eye: (
+            projecao, np.eye(4, dtype=np.float32)
+        )
+        self.assertEqual(
+            selecionar_cor([original], [cam], 55, 55, 100, 100),
+            (12, 34, 56),
+        )
+        original.cull = -1
+        self.assertEqual(
+            selecionar_cor([original], [cam], 55, 55, 100, 100),
+            (0, 0, 0),
+        )
+
+    def test_recorte_descarta_objetos_fora_do_near_e_far(self):
+        original = objeto("fora_da_camera")
+        for z in (-3.0, 3.0):
+            with self.subTest(z=z):
+                original.verts[:, 2] = z
+                self.assertEqual(
+                    selecionar_cor([original], [camera()], 50, 50, 100, 100),
+                    (0, 0, 0),
+                )
+
+    def test_recorte_lateral_preserva_parte_visivel(self):
+        original = objeto(
+            "atravessa_lateral", indices=[[0, 1, 2]],
+            grupos=[(0, 1)], cores=[(7, 11, 13)],
+        )
+        original.verts = np.array([
+            [-2.5, -0.8, 0.4], [0.8, -0.8, 0.4], [0.0, 0.8, 0.4],
+        ], dtype=np.float32)
+        self.assertEqual(
+            selecionar_cor([original], [camera()], 50, 50, 100, 100),
+            (7, 11, 13),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
