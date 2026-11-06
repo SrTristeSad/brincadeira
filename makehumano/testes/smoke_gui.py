@@ -31,6 +31,7 @@ def main():
         marcador_offscreen = base / "vulkan-offscreen"
         marcador_render = base / "vulkan-render"
         marcador_skin = base / "vulkan-skin"
+        marcador_xray = base / "vulkan-xray"
         logfile = base / "startup.log"
         home = base / "home"
         home.mkdir()
@@ -45,6 +46,7 @@ def main():
         ambiente["MAKEHUMANO_VULKAN_OFFSCREEN_FILE"] = str(marcador_offscreen)
         ambiente["MAKEHUMANO_VULKAN_RENDER_FILE"] = str(marcador_render)
         ambiente["MAKEHUMANO_VULKAN_SKIN_FILE"] = str(marcador_skin)
+        ambiente["MAKEHUMANO_VULKAN_XRAY_FILE"] = str(marcador_xray)
         ambiente["WGPU_BACKEND_TYPE"] = "Vulkan"
         ambiente["LIBGL_ALWAYS_SOFTWARE"] = "1"
         ambiente["QT_X11_NO_MITSHM"] = "1"
@@ -95,9 +97,16 @@ def main():
                         and marcador_skin.read_text(encoding="utf-8").strip()
                         == "vulkan-skin:96x96"
                     )
+                    xray_valido = (
+                        marcador_xray.is_file()
+                        and marcador_xray.read_text(encoding="utf-8").startswith(
+                            "vulkan-xray:160x120:"
+                        )
+                    )
                     if (
                         gui_pronta and quadro_vulkan and picking_valido
                         and framebuffer_valido and render_valido and skin_valido
+                        and xray_valido
                     ):
                         # Se a aplicação saiu imediatamente após iniciar, não considerar sucesso.
                         time.sleep(1)
