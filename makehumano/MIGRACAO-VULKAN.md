@@ -24,9 +24,10 @@
 | Material `.mhmat` | Difusa, opacidade, brilho especular, emissão, back/front cull, depthless | Pipeline WGSL; equivalência visual pendente |
 | Normal maps `.mhmat` | Textura e intensidade originais; base tangente derivada de UVs no fragmento | Pipeline validada na CI; comparação visual pendente |
 | Iluminação `.mhscene` | Até oito luzes pontuais, ambiente e reflexo Blinn-Phong | Aproximação; falta atenuação/foco/especular de cena |
-| Shader xray original (.mhmat) | WGSL nativo com `edgefalloff`, `intensity`, cor ambiente e alfa de contorno | Compilação/execução GPU testadas; comparar imagem |
-| Seleção do shader no editor de materiais | Opção xray restaurada no editor original, com parâmetros editáveis | Smoke da GUI e testes de registro de preset; validar interação manual |
-| Shaders GLSL restantes | `phong`, `toon`, `litsphere`, `normalmap` e `skin` ainda sem equivalentes integrais | **Pendente** |
+| Shader xray original (.mhmat) | WGSL nativo com `edgefalloff`, `intensity`, cor ambiente e alfa de contorno | Execução GPU validada; comparar imagem |
+| Shader LitSphere (pele padrão) | WGSL usa normal em espaço de câmera, textura de LitSphere original e `AdditiveShading`; `autoBlendSkin` usa `EthnicSkinBlender` original | Captura GPU e testes de parâmetros; equivalência visual pendente |
+| Seleção do shader no editor de materiais | Presets xray e LitSphere restaurados, com parâmetros editáveis | Smoke da GUI; validar interações manualmente |
+| Shaders GLSL restantes | `phong`, `toon`, `normalmap`, `skin` ainda sem equivalentes integrais | **Pendente** |
 | Shaders GLSL arbitrários | `vulkan_shader.Shader.supported()` permanece falso; nenhum compilador GLSL genérico | **Pendente** |
 
 ## Arquitetura
@@ -61,7 +62,7 @@ python -m unittest discover -s makehumano/testes -p 'test_*wgpu.py' -v
 
 ## Pendências que impedem o lançamento
 
-- Converter os cinco presets GLSL restantes e seus uniforms/atributos para WGSL. O xray original já possui port nativo e seleção no editor, mas GLSL arbitrário ainda não é executável.
+- Converter os quatro presets GLSL restantes (`phong`, `toon`, `normalmap`, `skin`) e seus uniforms/atributos para WGSL. Xray e LitSphere já têm ports nativos, mas GLSL arbitrário ainda não é executável.
 - Concluir a equivalência de transparência e ordenação de superfícies translúcidas, especialmente materiais sobrepostos; variantes de culling/depthless já foram adicionadas.
 - Reproduzir atenuação/especular/foco das luzes de cena, outros comportamentos avançados de materiais. A transformação de normais já usa inversa-transposta do modelo.
 - Criar testes comparativos de imagens, incluindo reflexos, alfa, normal maps e culling, porque o smoke só verifica inicialização e integridade básica.
