@@ -8,6 +8,8 @@ e shaders customizados ainda precisam ser migrados antes de remover OpenGL.
 
 import numpy as np
 
+from vulkan_texturas import CacheTexturasVulkan
+
 
 def preparar_malha_original(obj):
     """Retorna vértices float32 [n,12] e triângulos uint32 de Object3D.
@@ -229,7 +231,7 @@ struct Fragmento {
         self.amostra = self.device.create_sampler(
             mag_filter="linear", min_filter="linear"
         )
-        self._texturas = {}
+        self._texturas = CacheTexturasVulkan(self.device, wgpu, self.QtGui)
         self._depth = None
         self._depth_size = None
         self.frames = 0
@@ -238,41 +240,8 @@ struct Fragmento {
         self._primitivas_pendentes = set()
 
     def _textura(self, caminho):
-        chave = str(caminho or "")
-        if chave in self._texturas:
-            return self._texturas[chave]
-        if chave:
-            imagem = self.QtGui.QImage(chave)
-        else:
-            imagem = self.QtGui.QImage()
-        if imagem.isNull():
-            pixels = np.array([[[255, 255, 255, 255]]], dtype=np.uint8)
-        else:
-            imagem = imagem.convertToFormat(
-                self.QtGui.QImage.Format_RGBA8888
-            )
-            w, h = imagem.width(), imagem.height()
-            pixels = np.frombuffer(
-                imagem.bits().asstring(w*h*4), dtype=np.uint8
-            ).reshape((h, w, 4)).copy()
-        h, w = pixels.shape[:2]
-        wgpu = self.wgpu
-        textura = self.device.create_texture(
-            size=(w, h, 1), dimension="2d", format="rgba8unorm",
-            usage=wgpu.TextureUsage.TEXTURE_BINDING | wgpu.TextureUsage.COPY_DST,
-        )
-        self.device.queue.write_texture(
-            wgpu.TexelCopyTextureInfo(
-                texture=textura, mip_level=0, origin=(0, 0, 0)
-            ),
-            pixels.tobytes(),
-            wgpu.TexelCopyBufferLayout(
-                offset=0, bytes_per_row=w*4, rows_per_image=h
-            ),
-            (w, h, 1),
-        )
-        self._texturas[chave] = textura
-        return textura
+        # Mesmo caminho pode ter novos pixels após edição de materiais.
+        return self._texturas.obter(caminho)
 
     def desenhar(self, mundo, cameras, *, cor_fundo=(0.2, 0.2, 0.2, 1)):
         wgpu = self.wgpu
