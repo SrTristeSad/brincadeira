@@ -47,6 +47,23 @@ fim de startup para não comparar iluminação ainda não carregada. Essa
 verificação detecta diferenças do empacotamento; não substitui equivalência
 com o renderer original nem validação em outra GPU.
 
+## Correções adicionais de compatibilidade (branch experimental)
+
+- **Picking em limites da câmera:** recorte homogêneo dos triângulos
+  contra os seis planos de clip Vulkan antes de dividir por `w`.
+  Preserva as partes visíveis dos triângulos que cruzam o plano próximo
+  ou o enquadramento lateral, mantendo RGB por FaceGroup, profundidade e culling.
+  Foram adicionados casos de regressão de near/far, lateral e profundidade.
+- **Texturas substituídas externamente:** a cópia CPU do material agora
+  verifica `mtime_ns`, `ctime_ns`, tamanho, dispositivo e inode.
+  Assim, a substituição atômica de um PNG com mesmo mtime e tamanho
+  não deixa pixels antigos na viewport. Há regressão com PNG válido
+  substituído via `os.replace`.
+
+Estas correções são parciais: não demonstram paridade visual com OpenGL,
+compatibilidade de cabelos/roupas ausentes nem execução em GPUs físicas.
+Conferir a CI do PR de compatibilidade antes de considerá-las aprovadas.
+
 ## Bloqueadores reais restantes
 
 1. **Validação Windows em GPUs reais:** Vulkan por software no runner é um teste
