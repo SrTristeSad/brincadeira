@@ -36,7 +36,9 @@ exige simultaneamente:
 - exportação OBJ com vértices/faces, FBX binário com cabeçalho, Collada com geometria XML e STL binário com contagem/tamanho dos triângulos;
 - carregamento dos plugins de modificadores, materiais, OBJ, FBX, Collada e STL;
 - resposta do controle wireframe, com arestas pretas e imagem diferente da superfície sólida;
-- processo ainda vivo e ausência de traceback ou erro de render no log.
+- processo ainda vivo e ausência de traceback ou erro de render no log;
+- no Windows, igualdade exata de 14 capturas PNG entre fontes e executável. As
+  capturas só são geradas após terminar a carga da iluminação, plugins e targets.
 
 Isso **não** comprova equivalência visual dos shaders, todos os controles da
 interface ou todos os formatos/opções de exportação. Os quatro formatos citados
@@ -93,8 +95,8 @@ uma build bem-sucedida como prova de compatibilidade completa.
 
 ## Evidências desta etapa
 
-- [CI e pacotes da revisão funcional](https://github.com/SrTristeSad/brincadeira/actions/runs/42169128245)
-- [CPU, Vulkan e GUI com/sem PyOpenGL](https://github.com/SrTristeSad/brincadeira/actions/runs/42169135995)
+- [CI e pacotes da revisão funcional](https://github.com/SrTristeSad/brincadeira/actions/runs/42170021935)
+- [CPU, Vulkan e GUI com/sem PyOpenGL](https://github.com/SrTristeSad/brincadeira/actions/runs/42170026790)
 
 Consultar a conclusão dos jobs antes de aprovar um ZIP. O teste pelos fontes
 usa diretamente `codigo/makehuman/makehuman.py`, evitando deixar processos

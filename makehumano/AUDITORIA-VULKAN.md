@@ -29,6 +29,12 @@ em grupos de malha, tags de proxies e metadados de licença. A criação local d
 pacote Linux e a importação congelada também foram exercitadas; os testes GPU
 e GUI são executados nos runners dos workflows vinculados ao commit.
 
+A comparação adicional de 14 PNGs entre fontes Windows e executável exige
+igualdade exata de pixels no mesmo driver. As capturas são sincronizadas com
+fim de startup para não comparar iluminação ainda não carregada. Essa
+verificação detecta diferenças do empacotamento; não substitui equivalência
+com o renderer original nem validação em outra GPU.
+
 ## Bloqueadores reais restantes
 
 1. **Validação Windows em GPUs reais:** Vulkan por software no runner é um teste

@@ -76,7 +76,7 @@ python -m unittest discover -s makehumano/testes -p 'test_*wgpu.py' -v
 
 O empacotamento e o teste do binário congelado estão documentados em
 [PORTATIL.md](PORTATIL.md). O smoke agora exercita também um modificador,
-salvamento/recarregamento MHM e exportações OBJ, FBX binário, Collada e STL binário pelas ferramentas originais. Capturas dos presets, transparência, normais, especular e wireframe ficam no artefato de diagnóstico.
+salvamento/recarregamento MHM e exportações OBJ, FBX binário, Collada e STL binário pelas ferramentas originais. Capturas dos presets, transparência, normais, especular e wireframe ficam no artefato de diagnóstico. No Windows, a CI compara 14 capturas dos fontes e do executável pixel a pixel, somente após a cena terminar de carregar.
 A validação Windows utiliza Vulkan por software na CI; compatibilidade com
 GPUs e drivers reais continua necessária antes de um lançamento.
 
