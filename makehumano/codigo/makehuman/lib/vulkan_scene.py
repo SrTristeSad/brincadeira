@@ -8,6 +8,8 @@ e shaders customizados ainda precisam ser migrados antes de remover OpenGL.
 
 import numpy as np
 
+from vulkan_buffers import CacheBuffersVulkan
+
 
 def preparar_malha_original(obj):
     """Retorna vértices float32 [n,12] e triângulos uint32 de Object3D.
@@ -230,6 +232,7 @@ struct Fragmento {
             mag_filter="linear", min_filter="linear"
         )
         self._texturas = {}
+        self._buffers = CacheBuffersVulkan(self.device, wgpu)
         self._depth = None
         self._depth_size = None
         self.frames = 0
@@ -347,14 +350,10 @@ struct Fragmento {
                 uniforms = np.concatenate(
                     (mvp.T.reshape(-1), cor)
                 ).astype(np.float32)
-                buf_u = self.device.create_buffer_with_data(
-                    data=uniforms, usage=wgpu.BufferUsage.UNIFORM
-                )
-                buf_v = self.device.create_buffer_with_data(
-                    data=vertices, usage=wgpu.BufferUsage.VERTEX
-                )
-                buf_i = self.device.create_buffer_with_data(
-                    data=indices, usage=wgpu.BufferUsage.INDEX
+                # O Object3D original continua atualizando deformações,
+                # materiais e índices. Reusar alocações não congela a cena.
+                buf_v, buf_i, buf_u = self._buffers.atualizar(
+                    obj, vertices, indices, uniforms
                 )
                 textura = self._textura(getattr(obj, "texture", None))
                 bind = self.device.create_bind_group(
