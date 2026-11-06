@@ -373,6 +373,79 @@ def criar_canvas_vulkan(canvas_original):
                             "MAKEHUMANO_VULKAN: xray WGSL, pixels="
                             + str(cobertura), flush=True,
                         )
+                litsphere_marker = os.environ.get(
+                    "MAKEHUMANO_VULKAN_LITSPHERE_FILE"
+                )
+                if litsphere_marker and not os.path.exists(litsphere_marker):
+                    # Verifica o port do material de pele numa malha original,
+                    # sem alterar o material ou os dados do personagem.
+                    import mh
+                    import numpy as np
+                    from image import Image
+                    candidatos = [
+                        obj for obj in G.world
+                        if obj.visibility and obj.solid
+                        and len(obj.primitives) > 100
+                    ]
+                    if not candidatos:
+                        raise RuntimeError(
+                            "LitSphere: nenhuma malha original para o smoke"
+                        )
+                    corpo = max(
+                        candidatos, key=lambda obj: len(obj.primitives),
+                    )
+                    imagem_pele = Image(
+                        mh.getSysDataPath("litspheres/skinmat_caucasian.png")
+                    )
+
+                    class MaterialLitSphereSmoke:
+                        shader = "data/shaders/glsl/litsphere"
+                        shaderParameters = {
+                            "litsphereTexture": imagem_pele,
+                            "AdditiveShading": 0.0,
+                        }
+                        shaderConfig = {
+                            "diffuse": False, "vertexColors": False,
+                            "normal": False,
+                        }
+
+                        def __init__(self, original):
+                            self.original = original
+
+                        def __getattr__(self, nome):
+                            return getattr(self.original, nome)
+
+                    class ObjetoLitSphereSmoke:
+                        def __init__(self, original):
+                            self.original = original
+                            self.material = MaterialLitSphereSmoke(
+                                original.material
+                            )
+
+                        def __getattr__(self, nome):
+                            return getattr(self.original, nome)
+
+                    rgba = self._cena.capturar_framebuffer(
+                        [ObjetoLitSphereSmoke(corpo)], G.cameras,
+                        160, 120, incluir_alfa=True,
+                        cor_fundo=(0, 0, 0, 0),
+                    )
+                    if rgba.shape != (120, 160, 4):
+                        raise RuntimeError("LitSphere: buffer RGBA inválido")
+                    cobertura = int(np.count_nonzero(rgba[:, :, 3]))
+                    if not cobertura:
+                        raise RuntimeError(
+                            "LitSphere: nenhum pixel de pele renderizado"
+                        )
+                    with open(litsphere_marker, "w", encoding="utf-8") as saida:
+                        saida.write(
+                            "vulkan-litsphere:160x120:"
+                            + str(cobertura) + "\n"
+                        )
+                    print(
+                        "MAKEHUMANO_VULKAN: LitSphere WGSL cobertura="
+                        + str(cobertura), flush=True,
+                    )
                 caminho = os.environ.get("MAKEHUMANO_VULKAN_FRAME_FILE")
                 if caminho and not os.path.exists(caminho):
                     with open(caminho, "w", encoding="utf-8") as saida:
