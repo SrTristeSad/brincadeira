@@ -41,6 +41,8 @@ exige simultaneamente:
 - quadro da cena original `G.world` usando um adaptador Vulkan;
 - picking, framebuffer offscreen, `renderToBuffer`, `renderAlphaMask`, `renderSkin`;
 - projeção UV com coordenadas 3D/4D e matrizes, pintura acumulada e destino luminância/alfa;
+- displacement alterando silhueta e picking, intensidade zero, atualização do mapa e preservação da malha;
+- ferramenta mapImageGL original na malha real, pintura visível na viewport sem sobrescrever o arquivo;
 - execução dos seis presets oficiais WGSL, normal maps e composição alfa;
 - alteração real da malha pelo modificador `macrodetails/Age`, undo e redo no histórico original;
 - rig oficial e T-pose deformando a malha e a imagem, undo/redo e roundtrip MHM com rig/pose;
@@ -55,7 +57,7 @@ exige simultaneamente:
 - resposta do controle wireframe, com arestas pretas e imagem diferente da superfície sólida;
 - processo ainda vivo e ausência de traceback ou erro de render no log;
 - segunda abertura do portátil com `--multisampling`, desde a inicialização;
-- no Windows, igualdade exata de 41 capturas PNG entre fontes e executável. As
+- no Windows, igualdade exata de 46 capturas PNG entre fontes e executável. As
   capturas só são geradas após terminar a carga da iluminação, plugins e targets.
 
 Isso **não** comprova equivalência visual dos shaders, todos os controles da

@@ -212,3 +212,37 @@ ossos, clusters, pesos e matrizes de vínculo. No Collada, verifica joints,
 controladores, limites dos índices e normalização dos pesos. Isso é validação
 estrutural independente; não substitui importação em Blender/outro consumidor
 nem comprova exportação de animações completas.
+
+### Displacement de vértices e cópia de trabalho da textura
+
+`displacementMapTexture` e `displacementMapIntensity` agora afetam o buffer de
+vértices Vulkan. A CPU amostra L/LA/RGB/RGBA com filtro bilinear, clamp-to-edge
+e orientação vertical das imagens Qt; alfa não representa altura. Preto é
+zero, branco equivale a uma unidade local vezes a intensidade (0..1), na
+direção da normal normalizada. Os vértices editáveis, morph targets e UVs
+permanecem intactos. Não há tesselação nem recálculo das normais de
+sombreamento; bump/normal maps continuam disponíveis para os detalhes.
+
+Render, picking/profundidade, ordenação de transparência, wireframe e a
+projeção original usam as mesmas posições deslocadas. Malhas sem UVs geram
+erro explícito ao ativar o mapa. Mapa preto, intensidade zero e configuração
+desligada preservam a posição anterior. O mapa não é gravado como deformação
+no personagem exportado: formatos e referências aos mapas são preservados.
+
+Restaurada a propriedade `Object3D.textureTex` usada por mapImageGL. O renderer
+agora lê a mesma Texture CPU editável da ferramenta original, em vez de
+reabrir o arquivo e ignorar a pintura. A recarga explícita descarta a cópia
+em memória; modificações externas são detectadas por timestamp/tamanho.
+O arquivo de origem não é sobrescrito pela projeção. O smoke usa a malha
+real com uma textura temporária de teste e restaura o Material original.
+
+A intensidade de displacement agora consta uma única vez entre os campos
+reservados do Material. Arquivos antigos contendo `shaderParam
+displacementmapIntensity` continuam legíveis, com seu valor efetivo migrado
+para o campo canônico. Novas gravações não duplicam a propriedade.
+
+A projeção obtém sua direção com a matriz de modelo da câmera original,
+incluindo rotação orbital, em vez do atributo obsoleto `mesh.transform`.
+O controlador de smoke interrompe a inicialização ao detectar um traceback
+ou erro de desenho, preservando o diagnóstico sem repetir a mesma falha
+até o timeout.

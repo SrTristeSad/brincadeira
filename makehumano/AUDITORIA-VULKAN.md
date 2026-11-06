@@ -27,18 +27,21 @@ em `motor_wgpu`. O estado abaixo distingue testes exercitados de paridade final.
 | Reprodução sem looping voltava ao primeiro quadro | Setter e interpolação corrigidos; teste de deformação real retém o último quadro |
 | Reduzir fps falhava na propriedade sem setter | Reamostragem por tempo com quadros inteiros, poses originais e invalidação do cache de skinning |
 | Rig/pose/exportação com ossos sem cobertura | Plugins oficiais, undo/redo, roundtrip MHM, capturas Vulkan e leitura de pesos/matrizes dos arquivos exportados |
+| Displacement sem efeito na viewport/seleção | Amostragem bilinear e posições compartilhadas entre render, picking, ordenação e projeção, sem alterar a malha original |
+| Projeção original sem textureTex ou pintura visível | Texture CPU compartilhada com a viewport, arquivo preservado e recarga explícita validada na malha real |
+| Intensidade de displacement serializada como uniform customizado | Campo reservado corrigido, gravação canônica e leitura compatível com arquivos antigos |
 | Plugins/exportadores só carregavam | Smoke altera geometria, salva/reabre MHM e exporta OBJ/FBX/DAE/STL, verificando estrutura dos arquivos |
 
 ## Validação local
 
-A suíte completa executou **280 testes com sucesso**, usando Python 3.12,
+A suíte completa executou **300 testes com sucesso**, usando Python 3.12,
 NumPy 2.5.4 e Qt 5.15.14. Os testes Qt de gravação PNG verificam os canais,
 alfa e imagens com largura não alinhada. Os dados binários verificam Unicode
 em grupos de malha, tags de proxies e metadados de licença. A criação local do
 pacote Linux e a importação congelada também foram exercitadas; os testes GPU
 e GUI são executados nos runners dos workflows vinculados ao commit.
 
-A comparação adicional de 41 PNGs entre fontes Windows e executável exige
+A comparação adicional de 46 PNGs entre fontes Windows e executável exige
 igualdade exata de pixels no mesmo driver. As capturas são sincronizadas com
 fim de startup para não comparar iluminação ainda não carregada. Essa
 verificação detecta diferenças do empacotamento; não substitui equivalência
@@ -50,9 +53,9 @@ com o renderer original nem validação em outra GPU.
    de integração, não uma matriz de drivers NVIDIA/AMD/Intel. Não classificar
    um artefato como aprovado enquanto o smoke Windows estiver falhando.
 2. **Paridade de materiais e shaders:** os seis presets executam em WGSL, mas
-   ainda faltam referências comparativas do original. Displacement
-   ainda não possui cobertura completa no
-   shader atual. Mapas especulares e de transparência separados agora têm
+   ainda faltam referências comparativas do original. Displacement agora
+   desloca os vértices de render/picking/projeção, mas não faz tesselação
+   nem recalcula normais de sombreamento. Mapas especulares e de transparência separados agora têm
    testes analíticos GPU, incluindo intensidade zero. Bump altera as normais
    por gradiente de altura, com prioridade para normal maps. AO agora respeita
    intensidade no material básico e no Phong. A interface pode expor parâmetros
@@ -90,7 +93,9 @@ com o renderer original nem validação em outra GPU.
    de mouse/teclado e todas as
    ferramentas de projeção. `renderSkin` agora verifica coordenadas 3D/4D,
    matrizes de textura/objeto, composição sobre Texture existente e destino LA;
-   faltam sequências completas da ferramenta com malhas e imagens externas.
+   O fluxo mapImageGL original também é exercitado sobre a malha real,
+   incluindo cópia de trabalho e displacement. Faltam sequências completas
+   de mouse/teclado com imagens externas.
 
 ## Critério de entrega
 

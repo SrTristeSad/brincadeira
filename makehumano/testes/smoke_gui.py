@@ -19,6 +19,8 @@ ROOT = Path(__file__).resolve().parents[1]
 # encerrá-lo não encerra a GUI filha e deixa logs bloqueados no Windows.
 APP = ROOT / "codigo" / "makehuman" / "makehuman.py"
 TIMEOUT_SECONDS = 90
+ERROS_GRAFICOS = ("Draw error", "Traceback (most recent call last):",
+                  "GPUValidationError", "WGPUValidationError")
 
 
 def main():
@@ -100,6 +102,11 @@ def main():
             try:
                 limite = time.monotonic() + TIMEOUT_SECONDS
                 while time.monotonic() < limite:
+                    # Um traceback já reprovaria o resultado final; não
+                    # repetir o mesmo erro até esgotar todo o timeout.
+                    current_log = logfile.read_text(encoding="utf-8", errors="replace")
+                    if any(error in current_log for error in ERROS_GRAFICOS):
+                        break
                     gui_pronta = (
                         marker.is_file()
                         and marker.read_text(encoding="utf-8").startswith("ready")
@@ -204,27 +211,13 @@ def main():
         print(log_text)
         print("--- FIM DO LOG ---")
 
-        if iniciou:
-            # Um frame parcial não equivale à viewport renderizada.
-            # Exigir ausência de erros do RenderCanvas no processo.
-            erros_graficos = (
-                "Draw error",
-                "Traceback (most recent call last):",
-                "GPUValidationError",
-                "WGPUValidationError",
-            )
-            if any(erro in log_text for erro in erros_graficos):
-                print(
-                    "FALHA: a viewport Vulkan gerou erros no log da GUI.",
-                    file=sys.stderr,
-                )
-                # O traceback pode estar antes da cauda do log (plugins
-                # geram muitas linhas). Exibir o contexto exato da falha.
-                for error in erros_graficos:
-                    position = log_text.find(error)
-                    if position >= 0:
-                        print(log_text[max(0, position - 200):position + 3000])
-                iniciou = False
+        if any(error in log_text for error in ERROS_GRAFICOS):
+            print("FALHA: a viewport Vulkan gerou erros no log da GUI.", file=sys.stderr)
+            for error in ERROS_GRAFICOS:
+                position = log_text.find(error)
+                if position >= 0:
+                    print(log_text[max(0, position-200):position+3000])
+            return 1
 
         if iniciou:
             print(
