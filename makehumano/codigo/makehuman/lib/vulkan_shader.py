@@ -9,7 +9,7 @@ suporte a shaders personalizados enquanto ainda não foram convertidos.
 # Apenas presets portados e testados entram no seletor original.
 # Shader.supported() continua False: isso descreve compilação de GLSL,
 # que ainda não existe em Vulkan.
-PRESETS_NATIVOS = frozenset(("xray", "litsphere", "phong", "toon"))
+PRESETS_NATIVOS = frozenset(("xray", "litsphere", "phong", "toon", "normalmap"))
 
 
 def nome_preset_nativo(caminho):
@@ -47,7 +47,7 @@ def configuracao_shader_nativo(material):
 
     Retorna (modo, controles, nome_pendente). Não compila nem interpreta GLSL.
     mode 0 = material padrão; 1 = xray; 2 = litsphere; 3 = phong;
-    mode 4 = toon. Os parâmetros extras do toon ficam em função separada.
+    mode 4 = toon; 5 = normalmap. Controles extras em função separada.
     Um preset desconhecido fica identificado como pendente, sem fingir
     que foi convertido.
     """
@@ -65,6 +65,10 @@ def configuracao_shader_nativo(material):
         return 0, (0.0, 0.0, 0.0, 0.0), nome
 
     parametros = getattr(material, "shaderParameters", {}) or {}
+    if nome == "normalmap":
+        # A geometria mantém o tangent space no fragmento Vulkan,
+        # enquanto os parâmetros da cena continuam os do MakeHuman.
+        return 5, (0.0, 0.0, 0.0, 0.0), None
     if nome == "phong":
         ambient = getattr(material, "ambientColor", None)
         rgb = getattr(ambient, "values", ambient)
@@ -169,3 +173,23 @@ def textura_litsphere_nativa(material):
         return None
     parametros = getattr(material, "shaderParameters", {}) or {}
     return parametros.get("litsphereTexture")
+
+
+def textura_normalmap_nativa(material):
+    """Obtém o mapa de normais do preset original, sem fallback branco."""
+    import os
+
+    if material is None:
+        return None
+    parametros = getattr(material, "shaderParameters", {}) or {}
+    textura = parametros.get("normalmapTexture") or getattr(
+        material, "normalMapTexture", None
+    )
+    if not textura:
+        return None
+    if isinstance(textura, (str, os.PathLike)) and not os.path.isfile(textura):
+        raise ValueError(
+            "Shader normalmap: textura de normais não encontrada: "
+            + os.fspath(textura)
+        )
+    return textura
