@@ -5,7 +5,8 @@
   "scripts": {
     "build": "npm run build:ts && uglifyjs ./out/dragonBones.js -o ./out/dragonBones.min.js -m",
     "build:ts": "tsc --project tsconfig.json",
-    "test": "npm run build && node --test"
+    "test": "npm run build && node --test",
+    "test:preflight": "node --test tests/preflight.test.cjs"
   },
   "devDependencies": {
     "typescript": "5.8.3",

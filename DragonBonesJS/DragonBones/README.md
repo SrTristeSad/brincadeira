@@ -4,7 +4,16 @@ Código-base original: [DragonBonesJS](https://github.com/DragonBones/DragonBone
 
 ## Desenvolvimento
 
-Requer Node.js 22+ para as ferramentas de compilação.
+Requer Node.js 22+ para as ferramentas de desenvolvimento. Para verificar a
+estrutura dos arquivos, entradas do pacote, licença e sintaxe dos testes **sem
+instalar dependências**, execute:
+
+```sh
+cd DragonBonesJS/DragonBones
+npm run test:preflight
+```
+
+Esse comando é uma pré-verificação e **não** compila nem executa o motor de animações.
 
 ```sh
 cd DragonBonesJS/DragonBones
