@@ -124,17 +124,21 @@ def getTexture(path, cache=None):
         log.error("Arquivo de textura inexistente: %s", path)
         return None
     stat = os.stat(path)
-    mtime = stat.st_mtime_ns
+    # Editores podem trocar um arquivo por renomeação atômica, preservando
+    # mtime e tamanho. ctime e identidade do arquivo detectam essa troca.
+    assinatura = (stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size,
+                  stat.st_dev, stat.st_ino)
     key = chave_arquivo(path)
     cached = cache.get(key)
     if cached is None:
         cached = Texture(path)
         cache[key] = cached
-    elif (getattr(cached, "_source_version", None) != mtime
-          or getattr(cached, "_source_size", None) != stat.st_size):
+    elif getattr(cached, "_source_stamp", None) != assinatura:
         cached.loadImage(path)
-    cached._source_version = mtime
+    # Manter campos históricos para consumidores existentes do Texture.
+    cached._source_version = stat.st_mtime_ns
     cached._source_size = stat.st_size
+    cached._source_stamp = assinatura
     return cached
 
 
