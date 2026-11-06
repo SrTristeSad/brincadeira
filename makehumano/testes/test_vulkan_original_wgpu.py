@@ -25,6 +25,7 @@ from vulkan_scene import (
     CenaVulkan, preparar_malha_original, matriz_wgpu, assinatura_textura,
     parametros_material_vulkan, pixels_textura_rgba, aparencia_material_vulkan,
     configuracao_raster_vulkan, parametros_normalmap_vulkan,
+    matriz_normal_vulkan,
 )
 from vulkan_texture import Texture as TextureVulkan
 from vulkan_skin import preparar_skin, normalizar_cor_fundo
@@ -662,6 +663,30 @@ class TestarNormalMapsOriginaisVulkan(unittest.TestCase):
                 parametros_normalmap_vulkan(
                     self._obj(str(caminho), normalMapIntensity=float("nan")),
                 )
+
+
+class TestarMatrizNormalOriginalVulkan(unittest.TestCase):
+    def test_escala_nao_uniforme_usa_inversa_transposta(self):
+        modelo = np.diag([2.0, 4.0, 0.5, 1.0]).astype(np.float32)
+        normal = matriz_normal_vulkan(modelo)
+        np.testing.assert_allclose(normal.diagonal(), [0.5, 0.25, 2.0, 1.0])
+        np.testing.assert_array_equal(modelo.diagonal(), [2, 4, 0.5, 1])
+
+    def test_translacao_nao_muda_normal(self):
+        modelo = np.eye(4, dtype=np.float32)
+        modelo[:3, 3] = [2, 3, -9]
+        np.testing.assert_allclose(
+            matriz_normal_vulkan(modelo), np.eye(4, dtype=np.float32),
+        )
+
+    def test_matriz_degenerada_ou_nao_finita_e_rejeitada(self):
+        modelo = np.eye(4, dtype=np.float32)
+        modelo[2, 2] = 0
+        with self.assertRaises(ValueError):
+            matriz_normal_vulkan(modelo)
+        modelo[2, 2] = float("nan")
+        with self.assertRaises(ValueError):
+            matriz_normal_vulkan(modelo)
 
 
 if __name__ == "__main__":
