@@ -76,6 +76,12 @@ O teste de CI `vulkan-gui-original` tenta abrir a **GUI original** com esse
 canvas e exige pelo menos um objeto real renderizado por Vulkan.
 **Limitações:** picking, transparência, todos os shaders, renderização
 offscreen, parte dos materiais e plugins gráficos ainda não foram migrados.
+O piloto agora reutiliza buffers de vértices, índices e uniforms por
+`Object3D` em `codigo/makehuman/lib/vulkan_buffers.py`. As deformações e as
+mudanças de câmera/material continuam atualizadas a cada quadro; os índices
+só são enviados novamente se a topologia ou a máscara de faces mudar.
+A mudança reduz alocações, mas não constitui um benchmark de desempenho
+nem resolve a paridade visual com o OpenGL original.
 Durante a migração, PyOpenGL permanece necessário a partes do aplicativo;
 portanto **OpenGL ainda não foi eliminado e o objetivo não foi concluído**.
 Não usar o modo experimental como editor de produção até haver paridade.
