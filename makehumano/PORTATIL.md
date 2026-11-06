@@ -116,12 +116,30 @@ uma build bem-sucedida como prova de compatibilidade completa.
 
 ## Evidências desta etapa
 
-- [CI e pacotes da revisão funcional](https://github.com/SrTristeSad/brincadeira/actions/runs/42206337515)
-- [CPU, Vulkan e GUI com/sem PyOpenGL](https://github.com/SrTristeSad/brincadeira/actions/runs/42206337569)
-- [Suíte de testes em Python 3.12 e 3.13](https://github.com/SrTristeSad/brincadeira/actions/runs/42206337531)
+- [CI e pacotes da revisão funcional](https://github.com/SrTristeSad/brincadeira/actions/runs/42246515895)
+- [CPU, Vulkan e GUI com/sem PyOpenGL](https://github.com/SrTristeSad/brincadeira/actions/runs/42246515890)
+- [Suíte de testes em Python 3.12 e 3.13](https://github.com/SrTristeSad/brincadeira/actions/runs/42246516087)
 
-As builds acima correspondem ao código `5c678c7a6cbc9a13e06a8047c9c1dbcac3d94b8c`.
+As builds acima correspondem ao código `eb517ba0e8b35b486b786d97864714104330295f`.
 
-Consultar a conclusão dos jobs antes de aprovar um ZIP. O teste pelos fontes
+Windows e Linux concluíram a abertura real e os testes funcionais, tanto no
+modo padrão quanto com `--multisampling`. As 46 capturas Windows foram
+comparadas novamente após baixar os diagnósticos: igualdade exata entre
+fontes e executável. As 41 capturas da revisão anterior também permaneceram
+idênticas nos dois modos. A suíte de 305 casos passou em Python 3.12/3.13
+(com a exclusão do caso específico de separadores Windows no Linux).
+
+- [ZIP Windows desta revisão](https://github.com/SrTristeSad/brincadeira/actions/runs/42246515895/artifacts/13519286641)
+- [ZIP Linux desta revisão](https://github.com/SrTristeSad/brincadeira/actions/runs/42246515895/artifacts/13518041448)
+- [Diagnóstico Windows](https://github.com/SrTristeSad/brincadeira/actions/runs/42246515895/artifacts/13519156911)
+
+SHA-256 do ZIP Windows:
+`a98d6cd68ef5155a640e7e8c5080de0e21f228d497c157fc691551a855a6cedd`.
+O ZIP foi baixado e verificado: integridade, executável, Python 3.12, Qt,
+wgpu-native, malha base, rig oficial e módulos novos presentes; nenhum driver
+de CI incluído. A validação Windows usa Vulkan por software e ainda não
+comprova compatibilidade com GPUs físicas.
+
+Consultar a conclusão dos jobs antes de aprovar outro ZIP. O teste pelos fontes
 usa diretamente `codigo/makehuman/makehuman.py`, evitando deixar processos
 filhos abertos ao encerrar o iniciador `executar.py` durante o smoke Windows.
