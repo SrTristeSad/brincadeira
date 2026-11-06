@@ -617,7 +617,11 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
     // horizontal de temperatura de cor (sampler1D legado em textura 2D).
     if (dados.shader_preset.x > 5.5 && dados.shader_preset.x < 6.5) {
         let ao = textureSample(mapa_ao, amostra, uv);
-        var cor_skin = dados.ambiente.rgb * dados.cor.rgb * tex.rgb;
+        // GLSL sceneColor = emission + materialAmbient * sceneAmbient.
+        // The original skin vertex shader multiplies sceneColor by ambient again.
+        let ambiente_skin = (dados.emissiva.rgb + dados.shader_parametros.xyz * dados.ambiente.rgb)
+                            * dados.shader_parametros.xyz;
+        var cor_skin = ambiente_skin * tex.rgb;
         for (var s: i32 = 0; s < i32(dados.amostragem_luzes.x); s = s + 1) {
             let luz_skin = normalize(dados.luzes_posicao[s].xyz - i.mundo);
             let ndotl = max(dot(normal, luz_skin), 0.0);
@@ -642,9 +646,12 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
     // Phong original: iluminação por fragmento, uma luz, cor difusa,
     // ambiente, especular e mapa AO do Material original.
     if (dados.shader_preset.x > 2.5 && dados.shader_preset.x < 3.5) {
-        let ambiente_phong = dados.ambiente.rgb * dados.shader_parametros.xyz;
+        // Preserve the original vertex expression, including sceneColor's
+        // material contribution; diffuse color does not tint this term.
+        let ambiente_phong = (dados.emissiva.rgb + dados.ambiente.rgb * dados.shader_parametros.xyz)
+                             * dados.shader_parametros.xyz;
         let tex_phong = rgb * ao_factor;
-        var color_phong = ambiente_phong * tex_phong * dados.cor.rgb;
+        var color_phong = ambiente_phong * tex_phong;
         for (var s: i32 = 0; s < i32(dados.amostragem_luzes.x); s = s + 1) {
             let light_dir = normalize(dados.luzes_posicao[s].xyz - i.mundo);
             let ndotl = max(dot(normal, light_dir), 0.0);
@@ -671,7 +678,9 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
     // Usa a primeira luz e alfa opaco do fragment shader legado.
     if (dados.shader_preset.x > 4.5 && dados.shader_preset.x < 5.5) {
         let tex_color = tex.rgb;
-        var rgb_normalmap = dados.ambiente.rgb * dados.cor.rgb * tex_color;
+        // The original shader uses Light[0].ambient, forced to zero by
+        // setSceneLighting; it does not use the global scene ambient.
+        var rgb_normalmap = vec3<f32>(0.0);
         for (var s: i32 = 0; s < i32(dados.amostragem_luzes.x); s = s + 1) {
             let direcao = normalize(dados.luzes_posicao[s].xyz - i.mundo);
             let difusa = max(dot(direcao, normal), 0.0);
@@ -743,7 +752,7 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
                       + aditivo * (iluminacao_lit + tex.rgb);
             alfa_lit = tex.a;
         }
-        return vec4<f32>(cor_lit, alfa_lit * dados.cor.a);
+        return vec4<f32>(cor_lit * ao_factor, alfa_lit * dados.cor.a);
     }
     // Port do shader GLSL xray_fragment_shader.txt do MakeHuman.
     // Conserva o fade de contorno e os parâmetros de material originais.
@@ -1301,7 +1310,7 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
                 textura_ao = None
                 forca_ao = 0.0
                 textura_gradiente = None
-                if modo_shader in (0, 3):
+                if modo_shader in (0, 2, 3):
                     textura_ao, forca_ao = parametros_mapa(material_obj, "ao")
                 elif modo_shader == 6:
                     textura_ao, textura_gradiente = (

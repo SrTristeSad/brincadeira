@@ -1026,10 +1026,19 @@ class TestarShaderSkinOriginalVulkan(unittest.TestCase):
         modo, params, pendente = configuracao_shader_nativo(material)
         self.assertEqual(modo, 6)
         self.assertIsNone(pendente)
-        np.testing.assert_array_equal(params, [0, 0, 0, 0])
+        np.testing.assert_array_equal(params, [.2, .2, .2, 0])
         ao, grad = texturas_skin_nativas(material)
         self.assertIs(ao, material.shaderParameters["ambientOcclusionMap"])
         self.assertIs(grad, material.shaderParameters["gradientMap"])
+
+    def test_skin_passa_ambiente_independente_da_cor_difusa(self):
+        material = self._material(ambientColor=SimpleNamespace(values=(.1, .3, .5)))
+        np.testing.assert_array_equal(configuracao_shader_nativo(material)[1], [.1, .3, .5, 0])
+
+    def test_skin_rejeita_ambiente_nao_finito(self):
+        for values in ((1., 2.), (1., float('nan'), 0.), (1., 0., float('inf'))):
+            with self.subTest(values=values), self.assertRaises(ValueError):
+                configuracao_shader_nativo(self._material(ambientColor=SimpleNamespace(values=values)))
 
     def test_reutiliza_aomap_texture_do_material_original(self):
         with tempfile.TemporaryDirectory() as pasta:

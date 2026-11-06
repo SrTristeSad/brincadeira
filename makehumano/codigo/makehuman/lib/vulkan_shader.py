@@ -42,6 +42,18 @@ class Shader:
         )
 
 
+def _ambiente_material(material, nome):
+    """Cor ambiente do Material original, separada da cor difusa."""
+    import math
+    color = getattr(material, 'ambientColor', None)
+    rgb = getattr(color, 'values', color)
+    if rgb is None:
+        rgb = (.2, .2, .2)
+    if len(rgb) != 3 or not all(math.isfinite(float(value)) for value in rgb):
+        raise ValueError(f'Shader {nome}: ambientColor RGB inválido')
+    return tuple(float(value) for value in rgb)+(0.,)
+
+
 def configuracao_shader_nativo(material):
     """Resolve presets GLSL originais portados explicitamente para WGSL.
 
@@ -68,19 +80,13 @@ def configuracao_shader_nativo(material):
     if nome == "skin":
         # A iluminação dermatológica original requer duas texturas
         # adicionais (AO e gradiente) além da cor difusa.
-        return 6, (0.0, 0.0, 0.0, 0.0), None
+        return 6, _ambiente_material(material, nome), None
     if nome == "normalmap":
         # A geometria mantém o tangent space no fragmento Vulkan,
         # enquanto os parâmetros da cena continuam os do MakeHuman.
         return 5, (0.0, 0.0, 0.0, 0.0), None
     if nome == "phong":
-        ambient = getattr(material, "ambientColor", None)
-        rgb = getattr(ambient, "values", ambient)
-        if rgb is None:
-            rgb = (0.2, 0.2, 0.2)
-        if len(rgb) != 3 or not all(math.isfinite(float(c)) for c in rgb):
-            raise ValueError("Shader phong: ambientColor RGB inválido")
-        return 3, tuple(float(v) for v in rgb) + (0.0,), None
+        return 3, _ambiente_material(material, nome), None
     if nome == "toon":
         return 4, tuple(
             _parametro_numerico(parametros, key, default, nome)
