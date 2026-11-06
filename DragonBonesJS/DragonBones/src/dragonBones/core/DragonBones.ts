@@ -369,25 +369,3 @@ if (!Date.now) {
 if (typeof global === "undefined" && typeof window !== "undefined") {
     var global = window as any;
 }
-//
-declare var exports: any;
-declare var module: any;
-declare var define: any;
-if (typeof exports === "object" && typeof module === "object") {
-    module.exports = dragonBones;
-}
-else if (typeof define === "function" && define["amd"]) {
-    // Register the library itself; do not require "dragonBones" from within
-    // its own AMD module (that creates a circular dependency).
-    define([], function () { return dragonBones; });
-}
-else if (typeof exports === "object") {
-    // Assign exported members to the supplied exports object instead of
-    // rebinding the local variable (which callers cannot observe).
-    for (const key of Object.keys(dragonBones)) {
-        exports[key] = (dragonBones as any)[key];
-    }
-}
-else if (typeof global !== "undefined") {
-    global.dragonBones = dragonBones;
-}

@@ -54,3 +54,9 @@ Foram acrescentados três testes de regressão. A compilação completa do motor
 O adaptador legado agora registra a saída AMD **sem uma dependência circular sobre `dragonBones`** e preenche o objeto fornecido em ambientes que expõem apenas `exports`, em vez de simplesmente reatribuir uma variável local. O caminho CommonJS (`module.exports`) e o fallback global continuam preservados. O alvo da compilação permanece ES5.
 
 O defeito e a correção foram reproduzidos num módulo TypeScript mínimo compilado com TypeScript 5.8.3 e executado em Node.js 22. Os quatro novos testes de distribuição exercitam os dois artefatos do projeto, após o build completo.
+
+### Ordem de inicialização das exportações
+
+O adaptador AMD/CommonJS/`exports` foi extraído de `core/DragonBones.ts` para `core/ModuleExports.ts` e adicionado **por último** ao `tsconfig.json`. Assim, todos os membros de `dragonBones` já existem quando a distribuição os exporta. Isso corrige especialmente o caminho `exports` sem módulo CommonJS, que antes recebia somente classes declaradas no primeiro arquivo. A interface pública e o formato ES5 continuam preservados. O verificador estrutural impede que o adaptador volte a ser compilado antes do núcleo.
+
+Validado em reprodução TypeScript 5.8.3 (`outFile`, ES5) com três arquivos de classes e adaptador ao final: AMD, CommonJS e `exports` receberam todas as classes no Node 22. A execução do projeto completo permanece pendente.

@@ -12,6 +12,9 @@ const pkg = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), '
 test('TypeScript manifest lists existing, unique core source files', () => {
     assert.ok(Array.isArray(tsconfig.files) && tsconfig.files.length >= 37,
         'the imported core should list at least its original 37 TypeScript files');
+    assert.equal(tsconfig.files[tsconfig.files.length - 1],
+        './src/dragonBones/core/ModuleExports.ts',
+        'module exports must run after the full DragonBones namespace is initialized');
     const sourceRoot = path.join(projectRoot, 'src', 'dragonBones') + path.sep;
     const seen = new Set();
     for (const name of tsconfig.files) {
