@@ -11,6 +11,7 @@ Não é substituto definitivo do picking da GPU; a paridade será testada.
 import numpy as np
 
 from vulkan_scene import matriz_wgpu
+from vulkan_displacement import posicoes_render
 
 
 COR_VAZIA = (0, 0, 0)
@@ -54,7 +55,7 @@ def _selecionar_cor_e_profundidade(mundo, cameras, x, y, largura, altura):
     for obj in sorted(mundo, key=lambda item: item.priority):
         if not obj.visibility or not obj.pickable:
             continue
-        coords = np.asarray(obj.verts, dtype=np.float32)
+        coords = posicoes_render(obj)
         if coords.ndim != 2 or coords.shape[1] != 3 or not len(coords):
             continue
         face = np.asarray(obj.primitives)

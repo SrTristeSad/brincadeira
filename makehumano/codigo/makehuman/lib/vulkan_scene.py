@@ -12,6 +12,7 @@ import numpy as np
 
 from vulkan_material_maps import parametros_mapa, mapa_transparencia_ativo
 from vulkan_area_lights import amostrar_luzes, MAX_LUZES_VULKAN
+from vulkan_displacement import posicoes_render, invalidar_displacement
 
 
 def pixels_textura_rgba(dados):
@@ -58,7 +59,7 @@ def preparar_malha_original(obj, camera=None):
     um novo parser de base.obj. Respeita os índices UV desenrolados e as
     máscaras de faces atualizados pelo próprio module3d.Object3D.
     """
-    posicoes = np.asarray(obj.verts, dtype=np.float32)
+    posicoes = posicoes_render(obj)
     if posicoes.ndim != 2 or posicoes.shape[1] != 3:
         raise ValueError("Object3D original: posições inválidas")
     n = len(posicoes)
@@ -126,14 +127,14 @@ def preparar_malha_original(obj, camera=None):
         indices = indices[validos]
         transparentes = transparentes[validos]
         if camera is not None and np.any(transparentes):
-            indices = ordenar_triangulos_vulkan(obj, camera, indices, transparentes)
+            indices = ordenar_triangulos_vulkan(obj, camera, indices, transparentes, posicoes)
     if not np.isfinite(vertices).all():
         raise ValueError("Object3D original: coordenadas não finitas")
     return (np.ascontiguousarray(vertices),
             np.ascontiguousarray(indices.reshape(-1), dtype=np.uint32))
 
 
-def ordenar_triangulos_vulkan(obj, camera, triangulos, transparentes):
+def ordenar_triangulos_vulkan(obj, camera, triangulos, transparentes, posicoes=None):
     """Ordenar faces alpha em espaço da câmera sem modificar a malha original.
 
     Faces opacas permanecem primeiro. Quads já foram triangulados e os
@@ -146,7 +147,8 @@ def ordenar_triangulos_vulkan(obj, camera, triangulos, transparentes):
     _, view = camera.getMatrices(0)
     modelview = np.asarray(view, dtype=np.float64) @ np.asarray(
         camera.getModelMatrix(obj), dtype=np.float64)
-    centros = np.mean(np.asarray(obj.verts)[triangulos[transparentes]], axis=1)
+    coords = posicoes_render(obj) if posicoes is None else posicoes
+    centros = np.mean(coords[triangulos[transparentes]], axis=1)
     centros = np.column_stack((centros, np.ones(len(centros)))) @ modelview.T
     if not np.isfinite(centros).all() or np.any(np.abs(centros[:, 3]) < 1e-8):
         raise ValueError("Triângulo translúcido não projetável")
@@ -338,7 +340,7 @@ def profundidade_camada_vulkan(obj, cam):
     Objetos originais usam a transformação de getModelMatrix() da própria
     câmera MakeHuman. Não altera a câmera nem move vértices do personagem.
     """
-    coords = np.asarray(getattr(obj, "verts", ()), dtype=np.float64)
+    coords = np.asarray(posicoes_render(obj), dtype=np.float64)
     if coords.ndim != 2 or coords.shape[1] != 3 or not len(coords):
         raise ValueError("Camada translúcida sem vértices 3D")
     if not np.isfinite(coords).all():
@@ -970,6 +972,7 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
 
     def invalidar_texturas(self, caminho=None):
         """Invalida texturas da cena; a próxima renderização recarrega na GPU."""
+        invalidar_displacement(caminho)
         if caminho is None:
             self._texturas.clear()
         else:

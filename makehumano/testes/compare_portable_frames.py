@@ -20,6 +20,7 @@ FRAMES = (
     "light-area", "light-area-two", "light-area-phong",
     "msaa-off", "msaa-4x", "alpha-to-coverage", "alpha-blend-msaa",
     "rig-rest", "rig-tpose",
+    "displacement-off", "displacement-on",
 )
 
 

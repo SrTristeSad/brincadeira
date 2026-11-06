@@ -1061,6 +1061,10 @@ def criar_canvas_vulkan(canvas_original):
                     validar_luzes(self._cena, G.cameras, G.world, self.app, lights_marker)
                 caminho = os.environ.get("MAKEHUMANO_VULKAN_FRAME_FILE")
                 if caminho and not os.path.exists(caminho):
+                    from pathlib import Path
+                    from vulkan_smoke_displacement import validar_displacement
+                    validar_displacement(self._cena, G.cameras, G.world,
+                                         str(Path(caminho).parent / "displacement.json"))
                     with open(caminho, "w", encoding="utf-8") as saida:
                         saida.write(
                             "vulkan-makehuman-original:"

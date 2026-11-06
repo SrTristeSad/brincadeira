@@ -3,6 +3,7 @@ import math
 import os
 
 _MAPAS = {
+    "displacement": ("displacement", "displacementMapTexture", "displacementmapTexture", "displacementMapIntensity", "displacementmapIntensity"),
     "ao": ("ambientOcclusion", "aoMapTexture", "aomapTexture", "aoMapIntensity", "aomapIntensity"),
     "bump": ("bump", "bumpMapTexture", "bumpmapTexture", "bumpMapIntensity", "bumpmapIntensity"),
     "specular": ("spec", "specularMapTexture", "specularmapTexture", "specularMapIntensity", "specularmapIntensity"),
