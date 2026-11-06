@@ -261,3 +261,31 @@ test("moving a nested WorldClock detaches its previous owner", () => {
     destination.advanceTime(0.5);
     assert.deepEqual(leaf.updates, [0.5]);
 });
+
+test("WorldClock rejects three-level cycles created with add", () => {
+    const root = new WorldClock();
+    const middle = new WorldClock();
+    const leaf = new WorldClock();
+    root.add(middle);
+    middle.add(leaf);
+    leaf.add(root);
+    assert.equal(root.clock, null);
+    assert.equal(middle.clock, root);
+    assert.equal(leaf.clock, middle);
+    root.advanceTime(0.25);
+    assert.equal(leaf.time, 0.25);
+});
+
+test("WorldClock rejects three-level cycles created with the clock setter", () => {
+    const root = new WorldClock();
+    const middle = new WorldClock();
+    const leaf = new WorldClock();
+    middle.clock = root;
+    leaf.clock = middle;
+    root.clock = leaf;
+    assert.equal(root.clock, null);
+    assert.equal(middle.clock, root);
+    assert.equal(leaf.clock, middle);
+    root.advanceTime(0.2);
+    assert.equal(leaf.time, 0.2);
+});
