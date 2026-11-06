@@ -88,7 +88,7 @@ def validar_rig_pose(app, directory):
         bvh_path = directory / "personagem-animado.bvh"
         bvh_exporter.export(human, lambda ext: str(bvh_path))
         exported_bvh = bvh.load(str(bvh_path), convertFromZUp=False)
-        reloaded_track = exported_bvh.createAnimationTrack(human.getSkeleton().getJointNames())
+        reloaded_track = exported_bvh.createAnimationTrack([bone.name for bone in human.getSkeleton().getBones()])
         if reloaded_track.nFrames != 2 or not np.isclose(reloaded_track.frameRate, 24., rtol=1e-5):
             raise RuntimeError("BVH não preservou quadros e taxa da animação")
         for frame in range(2):

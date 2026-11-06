@@ -33,7 +33,7 @@ class OriginalAnimation(unittest.TestCase):
     def test_bvh_export_uses_local_poses_even_after_skinning_bake(self):
         from types import SimpleNamespace
         import tempfile
-        from transformations import rotation_matrix
+        from transformations import euler_matrix
         bone = SimpleNamespace(name="root", parent=None, index=0,
                                getRestOffset=lambda: np.zeros(3),
                                getRestHeadPos=lambda: np.zeros(3),
@@ -41,7 +41,7 @@ class OriginalAnimation(unittest.TestCase):
                                hasChildren=lambda: False)
         skel = SimpleNamespace(getJointNames=lambda: ["root"], getBone=lambda name: bone,
                                containsBone=lambda name: name == "root")
-        poses = np.array([np.eye(4)[:3], rotation_matrix(.4, [1., 0., 0.])[:3]], np.float32)
+        poses = np.array([np.eye(4)[:3], euler_matrix(.2, .4, -.3)[:3]], np.float32)
         poses[1, :, 3] = [2., 3., 4.]
         track = AnimationTrack("export test", poses, 2, 24.)
         unbaked = bvh.createFromSkeleton(skel, track)
