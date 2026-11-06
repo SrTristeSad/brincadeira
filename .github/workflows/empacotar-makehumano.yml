@@ -202,13 +202,24 @@ jobs:
           $env:VK_DRIVER_FILES = "$mesa\share\vulkan\icd.d\lvp_icd.x86_64.json"
           # PyInstaller muda a busca de DLLs: o loader deve estar ao lado do
           # executável durante o teste. Removê-lo antes de publicar o pacote.
-          Copy-Item "$mesa\bin\vulkan-1.dll" dist/MakeHumano/
+          # O loader MinGW também depende das DLLs de runtime do Mesa.
+          # O bootloader congelado altera a busca de DLLs; manter o conjunto
+          # completo no diretório do .exe durante o teste, sem distribuí-lo.
+          $driverDlls = Get-ChildItem "$mesa\bin\*.dll"
+          foreach ($dll in $driverDlls) {
+            if (Test-Path "dist/MakeHumano/$($dll.Name)") { throw "Colisão de DLL de teste: $($dll.Name)" }
+            Copy-Item $dll.FullName dist/MakeHumano/
+          }
+          $env:VK_LOADER_DEBUG = "error,warn"
+          $env:PYTHONUTF8 = "1"
           try {
             Remove-Item Env:MAKEHUMANO_PORTABLE_SELFTEST -ErrorAction SilentlyContinue
             python makehumano/testes/smoke_gui.py --executable dist/MakeHumano/MakeHumano.exe --log-dir portable-logs
             if ($LASTEXITCODE -ne 0) { throw "Falha no smoke da GUI Windows" }
           } finally {
-            Remove-Item dist/MakeHumano/vulkan-1.dll -ErrorAction SilentlyContinue
+            foreach ($dll in $driverDlls) {
+              Remove-Item "dist/MakeHumano/$($dll.Name)" -ErrorAction SilentlyContinue
+            }
           }
 
       - name: Verificar GUI congelada e ferramentas no Linux

@@ -20,6 +20,9 @@ TIMEOUT_SECONDS = 90
 
 
 def main():
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--executable", type=Path, help="Testar binário congelado")
     parser.add_argument("--log-dir", type=Path, help="Preservar logs da CI")
@@ -50,6 +53,8 @@ def main():
         # substitui a pasta Documentos consultada no registro pelo MakeHuman.
         ambiente["MH_HOME_LOCATION"] = str(home)
         ambiente["MAKEHUMANO_CONSOLE_LOG"] = "1"
+        ambiente["PYTHONIOENCODING"] = "utf-8"
+        ambiente["PYTHONUTF8"] = "1"
         ambiente.pop("MAKEHUMANO_PORTABLE_SELFTEST", None)
         ambiente["MAKEHUMANO_PORTABLE_ERROR_LOG"] = str(base / "error.log")
         ambiente["MAKEHUMANO_SMOKE_FUNCTIONAL_FILE"] = str(base / "functional.json")

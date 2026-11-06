@@ -176,6 +176,9 @@ def get_platform_paths():
 def redirect_standard_streams():
     # O smoke e o iniciador portátil precisam capturar também erros Qt/wgpu.
     if os.environ.get("MAKEHUMANO_CONSOLE_LOG") == "1":
+        for stream in (sys.stdout, sys.stderr):
+            if hasattr(stream, "reconfigure"):
+                stream.reconfigure(encoding="utf-8", errors="replace")
         return
     import locale
     encoding = locale.getpreferredencoding()
