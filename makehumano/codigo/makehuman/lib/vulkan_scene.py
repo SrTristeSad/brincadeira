@@ -154,6 +154,20 @@ def matriz_wgpu(camera, obj, *, tamanho_origem=None, tamanho_destino=None):
     return np.ascontiguousarray(conversao_z @ proj @ view @ model)
 
 
+def matriz_normal_vulkan(modelo):
+    """Inversa transposta do modelo para iluminação sob escala não uniforme."""
+    m = np.asarray(modelo, dtype=np.float32)
+    if m.shape != (4, 4) or not np.isfinite(m).all():
+        raise ValueError("Matriz de modelo inválida para cálculo das normais")
+    try:
+        inv_t = np.linalg.inv(m[:3, :3].astype(np.float64)).T
+    except np.linalg.LinAlgError as exc:
+        raise ValueError("Transformação de objeto degenerada") from exc
+    normal = np.eye(4, dtype=np.float32)
+    normal[:3, :3] = inv_t
+    return normal
+
+
 def parametros_material_vulkan(obj):
     """Lê as opções do material já utilizadas pelo Object3D original.
 
@@ -279,6 +293,7 @@ class CenaVulkan:
 struct Globals {
     mvp: mat4x4<f32>,
     modelo: mat4x4<f32>,
+    normal_modelo: mat4x4<f32>,
     cor: vec4<f32>,
     flags: vec4<f32>,
     ambiente: vec4<f32>,
@@ -308,7 +323,7 @@ struct Fragmento {
 @vertex fn vs_main(v: Entrada) -> Fragmento {
     var o: Fragmento;
     o.pos = dados.mvp * vec4<f32>(v.pos, 1.0);
-    o.normal = normalize((dados.modelo * vec4<f32>(v.normal, 0.0)).xyz);
+    o.normal = normalize((dados.normal_modelo * vec4<f32>(v.normal, 0.0)).xyz);
     o.mundo = (dados.modelo * vec4<f32>(v.pos, 1.0)).xyz;
     o.uv = v.uv;
     o.cor = v.cor;
@@ -769,8 +784,10 @@ struct Fragmento {
                 except np.linalg.LinAlgError as exc:
                     raise ValueError("View original não inversível") from exc
                 observador = np.array([*posicao_camera, 1.0], np.float32)
+                normal_modelo = matriz_normal_vulkan(modelo)
                 uniforms = np.concatenate((
                     mvp.T.reshape(-1), modelo.T.reshape(-1),
+                    normal_modelo.T.reshape(-1),
                     cor, flags, ambiente, especular, emissiva, observador,
                     posicoes.reshape(-1), cores.reshape(-1),
                 )).astype(np.float32)
