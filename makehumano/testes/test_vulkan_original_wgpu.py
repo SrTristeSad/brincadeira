@@ -30,7 +30,8 @@ from vulkan_scene import (
 from vulkan_texture import Texture as TextureVulkan
 from vulkan_skin import preparar_skin, normalizar_cor_fundo
 from vulkan_lighting import dados_iluminacao_cena
-from vulkan_shader import configuracao_shader_nativo, nome_preset_nativo, PRESETS_NATIVOS
+from vulkan_shader import (configuracao_shader_nativo, nome_preset_nativo,
+                           textura_litsphere_nativa, PRESETS_NATIVOS)
 
 
 def objeto_original(face=None):
@@ -721,7 +722,7 @@ class TestarPresetXrayOriginalVulkan(unittest.TestCase):
         np.testing.assert_allclose(params, [0.2, 3.5, 0.4, 1.0])
 
     def test_outros_shaders_glsl_nao_sao_marcados_como_portados(self):
-        for nome in ("litsphere", "phong", "toon", "normalmap", "skin"):
+        for nome in ("phong", "toon", "normalmap", "skin"):
             with self.subTest(shader=nome):
                 modo, _, pendente = configuracao_shader_nativo(
                     self._material(shader="/data/shaders/glsl/" + nome)
@@ -735,12 +736,12 @@ class TestarPresetXrayOriginalVulkan(unittest.TestCase):
         self.assertIsNotNone(pendente)
 
     def test_seletor_so_oferece_preset_portado(self):
-        self.assertEqual(PRESETS_NATIVOS, frozenset(("xray",)))
+        self.assertEqual(PRESETS_NATIVOS, frozenset(("xray", "litsphere")))
         self.assertEqual(
             nome_preset_nativo("/data/shaders/glsl/xray"), "xray",
         )
-        self.assertIsNone(
-            nome_preset_nativo("/data/shaders/glsl/litsphere")
+        self.assertEqual(
+            nome_preset_nativo("/data/shaders/glsl/litsphere"), "litsphere"
         )
         self.assertIsNone(nome_preset_nativo("/custom/xray"))
 
@@ -755,6 +756,68 @@ class TestarPresetXrayOriginalVulkan(unittest.TestCase):
                     values=(1, float("nan"), 0)
                 ))
             )
+
+
+class TestarLitSphereOriginalVulkan(unittest.TestCase):
+    def _material(self, **atributos):
+        imagem = SimpleNamespace(
+            width=2, height=2,
+            data=np.ones((2, 2, 3), dtype=np.uint8),
+            modified=2,
+        )
+        defaults = dict(
+            shader="/makehuman/data/shaders/glsl/litsphere",
+            shaderParameters={"litsphereTexture": imagem},
+            shaderConfig={"diffuse": False, "vertexColors": False},
+        )
+        defaults.update(atributos)
+        return SimpleNamespace(**defaults)
+
+    def test_pele_padrao_original_seleciona_litsphere(self):
+        arquivo = (
+            RAIZ / "codigo" / "makehuman" / "data" / "skins" / "default.mhmat"
+        )
+        fonte = arquivo.read_text(encoding="utf-8")
+        self.assertIn("shader data/shaders/glsl/litsphere", fonte)
+        self.assertIn("autoBlendSkin true", fonte)
+        mat = self._material()
+        modo, opcoes, pendente = configuracao_shader_nativo(mat)
+        self.assertEqual(modo, 2)
+        self.assertIsNone(pendente)
+        np.testing.assert_allclose(opcoes, [0, 0, 0, 0])
+        self.assertIs(
+            textura_litsphere_nativa(mat),
+            mat.shaderParameters["litsphereTexture"],
+        )
+
+    def test_preset_preserva_diffuse_vertex_colors_e_aditivo(self):
+        mat = self._material(
+            shaderConfig={"diffuse": True, "vertexColors": True},
+            shaderParameters={"AdditiveShading": ["0.3"]},
+        )
+        modo, opcoes, _ = configuracao_shader_nativo(mat)
+        self.assertEqual(modo, 2)
+        np.testing.assert_allclose(opcoes, [0.3, 1, 1, 0])
+
+    def test_aditivo_fora_da_faixa_e_restringido(self):
+        for aditivo, esperado in ((-1.0, 0.0), (10.0, 1.0)):
+            with self.subTest(aditivo=aditivo):
+                mat = self._material(
+                    shaderParameters={"AdditiveShading": aditivo},
+                )
+                self.assertEqual(
+                    configuracao_shader_nativo(mat)[1][0], esperado,
+                )
+
+    def test_aditivo_invalido_rejeitado(self):
+        with self.assertRaises(ValueError):
+            configuracao_shader_nativo(
+                self._material(shaderParameters={"AdditiveShading": "nan"}),
+            )
+
+    def test_sem_imagem_nao_finge_ter_textura_da_pele(self):
+        mat = self._material(shaderParameters={})
+        self.assertIsNone(textura_litsphere_nativa(mat))
 
 
 if __name__ == "__main__":
