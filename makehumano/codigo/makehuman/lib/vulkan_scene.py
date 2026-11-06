@@ -270,6 +270,90 @@ def configuracao_raster_vulkan(obj, *, linhas=False):
     return modo_cull, escrever_profundidade, comparacao
 
 
+def objeto_translucido_vulkan(obj):
+    """Classifica camadas para composição alpha, sem inferir pela textura.
+
+    Mantém o contrato do MakeHuman: transparentPrimitives, opacity e
+    material.transparent indicam superfícies que não gravam profundidade.
+    """
+    material = getattr(obj, "material", None)
+    opacity = float(getattr(material, "opacity", 1.0))
+    if not np.isfinite(opacity):
+        raise ValueError("Opacidade não finita na ordenação Vulkan")
+    return (bool(getattr(obj, "nTransparentPrimitives", 0))
+            or bool(getattr(material, "transparent", False))
+            or opacity < 1.0)
+
+
+def profundidade_camada_vulkan(obj, cam):
+    """Centro da malha em espaço de vista; Z menor é mais distante em GL.
+
+    Objetos originais usam a transformação de getModelMatrix() da própria
+    câmera MakeHuman. Não altera a câmera nem move vértices do personagem.
+    """
+    coords = np.asarray(getattr(obj, "verts", ()), dtype=np.float64)
+    if coords.ndim != 2 or coords.shape[1] != 3 or not len(coords):
+        raise ValueError("Camada translúcida sem vértices 3D")
+    if not np.isfinite(coords).all():
+        raise ValueError("Vértices não finitos em camada translúcida")
+    if not getattr(cam, "updated", True):
+        cam.updateCamera()
+        cam.updated = True
+    _, view = cam.getMatrices(0)
+    view = np.asarray(view, dtype=np.float64)
+    model = np.asarray(cam.getModelMatrix(obj), dtype=np.float64)
+    if (view.shape != (4, 4) or model.shape != (4, 4)
+            or not np.isfinite(view).all() or not np.isfinite(model).all()):
+        raise ValueError("Matriz inválida na ordenação de camadas")
+    centro = np.append(np.mean(coords, axis=0), 1.0)
+    eye = view @ model @ centro
+    if not np.isfinite(eye).all() or abs(eye[3]) < 1e-8:
+        raise ValueError("Camada translúcida com centro não projetável")
+    return float(eye[2] / eye[3])
+
+
+def ordenar_objetos_vulkan(mundo, cameras):
+    """Prioridades originais + render de camadas alpha atrás → frente.
+
+    Dentro de cada bloco de mesma priority e cameraMode, desenha primeiro
+    os opacos, depois os translúcidos em profundidade de câmera crescente
+    (OpenGL: Z mais negativo está mais distante), e por último overlays
+    depthless. Em empates, Python sort mantém a ordem do MakeHuman.
+    Não reordena objetos de câmeras diferentes ou prioridades diferentes.
+    """
+    if mundo is None:
+        return []
+    ordenados = sorted(mundo, key=lambda obj: obj.priority)
+    resultado = []
+    inicio = 0
+    while inicio < len(ordenados):
+        atual = ordenados[inicio]
+        fim = inicio + 1
+        while (fim < len(ordenados)
+               and ordenados[fim].priority == atual.priority
+               and ordenados[fim].cameraMode == atual.cameraMode):
+            fim += 1
+        grupo = ordenados[inicio:fim]
+        opacos, translucidos, overlays = [], [], []
+        for obj in grupo:
+            if bool(getattr(obj, "depthless", False)):
+                overlays.append(obj)
+            elif objeto_translucido_vulkan(obj):
+                translucidos.append(obj)
+            else:
+                opacos.append(obj)
+        if len(translucidos) > 1:
+            cam = cameras[atual.cameraMode]
+            translucidos.sort(
+                key=lambda obj: profundidade_camada_vulkan(obj, cam),
+            )
+        resultado.extend(opacos)
+        resultado.extend(translucidos)
+        resultado.extend(overlays)
+        inicio = fim
+    return resultado
+
+
 class CenaVulkan:
     """Renderização piloto de objetos G.world na própria janela MakeHuman."""
 
@@ -895,7 +979,7 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
         self.objetos_desenhados = 0
         self.linhas_desenhadas = 0
         if mundo is not None:
-            for obj in sorted(mundo, key=lambda item: item.priority):
+            for obj in ordenar_objetos_vulkan(mundo, cameras):
                 if not obj.visibility:
                     continue
                 if productionRender and getattr(obj, "excludeFromProduction", False):
