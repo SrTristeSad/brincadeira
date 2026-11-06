@@ -10,7 +10,7 @@ from vulkan_scene import pixels_textura_rgba
 
 
 def preparar_skin(verts_per_primitive, verts, index=None, UVs=None, color=None):
-    """Retorna (vértices float32 [N,9], índices uint32, linhas)."""
+    """Retorna vértices [posição xyz, textura xyzw, cor rgba] e índices."""
     pos = np.asarray(verts, dtype=np.float32)
     if pos.ndim != 2 or pos.shape[1] not in (2, 3):
         raise ValueError("Skin Vulkan exige vértices Nx2 ou Nx3")
@@ -42,7 +42,7 @@ def preparar_skin(verts_per_primitive, verts, index=None, UVs=None, color=None):
             & (ids[:, 0] != ids[:, 2])
         ]
     uv = np.zeros((n, 2), np.float32) if UVs is None else np.asarray(UVs, np.float32)
-    if uv.shape != (n, 2) or not np.isfinite(uv).all():
+    if uv.ndim != 2 or uv.shape[0] != n or uv.shape[1] not in (2, 3, 4) or not np.isfinite(uv).all():
         raise ValueError("UVs de skin inválidas")
     if color is None:
         col = np.ones((n, 4), np.float32)
@@ -51,10 +51,11 @@ def preparar_skin(verts_per_primitive, verts, index=None, UVs=None, color=None):
         if col.shape != (n, 4):
             raise ValueError("Cores da skin devem ter 4 canais")
         col = col.astype(np.float32) / 255.0
-    vertices = np.zeros((n, 9), dtype=np.float32)
+    vertices = np.zeros((n, 11), dtype=np.float32)
     vertices[:, :pos.shape[1]] = pos
-    vertices[:, 3:5] = uv
-    vertices[:, 5:9] = col
+    vertices[:, 6] = 1.0
+    vertices[:, 3:3 + uv.shape[1]] = uv
+    vertices[:, 7:11] = col
     return (
         np.ascontiguousarray(vertices),
         np.ascontiguousarray(ids.ravel(), dtype=np.uint32),
@@ -103,7 +104,7 @@ struct Uniforms {
 
 struct Entrada {
     @location(0) pos: vec3<f32>,
-    @location(1) uv: vec2<f32>,
+    @location(1) uv: vec4<f32>,
     @location(2) cor: vec4<f32>,
 };
 struct Saida {
@@ -115,7 +116,7 @@ struct Saida {
     var o: Saida;
     let p = uni.modelo * vec4<f32>(i.pos, 1.0);
     o.clip = vec4<f32>(2.0*p.x-p.w, 2.0*p.y-p.w, 0.5*p.w, p.w);
-    let uv4 = uni.textura * vec4<f32>(i.uv, 0.0, 1.0);
+    let uv4 = uni.textura * i.uv;
     o.uv = uv4.xy / uv4.w;
     o.cor = i.cor;
     return o;
@@ -140,16 +141,16 @@ struct Saida {
         vertex=wgpu.VertexState(
             module=shader, entry_point="vs_skin",
             buffers=[wgpu.VertexBufferLayout(
-                array_stride=36, step_mode="vertex",
+                array_stride=44, step_mode="vertex",
                 attributes=[
                     wgpu.VertexAttribute(
                         format="float32x3", offset=0, shader_location=0,
                     ),
                     wgpu.VertexAttribute(
-                        format="float32x2", offset=12, shader_location=1,
+                        format="float32x4", offset=12, shader_location=1,
                     ),
                     wgpu.VertexAttribute(
-                        format="float32x4", offset=20, shader_location=2,
+                        format="float32x4", offset=28, shader_location=2,
                     ),
                 ],
             )],
@@ -172,6 +173,7 @@ def render_skin(cena, dst, vertsPerPrimitive, verts, index=None,
                 textureMatrix=None, color=None, clearColor=None):
     """Implementa o contrato mh.renderSkin em um render pass de Vulkan."""
     from image import Image
+    from vulkan_texture import Texture
     wgpu = cena.wgpu
     if isinstance(dst, tuple):
         largura, altura = dst
@@ -249,14 +251,11 @@ def render_skin(cena, dst, vertsPerPrimitive, verts, index=None,
     passada.end()
     cena.device.queue.submit([encoder.finish()])
     resultado = cena.ler_framebuffer_rgb(textura_alvo)
-    if hasattr(dst, "_data"):
+    if isinstance(dst, Texture):
         # Preserva conteúdo atualizado de Texture CPU para passes seguintes.
         canais = dst.data.shape[2]
-        if canais == 4:
-            canais_render = cena.ler_framebuffer_rgba(textura_alvo)
-            dst._data = np.ascontiguousarray(canais_render)
-        else:
-            dst._data = np.ascontiguousarray(resultado[:, :, :canais])
+        canais_render = cena.ler_framebuffer_rgba(textura_alvo)
+        dst._data = np.ascontiguousarray(Image(data=canais_render).convert(canais).data)
         import time
         dst.modified = time.time_ns()
         cena.invalidar_texturas()

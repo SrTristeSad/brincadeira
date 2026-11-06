@@ -15,6 +15,7 @@ FRAMES = (
     "bump-disabled", "bump-enabled",
     "ao-grey", "ao-black",
     "ao-phong-white", "ao-phong-black",
+    "projection-3d", "projection-accumulated",
 )
 
 

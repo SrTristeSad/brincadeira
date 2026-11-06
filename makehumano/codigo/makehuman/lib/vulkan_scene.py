@@ -1174,7 +1174,7 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
                 from vulkan_shader import (
                     configuracao_shader_nativo, textura_litsphere_nativa,
                     parametros_extras_shader_nativo,
-                    textura_normalmap_nativa, textura_ao_shader_nativa,
+                    textura_normalmap_nativa,
                     texturas_skin_nativas,
                 )
                 material_obj = getattr(obj, "material", None)

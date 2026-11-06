@@ -437,9 +437,9 @@ class TestarRasterizacaoSkinVulkan(unittest.TestCase):
         vertices, indices, linhas = preparar_skin(
             3, pos, index=np.array([[0, 1, 2]], np.uint32), color=cores,
         )
-        self.assertEqual(vertices.shape, (3, 9))
+        self.assertEqual(vertices.shape, (3, 11))
         np.testing.assert_array_equal(vertices[:, 2], [0, 0, 0])
-        np.testing.assert_array_equal(vertices[0, 5:], [1, 0, 0, 1])
+        np.testing.assert_array_equal(vertices[0, 7:], [1, 0, 0, 1])
         np.testing.assert_array_equal(indices, [0, 1, 2])
         self.assertFalse(linhas)
 
@@ -463,9 +463,18 @@ class TestarRasterizacaoSkinVulkan(unittest.TestCase):
         with self.assertRaises(ValueError):
             preparar_skin(3, verts, index=np.array([[0, 1, 9]]))
         with self.assertRaises(ValueError):
-            preparar_skin(3, verts, UVs=np.zeros((3, 3)))
+            preparar_skin(3, verts, UVs=np.zeros((3, 5)))
         with self.assertRaises(NotImplementedError):
             preparar_skin(5, verts)
+
+    def test_projection_preserves_3d_and_homogeneous_texture_coordinates(self):
+        pos = np.array([[0, 0], [1, 0], [0, 1]], np.float32)
+        for size in (2, 3, 4):
+            uv = np.arange(3 * size, dtype=np.float32).reshape(3, size)
+            vertices, _, _ = preparar_skin(3, pos, UVs=uv)
+            np.testing.assert_array_equal(vertices[:, 3:3 + size], uv)
+            if size < 4:
+                np.testing.assert_array_equal(vertices[:, 6], 1.)
 
     def test_normaliza_cores_rgba_legadas(self):
         self.assertEqual(

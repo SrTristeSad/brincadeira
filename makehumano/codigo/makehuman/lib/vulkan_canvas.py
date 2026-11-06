@@ -351,6 +351,8 @@ def criar_canvas_vulkan(canvas_original):
                     )
                     if img.data.shape != (96, 96, 3) or img.data.max() == 0:
                         raise RuntimeError("renderSkin Vulkan não desenhou UVs")
+                    from vulkan_smoke_projection import validar_projecao
+                    validar_projecao(skin_marker)
                     with open(skin_marker, "w", encoding="utf-8") as saida:
                         saida.write("vulkan-skin:96x96\n")
                     print("MAKEHUMANO_VULKAN: renderSkin UV OK", flush=True)

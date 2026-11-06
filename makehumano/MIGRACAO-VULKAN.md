@@ -133,3 +133,13 @@ AO modula a cor difusa sem apagar reflexão especular ou emissão; o material
 básico shadeless ignora o mapa. O Skin conserva seu uso próprio do canal azul
 para o gradiente de iluminação. Os smokes verificam mapas constantes, altura
 variável, intensidade zero, controles desligados e prioridade de normal maps.
+
+### Contrato de projeção UV
+
+`renderSkin` aceita coordenadas de textura Nx2, Nx3 e Nx4, preservando Z e W
+para a matriz de textura usada pela ferramenta de projeção original. Destinos
+`Image` são lidos sem mutação, como no contrato original; destinos `Texture`
+são atualizados para passes acumulados e invalidam o cache GPU. Conversão de
+RGBA para destinos L/LA usa a conversão original de Image, conservando alfa
+em LA. O smoke exercita composição, matrizes de objeto/textura e coordenadas
+homogêneas equivalentes pela API `mh.renderSkin`.

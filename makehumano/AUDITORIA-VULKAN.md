@@ -26,14 +26,14 @@ em `motor_wgpu`. O estado abaixo distingue testes exercitados de paridade final.
 
 ## Validação local
 
-A suíte completa executou **250 testes com sucesso**, usando Python 3.12,
+A suíte completa executou **251 testes com sucesso**, usando Python 3.12,
 NumPy 2.5.4 e Qt 5.15.14. Os testes Qt de gravação PNG verificam os canais,
 alfa e imagens com largura não alinhada. Os dados binários verificam Unicode
 em grupos de malha, tags de proxies e metadados de licença. A criação local do
 pacote Linux e a importação congelada também foram exercitadas; os testes GPU
 e GUI são executados nos runners dos workflows vinculados ao commit.
 
-A comparação adicional de 29 PNGs entre fontes Windows e executável exige
+A comparação adicional de 31 PNGs entre fontes Windows e executável exige
 igualdade exata de pixels no mesmo driver. As capturas são sincronizadas com
 fim de startup para não comparar iluminação ainda não carregada. Essa
 verificação detecta diferenças do empacotamento; não substitui equivalência
@@ -78,8 +78,9 @@ com o renderer original nem validação em outra GPU.
 9. **Interações completas:** os smokes chamam APIs originais e verificam pixels;
    incluem undo/redo do modificador original, mas não cobrem toda sequência
    de mouse/teclado, poses e todas as
-   ferramentas de projeção. `renderSkin` ainda exige testes adicionais de
-   formatos, transformação UV e acumulação sobre imagens existentes.
+   ferramentas de projeção. `renderSkin` agora verifica coordenadas 3D/4D,
+   matrizes de textura/objeto, composição sobre Texture existente e destino LA;
+   faltam sequências completas da ferramenta com malhas e imagens externas.
 
 ## Critério de entrega
 
