@@ -9,7 +9,7 @@ suporte a shaders personalizados enquanto ainda não foram convertidos.
 # Apenas presets portados e testados entram no seletor original.
 # Shader.supported() continua False: isso descreve compilação de GLSL,
 # que ainda não existe em Vulkan.
-PRESETS_NATIVOS = frozenset(("xray",))
+PRESETS_NATIVOS = frozenset(("xray", "litsphere"))
 
 
 def nome_preset_nativo(caminho):
@@ -46,7 +46,7 @@ def configuracao_shader_nativo(material):
     """Resolve presets GLSL originais portados explicitamente para WGSL.
 
     Retorna (modo, controles, nome_pendente). Não compila nem interpreta GLSL.
-    mode 0 = shader de material padrão; mode 1 = xray original.
+    mode 0 = shader de material padrão; 1 = xray; 2 = litsphere.
     Um preset desconhecido fica identificado como pendente, sem fingir
     que foi convertido.
     """
@@ -60,10 +60,27 @@ def configuracao_shader_nativo(material):
     # Só roteamos nomes da família oficial de shaders incorporados.
     if "/shaders/glsl/" not in normalizado:
         return 0, (0.0, 0.0, 0.0, 0.0), normalizado
-    if nome_preset_nativo(caminho) != "xray":
+    if nome_preset_nativo(caminho) is None:
         return 0, (0.0, 0.0, 0.0, 0.0), nome
 
     parametros = getattr(material, "shaderParameters", {}) or {}
+    if nome == "litsphere":
+        aditivo = parametros.get("AdditiveShading", 0.0)
+        if isinstance(aditivo, (tuple, list)) and len(aditivo) == 1:
+            aditivo = aditivo[0]
+        aditivo = float(aditivo)
+        if not math.isfinite(aditivo):
+            raise ValueError("Shader litsphere: AdditiveShading não finito")
+        config = getattr(material, "shaderConfig", {}) or {}
+        return (
+            2, (
+                float(max(0.0, min(1.0, aditivo))),
+                float(bool(config.get("vertexColors", False))),
+                float(bool(config.get("diffuse", False))),
+                0.0,
+            ),
+            None,
+        )
     def escalar(chave, padrao):
         valor = parametros.get(chave, padrao)
         if isinstance(valor, (list, tuple)) and len(valor) == 1:
@@ -92,3 +109,15 @@ def configuracao_shader_nativo(material):
         ),
         None,
     )
+
+
+def textura_litsphere_nativa(material):
+    """Obtém imagem ou caminho da LitSphere pelos parâmetros do .mhmat.
+
+    Em autoBlendSkin, o getter do Material produz a imagem atual do
+    EthnicSkinBlender original, sem armazenar nova identidade de personagem.
+    """
+    if material is None:
+        return None
+    parametros = getattr(material, "shaderParameters", {}) or {}
+    return parametros.get("litsphereTexture")
