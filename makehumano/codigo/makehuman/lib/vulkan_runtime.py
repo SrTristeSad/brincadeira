@@ -29,3 +29,19 @@ def preparar_runtime_vulkan():
             "Instale/atualize o driver Vulkan da sua placa de vídeo."
         ) from exc
     print(f"MAKEHUMANO_VULKAN: runtime carregado de {path}", flush=True)
+
+
+_instancia_configurada = False
+
+
+def preparar_instancia_vulkan():
+    """Restringir a instância nativa a Vulkan, além da seleção do adaptador."""
+    global _instancia_configurada
+    preparar_runtime_vulkan()
+    os.environ["WGPU_BACKEND_TYPE"] = "Vulkan"
+    if not _instancia_configurada:
+        from wgpu.backends.wgpu_native.extras import set_instance_extras
+        # Configurar antes de criar qualquer superfície/contexto. Não criar
+        # backends GL, D3D ou Metal para depois simplesmente descartá-los.
+        set_instance_extras(backends=("Vulkan",))
+        _instancia_configurada = True

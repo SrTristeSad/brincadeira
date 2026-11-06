@@ -97,3 +97,19 @@ class VulkanRuntimeWindows(unittest.TestCase):
                     "os.add_dll_directory", create=True):
                 with self.assertRaisesRegex(RuntimeError, "driver Vulkan"):
                     vulkan_runtime.preparar_runtime_vulkan()
+
+
+class VulkanInstanceSelection(unittest.TestCase):
+    def test_only_vulkan_backend_is_created_once(self):
+        import vulkan_runtime
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        configure = Mock()
+        with patch.object(vulkan_runtime, "_instancia_configurada", False), patch.object(
+                vulkan_runtime, "preparar_runtime_vulkan"), patch.dict(
+                sys.modules, {"wgpu.backends.wgpu_native.extras": SimpleNamespace(set_instance_extras=configure)}), patch.dict(
+                "os.environ", {}, clear=False):
+            vulkan_runtime.preparar_instancia_vulkan()
+            vulkan_runtime.preparar_instancia_vulkan()
+            configure.assert_called_once_with(backends=("Vulkan",))
+            self.assertEqual(__import__("os").environ["WGPU_BACKEND_TYPE"], "Vulkan")
