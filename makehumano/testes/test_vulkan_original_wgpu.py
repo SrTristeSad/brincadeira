@@ -724,7 +724,7 @@ class TestarPresetXrayOriginalVulkan(unittest.TestCase):
         np.testing.assert_allclose(params, [0.2, 3.5, 0.4, 1.0])
 
     def test_outros_shaders_glsl_nao_sao_marcados_como_portados(self):
-        for nome in ("normalmap", "skin"):
+        for nome in ("skin",):
             with self.subTest(shader=nome):
                 modo, _, pendente = configuracao_shader_nativo(
                     self._material(shader="/data/shaders/glsl/" + nome)
@@ -738,7 +738,7 @@ class TestarPresetXrayOriginalVulkan(unittest.TestCase):
         self.assertIsNotNone(pendente)
 
     def test_seletor_so_oferece_preset_portado(self):
-        self.assertEqual(PRESETS_NATIVOS, frozenset(("xray", "litsphere", "phong", "toon")))
+        self.assertEqual(PRESETS_NATIVOS, frozenset(("xray", "litsphere", "phong", "toon", "normalmap")))
         self.assertEqual(
             nome_preset_nativo("/data/shaders/glsl/xray"), "xray",
         )
