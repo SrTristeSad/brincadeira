@@ -109,7 +109,7 @@ struct Entrada {
 };
 struct Saida {
     @builtin(position) clip: vec4<f32>,
-    @location(0) uv: vec2<f32>,
+    @location(0) uv: vec4<f32>,
     @location(1) cor: vec4<f32>,
 };
 @vertex fn vs_skin(i: Entrada) -> Saida {
@@ -117,12 +117,16 @@ struct Saida {
     let p = uni.modelo * vec4<f32>(i.pos, 1.0);
     o.clip = vec4<f32>(2.0*p.x-p.w, 2.0*p.y-p.w, 0.5*p.w, p.w);
     let uv4 = uni.textura * i.uv;
-    o.uv = uv4.xy / uv4.w;
+    o.uv = uv4;
     o.cor = i.cor;
     return o;
 }
 @fragment fn fs_skin(i: Saida) -> @location(0) vec4<f32> {
-    let sampled = textureSample(tex, filtragem, vec2<f32>(i.uv.x, 1.0 - i.uv.y));
+    // Interpolar as coordenadas homogêneas antes de dividir por Q,
+    // como na projeção de textura original. Dividir no vértice distorce
+    // projeções com profundidade variável dentro de um triângulo.
+    let uv = i.uv.xy / i.uv.w;
+    let sampled = textureSample(tex, filtragem, vec2<f32>(uv.x, 1.0 - uv.y));
     let cor = select(vec4<f32>(1.0), sampled, uni.opcoes.x > 0.5);
     return cor * i.cor;
 }

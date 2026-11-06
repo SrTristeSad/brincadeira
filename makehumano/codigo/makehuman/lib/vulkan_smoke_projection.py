@@ -30,6 +30,15 @@ def validar_projecao(marker):
                                 UVs=uv4, textureMatrix=matrix)
     if not np.array_equal(projected.data, homogeneous.data):
         raise RuntimeError("Projeção não preservou coordenadas homogêneas equivalentes")
+    projective_source = np.zeros((4, 256, 4), np.uint8)
+    projective_source[:, :154] = [255, 0, 0, 255]
+    projective_source[:, 154:] = [0, 255, 0, 255]
+    uv_projective = np.array([[0., .5, 0., 1.], [2., 1., 0., 2.],
+                              [2., 1., 0., 2.], [0., .5, 0., 1.]], np.float32)
+    perspective = mh.renderSkin(background, 4, vertices,
+                                texture=Image(data=projective_source), UVs=uv_projective)
+    if not np.array_equal(perspective.data[16, 16], [0, 255, 0]):
+        raise RuntimeError("Projeção dividiu por Q antes da interpolação dos fragmentos")
 
     destination = Texture(image=background)
     colors = np.tile(np.array([255, 0, 0, 128], np.uint8), (4, 1))
@@ -53,4 +62,5 @@ def validar_projecao(marker):
         raise RuntimeError("Destino luminância/alfa perdeu seus canais")
     path = Path(marker).parent
     projected.save(str(path / "projection-3d.png"))
+    perspective.save(str(path / "projection-perspective.png"))
     result.save(str(path / "projection-accumulated.png"))

@@ -40,7 +40,7 @@ exige simultaneamente:
 - carregamento dos plugins de modificadores, materiais, OBJ, FBX, Collada e STL;
 - resposta do controle wireframe, com arestas pretas e imagem diferente da superfície sólida;
 - processo ainda vivo e ausência de traceback ou erro de render no log;
-- no Windows, igualdade exata de 31 capturas PNG entre fontes e executável. As
+- no Windows, igualdade exata de 32 capturas PNG entre fontes e executável. As
   capturas só são geradas após terminar a carga da iluminação, plugins e targets.
 
 Isso **não** comprova equivalência visual dos shaders, todos os controles da

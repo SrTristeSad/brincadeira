@@ -143,3 +143,7 @@ são atualizados para passes acumulados e invalidam o cache GPU. Conversão de
 RGBA para destinos L/LA usa a conversão original de Image, conservando alfa
 em LA. O smoke exercita composição, matrizes de objeto/textura e coordenadas
 homogêneas equivalentes pela API `mh.renderSkin`.
+
+A divisão projectiva por W/Q ocorre no fragmento, após interpolar as
+coordenadas homogêneas. Um cenário GPU com Q variável detecta a distorção
+que ocorreria dividindo as coordenadas ainda no vertex shader.

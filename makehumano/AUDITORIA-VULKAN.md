@@ -33,7 +33,7 @@ em grupos de malha, tags de proxies e metadados de licença. A criação local d
 pacote Linux e a importação congelada também foram exercitadas; os testes GPU
 e GUI são executados nos runners dos workflows vinculados ao commit.
 
-A comparação adicional de 31 PNGs entre fontes Windows e executável exige
+A comparação adicional de 32 PNGs entre fontes Windows e executável exige
 igualdade exata de pixels no mesmo driver. As capturas são sincronizadas com
 fim de startup para não comparar iluminação ainda não carregada. Essa
 verificação detecta diferenças do empacotamento; não substitui equivalência
