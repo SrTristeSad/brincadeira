@@ -818,9 +818,14 @@ class MHApplication(gui3d.Application, mh.Application):
         self.splash.close()
         self.splash = None
             
-        if (not self.args.get('noshaders', False) or G.preStartupSettings["noShaders"]) and \
-          ( not mh.Shader.supported() or mh.Shader.glslVersion() < (1,20) ):
-            self.prompt('Warning', 'GLSL shaders have been disabled or are not supported.\nOnly simple shading will be available.', 'Ok', None, None, None, 'glslWarning')
+        # Vulkan é o backend padrão. Shader.supported() descreve apenas
+        # compilação GLSL arbitrária, não os seis presets WGSL já portados.
+        # Não bloquear a janela com o aviso OpenGL obsoleto.
+        if not mh.Shader.supported():
+            log.message(
+                "Vulkan: presets WGSL nativos disponíveis; "
+                "shaders GLSL personalizados continuam sem suporte."
+            )
 
         # Restore main window size and position
         geometry = self.getSetting('windowGeometry')
