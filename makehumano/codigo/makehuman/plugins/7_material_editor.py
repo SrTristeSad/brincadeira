@@ -488,8 +488,12 @@ class MaterialEditorTaskView(gui3d.TaskView):
         if not sh:
             # Parâmetros nativos visíveis no MESMO editor de materiais.
             modo, controles, _ = shader.configuracao_shader_nativo(mat)
-            if modo == 1:
-                for nome, indice in (("edgefalloff", 1), ("intensity", 2)):
+            if modo in (1, 2):
+                campos = (
+                    (("edgefalloff", 1), ("intensity", 2))
+                    if modo == 1 else (("AdditiveShading", 0),)
+                )
+                for nome, indice in campos:
                     widget = self.paramBox.addWidget(
                         ScalarValue(nome, controles[indice]),
                     )
