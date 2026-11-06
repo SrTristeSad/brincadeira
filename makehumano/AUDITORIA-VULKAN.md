@@ -72,6 +72,28 @@ Estas correções são parciais: não demonstram paridade visual com OpenGL,
 compatibilidade de cabelos/roupas ausentes nem execução em GPUs físicas.
 Conferir a CI do PR de compatibilidade antes de considerá-las aprovadas.
 
+## Comparação visual reproduzível OpenGL × Vulkan
+
+Foi incluído `testes/comparar_opengl_vulkan.py`, com testes de regressão
+para RGBA, tolerância por canal, proporção de pixels divergentes e cobertura
+alfa (interseção/união). Não reescala nem alinha automaticamente as capturas,
+pois isso esconderia diferenças reais. O comparador pode emitir JSON e mapa
+ampliado de diferenças, retornando código 1 quando o limite configurado é
+excedido. Exemplo, a partir da raiz do repositório:
+
+```bash
+python makehumano/testes/comparar_opengl_vulkan.py original.png atual.png \
+  --tolerancia 3 --fracao-maxima 0.01 \
+  --json comparacao.json --diferenca diferencas.png
+```
+
+É obrigatório fornecer capturas do **mesmo personagem, câmera, iluminação,
+resolução e materiais**, uma produzida pelo OpenGL original e outra pelo
+Vulkan atual. O repositório não contém referências aprovadas para afirmar
+paridade. Os testes de métricas validam o comparador, **não** a equivalência
+visual dos seis shaders; a decisão de aprovação depende dessas referências
+reais e revisão humana.
+
 ## Bloqueadores reais restantes
 
 1. **Validação Windows em GPUs reais:** Vulkan por software no runner é um teste
