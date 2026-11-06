@@ -1,10 +1,10 @@
 """Seleção por cor das FaceGroups da cena ORIGINAL, sem glReadPixels.
 
-A fase piloto usa interseção de triângulos projetados na CPU. O resultado
+O picking usa projeção e teste de cobertura das primitivas na CPU. O resultado
 mantém o contrato mh.getPickedColor() -> RGB de clrid(group), que a lógica
 original de gui3d/selection.py já utiliza. Nenhuma nova ferramenta é criada.
 
-Limitado a triângulos/quads, com clipping homogêneo dos seis planos Vulkan.
+Suporta pontos, linhas, triângulos e quads, com clipping homogêneo Vulkan.
 Ainda não substitui picking de GPU; a paridade será testada.
 """
 
@@ -67,6 +67,63 @@ def _triangulos_visiveis(clip, indices):
     return vertices[dentro]
 
 
+def _recortar_segmento(vertices):
+    """Recorta uma linha nos planos homogêneos Vulkan antes de dividir por w."""
+    inicio, fim = (np.asarray(p, dtype=np.float64) for p in vertices)
+    for plano, limite in zip(_PLANOS_CLIP, _LIMITES_CLIP):
+        da = float(inicio @ plano - limite)
+        db = float(fim @ plano - limite)
+        if da < 0 and db < 0:
+            return None
+        if (da < 0) != (db < 0):
+            t = da / (da - db)
+            ponto = inicio + t * (fim - inicio)
+            if da < 0:
+                inicio = ponto
+            else:
+                fim = ponto
+    return np.stack((inicio, fim))
+
+
+def _profundidade_pontos_linhas(clip, indices, px, py, largura, altura):
+    """Picking de GL_POINTS/GL_LINES originais via cobertura de um pixel."""
+    valores = []
+    for face in indices:
+        if len(face) == 1:
+            ponto = np.asarray(clip[int(face[0])], dtype=np.float64)
+            if np.any(ponto @ _PLANOS_CLIP.T < _LIMITES_CLIP):
+                continue
+            ndc = ponto[:3] / ponto[3]
+            sx = (ndc[0] * .5 + .5) * largura
+            sy = (.5 - ndc[1] * .5) * altura
+            if abs(px - sx) <= .5 and abs(py - sy) <= .5:
+                valores.append(float(ndc[2]))
+            continue
+
+        if int(face[0]) == int(face[1]):
+            continue
+        segmento = _recortar_segmento(clip[face])
+        if segmento is None:
+            continue
+        ndc = segmento[:, :3] / segmento[:, 3:4]
+        a = np.array(((ndc[0, 0] * .5 + .5) * largura,
+                      (.5 - ndc[0, 1] * .5) * altura))
+        b = np.array(((ndc[1, 0] * .5 + .5) * largura,
+                      (.5 - ndc[1, 1] * .5) * altura))
+        vetor = b - a
+        comprimento2 = float(vetor @ vetor)
+        if comprimento2 <= 1e-12:
+            continue
+        t = float(np.clip(((px - a[0]) * vetor[0]
+                           + (py - a[1]) * vetor[1]) / comprimento2,
+                          0.0, 1.0))
+        proximo = a + vetor * t
+        if float(np.sum((proximo - (px, py)) ** 2)) <= .25:
+            valores.append(float(ndc[0, 2] * (1.0 - t) + ndc[1, 2] * t))
+    profundidades = [z for z in valores if 0.0 <= z <= 1.0]
+    return min(profundidades) if profundidades else None
+
+
 def _segmentos_faces(face, start, count):
     """Triangula preservando o grupo e descartando faces degeneradas."""
     dados = np.asarray(face[start:start + count])
@@ -109,7 +166,7 @@ def _selecionar_cor_e_profundidade(mundo, cameras, x, y, largura, altura):
         if coords.ndim != 2 or coords.shape[1] != 3 or not len(coords):
             continue
         face = np.asarray(obj.primitives)
-        if face.ndim != 2 or face.shape[1] not in (3, 4):
+        if face.ndim != 2 or face.shape[1] not in (1, 2, 3, 4):
             continue
         mvp = matriz_wgpu(cameras[obj.cameraMode], obj)
         vertices = np.concatenate((
@@ -117,6 +174,21 @@ def _selecionar_cor_e_profundidade(mundo, cameras, x, y, largura, altura):
         ), axis=1)
         clip = vertices @ mvp.T
         for i, (inicio, quantidade) in enumerate(obj.groups):
+            if face.shape[1] in (1, 2):
+                indices = np.asarray(
+                    face[inicio:inicio + quantidade], dtype=np.int64,
+                )
+                if not len(indices):
+                    continue
+                if np.any(indices < 0) or np.any(indices >= len(coords)):
+                    raise ValueError("Índice de face fora da malha do MakeHuman")
+                z = _profundidade_pontos_linhas(
+                    clip, indices, px, py, largura, altura,
+                )
+                if z is not None and z < melhor_z:
+                    melhor_z = z
+                    resultado = tuple(int(v) for v in obj.clrid(i))
+                continue
             tri = _segmentos_faces(face, inicio, quantidade)
             if not len(tri):
                 continue

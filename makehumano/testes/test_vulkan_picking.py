@@ -124,6 +124,72 @@ class TestarPickingOriginal(unittest.TestCase):
         )
 
 
+    def test_pontos_e_linhas_sao_selecionaveis_sem_opengl(self):
+        """GL_POINTS/GL_LINES da GUI original não podem ser ignorados."""
+        ponto = objeto(
+            "ponto", z=0.2, indices=[[0]], grupos=[(0, 1)],
+            cores=[(11, 22, 33)],
+        )
+        ponto.verts[0, :2] = (0, 0)
+        self.assertEqual(
+            selecionar_cor([ponto], [camera()], 50, 50, 100, 100),
+            (11, 22, 33),
+        )
+        self.assertEqual(
+            selecionar_cor([ponto], [camera()], 65, 65, 100, 100),
+            (0, 0, 0),
+        )
+
+        linha = objeto(
+            "linha", z=0.3, indices=[[0, 1]], grupos=[(0, 1)],
+            cores=[(44, 55, 66)],
+        )
+        linha.verts[:2, 1] = 0
+        self.assertEqual(
+            selecionar_cor([linha], [camera()], 50, 50, 100, 100),
+            (44, 55, 66),
+        )
+        self.assertEqual(
+            selecionar_cor([linha], [camera()], 50, 60, 100, 100),
+            (0, 0, 0),
+        )
+        self.assertAlmostEqual(
+            selecionar_profundidade([linha], [camera()], 50, 50, 100, 100),
+            0.65, places=5,
+        )
+
+    def test_linha_recortada_no_near_e_oclusao_de_ponto(self):
+        linha = objeto(
+            "atravessa_near", indices=[[0, 1]], grupos=[(0, 1)],
+            cores=[(2, 4, 6)],
+        )
+        linha.verts[0] = (-0.8, 0, -1.5)
+        linha.verts[1] = (0.8, 0, 0.5)
+        self.assertEqual(
+            selecionar_cor([linha], [camera()], 65, 50, 100, 100),
+            (2, 4, 6),
+        )
+        self.assertEqual(
+            selecionar_cor([linha], [camera()], 15, 50, 100, 100),
+            (0, 0, 0),
+        )
+        ponto = objeto(
+            "ponto", z=0.1, indices=[[0]], grupos=[(0, 1)],
+            cores=[(8, 9, 10)],
+        )
+        ponto.verts[0, :2] = (0, 0)
+        linha.verts[0] = (-0.8, 0, 0.6)
+        linha.verts[1] = (0.8, 0, 0.6)
+        self.assertEqual(
+            selecionar_cor([linha, ponto], [camera()], 50, 50, 100, 100),
+            (8, 9, 10),
+        )
+        ponto.verts[0, 2] = 1.5
+        self.assertEqual(
+            selecionar_cor([linha, ponto], [camera()], 50, 50, 100, 100),
+            (2, 4, 6),
+        )
+
     def test_recorte_near_mantem_parte_visivel_e_culling(self):
         """Um vértice atrás da câmera não deve descartar a face inteira."""
         original = objeto(
