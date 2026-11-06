@@ -35,6 +35,7 @@ def main():
         marcador_litsphere = base / "vulkan-litsphere"
         marcador_estilos = base / "vulkan-phong-toon"
         marcador_normalmap = base / "vulkan-normalmap"
+        marcador_skin_shader = base / "vulkan-skin-shader"
         logfile = base / "startup.log"
         home = base / "home"
         home.mkdir()
@@ -53,6 +54,7 @@ def main():
         ambiente["MAKEHUMANO_VULKAN_LITSPHERE_FILE"] = str(marcador_litsphere)
         ambiente["MAKEHUMANO_VULKAN_ESTILOS_FILE"] = str(marcador_estilos)
         ambiente["MAKEHUMANO_VULKAN_NORMALMAP_FILE"] = str(marcador_normalmap)
+        ambiente["MAKEHUMANO_VULKAN_SKIN_SHADER_FILE"] = str(marcador_skin_shader)
         ambiente["WGPU_BACKEND_TYPE"] = "Vulkan"
         ambiente["LIBGL_ALWAYS_SOFTWARE"] = "1"
         ambiente["QT_X11_NO_MITSHM"] = "1"
@@ -127,11 +129,18 @@ def main():
                             encoding="utf-8"
                         ).startswith("vulkan-normalmap:160x120:")
                     )
+                    skin_shader_valido = (
+                        marcador_skin_shader.is_file()
+                        and marcador_skin_shader.read_text(
+                            encoding="utf-8"
+                        ).startswith("vulkan-skin-shader:160x120:")
+                    )
                     if (
                         gui_pronta and quadro_vulkan and picking_valido
                         and framebuffer_valido and render_valido and skin_valido
                         and xray_valido and litsphere_valido
                         and estilos_validos and normalmap_valido
+                        and skin_shader_valido
                     ):
                         # Se a aplicação saiu imediatamente após iniciar, não considerar sucesso.
                         time.sleep(1)
