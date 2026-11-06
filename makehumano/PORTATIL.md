@@ -21,6 +21,16 @@ Windows também testa intencionalmente um runtime inexistente. Erros ao criar o 
 em vez de encerrar com sucesso. Os personagens continuam na pasta de usuário
 original do MakeHuman; apenas os testes usam um perfil temporário.
 
+Para testar a opção original de suavização, execute no terminal da pasta:
+
+```bat
+Iniciar-MakeHumano.bat --multisampling
+```
+
+Isso ativa MSAA 4x e permite Alpha to Coverage nos materiais translúcidos.
+Sem o argumento, o modo padrão continua sem MSAA. Sombras não são
+implementadas por essa opção.
+
 ## O que a CI exige do executável
 
 O autoteste de importação continua verificando `mhmain` e `cProfile`, mas não
@@ -41,6 +51,7 @@ exige simultaneamente:
 - carregamento dos plugins de modificadores, materiais, OBJ, FBX, Collada e STL;
 - resposta do controle wireframe, com arestas pretas e imagem diferente da superfície sólida;
 - processo ainda vivo e ausência de traceback ou erro de render no log;
+- segunda abertura do portátil com `--multisampling`, desde a inicialização;
 - no Windows, igualdade exata de 39 capturas PNG entre fontes e executável. As
   capturas só são geradas após terminar a carga da iluminação, plugins e targets.
 
@@ -99,11 +110,11 @@ uma build bem-sucedida como prova de compatibilidade completa.
 
 ## Evidências desta etapa
 
-- [CI e pacotes da revisão funcional](https://github.com/SrTristeSad/brincadeira/actions/runs/42194336806)
-- [CPU, Vulkan e GUI com/sem PyOpenGL](https://github.com/SrTristeSad/brincadeira/actions/runs/42194336964)
-- [251 testes em Python 3.12 e 3.13](https://github.com/SrTristeSad/brincadeira/actions/runs/42194336818)
+- [CI e pacotes da revisão funcional](https://github.com/SrTristeSad/brincadeira/actions/runs/42197108848)
+- [CPU, Vulkan e GUI com/sem PyOpenGL](https://github.com/SrTristeSad/brincadeira/actions/runs/42197108664)
+- [265 testes em Python 3.12 e 3.13](https://github.com/SrTristeSad/brincadeira/actions/runs/42197108502)
 
-As builds acima correspondem ao código `49dc660d37bdbbc6a1d01adce85889700cbdc823`.
+As builds acima correspondem ao código `806a981c87ae1ec100241fa24060d2a162e91d60`.
 
 Consultar a conclusão dos jobs antes de aprovar um ZIP. O teste pelos fontes
 usa diretamente `codigo/makehuman/makehuman.py`, evitando deixar processos
