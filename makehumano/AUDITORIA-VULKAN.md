@@ -18,18 +18,21 @@ em `motor_wgpu`. O estado abaixo distingue testes exercitados de paridade final.
 | Wireframe original não mudava o render Vulkan | Superfície sem textura e arestas pretas, preservando topologia dos quads; teste GPU do controle original |
 | Módulos históricos podiam importar PyOpenGL | `texture.py` e `shader.py` agora encaminham ao Vulkan; GLSL arbitrário falha explicitamente |
 | `tostring`/`fromstring` binário incompatíveis com NumPy atual | Escrita/leitura modernizada em imagens, grupos de malha, proxies e licenças; roundtrips UTF-8 e PNG, incluindo correção de canais RGBA |
+| Mapas especulares e de transparência ignorados | Texturas e intensidades originais no WGSL; testes GPU branco/preto/cinza e intensidade zero |
+| Foco e atenuação sem efeito | Cone por posição/foco/ângulo e atenuação por distância; capturas GPU controladas |
+| Softness alterava a atenuação no editor original | Evento agora atualiza `areaLightSize`, com regressão nos widgets reais; não implementa luzes de área |
 | Plugins/exportadores só carregavam | Smoke altera geometria, salva/reabre MHM e exporta OBJ/FBX/DAE/STL, verificando estrutura dos arquivos |
 
 ## Validação local
 
-A suíte completa executou **229 testes com sucesso**, usando Python 3.12,
+A suíte completa executou **242 testes com sucesso**, usando Python 3.12,
 NumPy 2.5.4 e Qt 5.15.14. Os testes Qt de gravação PNG verificam os canais,
 alfa e imagens com largura não alinhada. Os dados binários verificam Unicode
 em grupos de malha, tags de proxies e metadados de licença. A criação local do
 pacote Linux e a importação congelada também foram exercitadas; os testes GPU
 e GUI são executados nos runners dos workflows vinculados ao commit.
 
-A comparação adicional de 14 PNGs entre fontes Windows e executável exige
+A comparação adicional de 23 PNGs entre fontes Windows e executável exige
 igualdade exata de pixels no mesmo driver. As capturas são sincronizadas com
 fim de startup para não comparar iluminação ainda não carregada. Essa
 verificação detecta diferenças do empacotamento; não substitui equivalência
@@ -41,12 +44,16 @@ com o renderer original nem validação em outra GPU.
    de integração, não uma matriz de drivers NVIDIA/AMD/Intel. Não classificar
    um artefato como aprovado enquanto o smoke Windows estiver falhando.
 2. **Paridade de materiais e shaders:** os seis presets executam em WGSL, mas
-   ainda faltam referências comparativas do original. Bump/displacement,
-   mapas especulares e transparência em texturas separadas ainda não possuem
-   cobertura completa no shader atual. A interface pode expor parâmetros
+   ainda faltam referências comparativas do original. Bump/displacement
+   ainda não possuem cobertura completa no
+   shader atual. Mapas especulares e de transparência separados agora têm
+   testes analíticos GPU, incluindo intensidade zero. A interface pode expor parâmetros
    cujos efeitos não são integralmente implementados.
-3. **Iluminação avançada:** sombras, luzes de área, foco e atenuação continuam
-   sem implementação equivalente. `Light.specular` independente foi tratado.
+3. **Iluminação avançada:** sombras e luzes de área continuam pendentes.
+   Foco, ângulo total do cone e atenuação quadrática agora afetam os presets
+   iluminados. `Light.specular` independente foi tratado. LitSphere e Xray
+   conservam seus modelos de iluminação próprios. Não há paridade comprovada
+   com todos os renderizadores externos originais.
 4. **Transparência avançada:** ordenar triângulos corrige a dependência simples
    da ordem, mas não resolve ciclos/interseções entre faces ou objetos.
    Alpha-to-coverage e MSAA ainda precisam ser portados e comparados.
@@ -66,7 +73,8 @@ com o renderer original nem validação em outra GPU.
 8. **GLSL personalizado:** não existe tradução genérica para WGSL. Os presets
    oficiais possuem rotas nativas; scripts GLSL externos continuam pendentes.
 9. **Interações completas:** os smokes chamam APIs originais e verificam pixels;
-   não cobrem toda sequência de mouse/teclado, undo/redo, poses e todas as
+   incluem undo/redo do modificador original, mas não cobrem toda sequência
+   de mouse/teclado, poses e todas as
    ferramentas de projeção. `renderSkin` ainda exige testes adicionais de
    formatos, transformação UV e acumulação sobre imagens existentes.
 

@@ -96,3 +96,24 @@ de compatibilidade e os limites dos testes.
 - Validar imagens comparativamente (CPU/smoke não verificam aparência pixel a pixel).
 
 **Nenhum destes itens deve ser mascarado por um retorno fictício ou fallback silencioso.**
+
+### Mapas e controles de luz do editor original
+
+`specularMapTexture` modula a cor especular RGB; intensidade zero preserva o
+material sem mapa. `transparencyMapTexture` reduz alfa por
+`1 - intensidade * média(RGB)`: branco transparente, preto opaco, conforme o
+uso do mapa como fator de transparência no exportador original. Faces com
+mapa ativo entram na ordenação de transparência e não escrevem profundidade;
+alfa zero é descartado. Isso não resolve interseções cíclicas de superfícies.
+
+As luzes usam posição/foco em coordenadas de mundo. `fov` define o ângulo total
+do cone; 180 graus mantém a luz pontual sem cone. `attenuation` aplica
+`1 / (1 + attenuation * distância²)` às contribuições difusa e especular,
+conservando as cenas anteriores quando zero. Luz ambiente não é atenuada.
+Os modelos LitSphere e Xray mantêm sua iluminação própria. O controle
+Softness grava o tamanho de área correto, mas sombras e luzes de área ainda
+não estão implementadas pelo renderer Vulkan.
+
+Os smokes opcionais `vulkan_smoke_materials.py` e `vulkan_smoke_lighting.py`
+renderizam pela mesma cena Vulkan da interface original e conservam capturas
+e marcadores JSON. Não constituem um editor ou renderer alternativo.

@@ -20,12 +20,24 @@ def check_original_tools(app, report_path):
     modifier = human.getModifier("macrodetails/Age")
     previous_value = modifier.getValue()
     previous_coords = human.meshData.coord.copy()
+    previous_undo = list(app.undoStack)
+    previous_redo = list(app.redoStack)
     try:
-        modifier.setValue(0.3 if abs(previous_value - 0.3) > 0.01 else 0.7)
-        human.applyAllTargets()
+        from humanmodifier import ModifierAction
+        value = 0.3 if abs(previous_value - 0.3) > 0.01 else 0.7
+        action = ModifierAction(modifier, previous_value, value, lambda: None)
+        app.do(action)
+        if not app.undoStack or app.undoStack[-1] is not action:
+            raise RuntimeError("Ação de modelagem não entrou no histórico original")
         changed_coords = human.meshData.coord.copy()
         if np.allclose(changed_coords, previous_coords):
             raise RuntimeError("O modificador de idade não alterou a malha original")
+        app.undo()
+        np.testing.assert_allclose(human.meshData.coord, previous_coords, atol=1e-5)
+        if not app.redoStack or app.redoStack[-1] is not action:
+            raise RuntimeError("Undo não preservou a ação para refazer")
+        app.redo()
+        np.testing.assert_allclose(human.meshData.coord, changed_coords, atol=1e-5)
         model = report.parent / "personagem-portátil.mhm"
         human.save(str(model))
         modifier.setValue(previous_value)
@@ -94,6 +106,7 @@ def check_original_tools(app, report_path):
         report.write_text(json.dumps({
             "modifier": modifier.fullName,
             "mhm_roundtrip": True,
+            "modifier_undo_redo": True,
             "wireframe": True,
             "exports": ["obj", "fbx-binary", "collada", "stl-binary"],
             "plugins": sorted(name for name, module in app.modules.items() if module),
@@ -101,3 +114,6 @@ def check_original_tools(app, report_path):
     finally:
         modifier.setValue(previous_value)
         human.applyAllTargets()
+        app.undoStack[:] = previous_undo
+        app.redoStack[:] = previous_redo
+        app.syncUndoRedo()
