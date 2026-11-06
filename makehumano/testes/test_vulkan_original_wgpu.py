@@ -24,7 +24,7 @@ from vulkan_offscreen import (
 from vulkan_scene import (
     CenaVulkan, preparar_malha_original, matriz_wgpu, assinatura_textura,
     parametros_material_vulkan, pixels_textura_rgba, aparencia_material_vulkan,
-    configuracao_raster_vulkan,
+    configuracao_raster_vulkan, parametros_normalmap_vulkan,
 )
 from vulkan_texture import Texture as TextureVulkan
 from vulkan_skin import preparar_skin, normalizar_cor_fundo
@@ -608,6 +608,60 @@ class TestarRegrasDeRasterOriginalVulkan(unittest.TestCase):
     def test_opacidade_invalida_e_rejeitada(self):
         with self.assertRaises(ValueError):
             configuracao_raster_vulkan(self._obj(opacity=float("nan")))
+
+
+class TestarNormalMapsOriginaisVulkan(unittest.TestCase):
+    def _obj(self, caminho, **kwargs):
+        material = dict(
+            normalMapTexture=caminho, normalMapIntensity=0.65,
+            shaderConfig={"normal": True},
+        )
+        material.update(kwargs)
+        return SimpleNamespace(material=SimpleNamespace(**material))
+
+    def test_habilita_textura_existente_e_preserva_intensidade(self):
+        with tempfile.TemporaryDirectory() as pasta:
+            caminho = Path(pasta) / "pele-normal.png"
+            caminho.write_bytes(b"mock")
+            caminho_out, intensidade = parametros_normalmap_vulkan(
+                self._obj(str(caminho)),
+            )
+            self.assertEqual(caminho_out, str(caminho))
+            self.assertAlmostEqual(intensidade, 0.65)
+
+    def test_sem_textura_ou_config_desativada_nao_usa_normalmap(self):
+        self.assertEqual(
+            parametros_normalmap_vulkan(self._obj(None)), (None, 0.0),
+        )
+        self.assertEqual(
+            parametros_normalmap_vulkan(self._obj("missing.png")),
+            (None, 0.0),
+        )
+        self.assertEqual(
+            parametros_normalmap_vulkan(
+                self._obj("missing.png", shaderConfig={"normal": False}),
+            ),
+            (None, 0.0),
+        )
+
+    def test_limita_intensidade_ao_intervalo_do_material(self):
+        with tempfile.TemporaryDirectory() as pasta:
+            caminho = Path(pasta) / "normal.png"
+            caminho.write_bytes(b"mock")
+            self.assertEqual(
+                parametros_normalmap_vulkan(
+                    self._obj(str(caminho), normalMapIntensity=12.0),
+                )[1], 1.0,
+            )
+            self.assertEqual(
+                parametros_normalmap_vulkan(
+                    self._obj(str(caminho), normalMapIntensity=-2.0),
+                )[1], 0.0,
+            )
+            with self.assertRaises(ValueError):
+                parametros_normalmap_vulkan(
+                    self._obj(str(caminho), normalMapIntensity=float("nan")),
+                )
 
 
 if __name__ == "__main__":
