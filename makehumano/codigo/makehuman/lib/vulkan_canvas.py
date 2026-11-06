@@ -1051,6 +1051,10 @@ def criar_canvas_vulkan(canvas_original):
                 if maps_marker and not os.path.exists(maps_marker):
                     from vulkan_smoke_materials import validar_mapas
                     validar_mapas(self._cena, G.cameras, G.world, maps_marker)
+                lights_marker = os.environ.get("MAKEHUMANO_VULKAN_LIGHT_CONTROLS_FILE")
+                if lights_marker and not os.path.exists(lights_marker):
+                    from vulkan_smoke_lighting import validar_luzes
+                    validar_luzes(self._cena, G.cameras, G.world, self.app, lights_marker)
                 caminho = os.environ.get("MAKEHUMANO_VULKAN_FRAME_FILE")
                 if caminho and not os.path.exists(caminho):
                     with open(caminho, "w", encoding="utf-8") as saida:

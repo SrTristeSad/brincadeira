@@ -493,6 +493,8 @@ struct Globals {
     luzes_cor: array<vec4<f32>, 8>,
     luzes_especular: array<vec4<f32>, 8>,
     mapas_parametros: vec4<f32>,
+    luzes_direcao: array<vec4<f32>, 8>,
+    luzes_atenuacao: array<vec4<f32>, 8>,
 };
 @group(0) @binding(0) var<uniform> dados: Globals;
 @group(0) @binding(1) var mapa: texture_2d<f32>;
@@ -524,6 +526,17 @@ struct Fragmento {
     o.uv = v.uv;
     o.cor = v.cor;
     return o;
+}
+fn fator_luz(indice: i32, mundo: vec3<f32>) -> f32 {
+    let delta = mundo - dados.luzes_posicao[indice].xyz;
+    let distancia2 = dot(delta, delta);
+    var fator = 1.0 / (1.0 + dados.luzes_atenuacao[indice].x * distancia2);
+    let foco = dados.luzes_direcao[indice];
+    if (foco.w > -0.5) {
+        let direcao = delta * inverseSqrt(max(distancia2, 0.000000000001));
+        fator *= select(0.0, 1.0, dot(direcao, foco.xyz) >= foco.w);
+    }
+    return fator;
 }
 fn cor_fragmento(i: Fragmento) -> vec4<f32> {
     let uv = vec2<f32>(i.uv.x, 1.0 - i.uv.y);
@@ -574,14 +587,14 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
                     mapa_gradiente, amostra,
                     vec2<f32>(gradiente_x, 0.5),
                 ).rgb;
-                cor_skin += ndotl * ao.b * gradiente * tex.rgb;
+                cor_skin += fator_luz(0, i.mundo) * ndotl * ao.b * gradiente * tex.rgb;
                 let meio = normalize(luz_skin + direcao_visao);
                 let brilho = pow(
                     max(dot(normal, meio), 0.0),
                     max(dados.especular.w, 0.001),
                 );
                 cor_skin += dados.luzes_especular[0].rgb
-                            * cor_especular * brilho;
+                            * cor_especular * brilho * fator_luz(0, i.mundo);
             }
         }
         return vec4<f32>(cor_skin, tex.a * dados.cor.a);
@@ -599,7 +612,7 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
             let light_dir = normalize(dados.luzes_posicao[0].xyz - i.mundo);
             let ndotl = max(dot(normal, light_dir), 0.0);
             color_phong += dados.luzes_cor[0].rgb * tex_phong
-                           * dados.cor.rgb * ndotl;
+                           * dados.cor.rgb * ndotl * fator_luz(0, i.mundo);
             if (ndotl > 0.0) {
                 let half_dir = normalize(light_dir + direcao_visao);
                 let expoente = max(1.0, dados.especular.w
@@ -608,7 +621,7 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
                     max(dot(normal, half_dir), 0.0), expoente
                 );
                 color_phong += dados.luzes_especular[0].rgb
-                               * cor_especular * especular_phong;
+                               * cor_especular * especular_phong * fator_luz(0, i.mundo);
             }
         }
         return vec4<f32>(
@@ -626,13 +639,13 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
             let direcao = normalize(dados.luzes_posicao[0].xyz - i.mundo);
             let difusa = max(dot(direcao, normal), 0.0);
             rgb_normalmap += dados.luzes_cor[0].rgb * dados.cor.rgb
-                             * tex_color * difusa;
+                             * tex_color * difusa * fator_luz(0, i.mundo);
             let especular_normal = pow(
                 clamp(dot(reflect(-direcao, normal), direcao_visao), 0.0, 1.0),
                 max(dados.especular.w, 0.001),
             );
             rgb_normalmap += dados.luzes_especular[0].rgb
-                             * cor_especular * especular_normal;
+                             * cor_especular * especular_normal * fator_luz(0, i.mundo);
         }
         return vec4<f32>(rgb_normalmap, 1.0);
     }
@@ -652,14 +665,14 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
                 max(dot(normal, meio), 0.0),
                 max(dados.shader_parametros.y, 0.0001),
             );
-            multiplier += dados.shader_parametros.w
+            multiplier += fator_luz(0, i.mundo) * dados.shader_parametros.w
                           * dot(spec_factor, vec3<f32>(1.0 / 3.0)) * smoothstep(
                 dados.shader_parametros_extra.y - 0.01,
                 dados.shader_parametros_extra.y,
                 spec,
             );
             let diff = max(dot(normal, light_dir), 0.0);
-            multiplier += dados.shader_parametros_extra.x * smoothstep(
+            multiplier += fator_luz(0, i.mundo) * dados.shader_parametros_extra.x * smoothstep(
                 dados.shader_parametros_extra.z - 0.01,
                 dados.shader_parametros_extra.z,
                 diff,
@@ -716,13 +729,13 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
         let deslocamento = dados.luzes_posicao[j].xyz - i.mundo;
         let direcao = normalize(deslocamento);
         let difusa = max(dot(normal, direcao), 0.0);
-        iluminacao += dados.luzes_cor[j].rgb * difusa;
+        iluminacao += dados.luzes_cor[j].rgb * difusa * fator_luz(j, i.mundo);
         if (difusa > 0.0 && dados.especular.w > 0.0) {
             let meio = normalize(direcao + direcao_visao);
             let intensidade = pow(max(dot(normal, meio), 0.0),
                                   dados.especular.w);
             reflexo += dados.luzes_especular[j].rgb * cor_especular
-                     * intensidade;
+                     * intensidade * fator_luz(j, i.mundo);
         }
     }
     let luz = select(iluminacao, vec3<f32>(1.0), dados.flags.x > 0.5);
@@ -1087,11 +1100,14 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
             ),
         )
         passagem.set_pipeline(self.pipeline)
-        from vulkan_lighting import dados_iluminacao_cena, cores_especulares_cena
+        from vulkan_lighting import (
+            dados_iluminacao_cena, cores_especulares_cena, parametros_foco_atenuacao,
+        )
         ambiente, posicoes, cores, total_luzes = dados_iluminacao_cena(
             self._cena_luzes,
         )
         cores_especulares = cores_especulares_cena(self._cena_luzes)
+        direcoes_luzes, atenuacoes_luzes = parametros_foco_atenuacao(self._cena_luzes)
         self.objetos_desenhados = 0
         self.linhas_desenhadas = 0
         if mundo is not None:
@@ -1228,6 +1244,7 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
                     shader_preset, np.asarray(shader_parametros, np.float32),
                     shader_extra, posicoes.reshape(-1), cores.reshape(-1),
                     cores_especulares.reshape(-1), mapas_parametros,
+                    direcoes_luzes.reshape(-1), atenuacoes_luzes.reshape(-1),
                 )).astype(np.float32)
                 buf_u = self.device.create_buffer_with_data(
                     data=uniforms, usage=wgpu.BufferUsage.UNIFORM
