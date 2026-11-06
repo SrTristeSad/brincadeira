@@ -72,3 +72,28 @@ class OriginalModuleCompatibility(unittest.TestCase):
         self.assertFalse(shader.Shader.supported())
         with self.assertRaisesRegex(NotImplementedError, "GLSL"):
             shader.getShader("/custom/shader")
+
+
+class VulkanRuntimeWindows(unittest.TestCase):
+    def test_loader_and_dependency_directory_stay_alive(self):
+        sys.path.insert(0, str(ROOT / "codigo/makehuman/lib"))
+        import vulkan_runtime
+        with patch.object(vulkan_runtime.sys, "platform", "win32"), patch.dict(
+                "os.environ", {"MAKEHUMANO_VULKAN_LOADER": "/ci/vulkan-1.dll"}), patch.object(
+                vulkan_runtime, "_loader", None), patch.object(vulkan_runtime, "_dll_directory", None):
+            with patch("ctypes.WinDLL", create=True) as loader, patch(
+                    "os.add_dll_directory", create=True) as directory:
+                vulkan_runtime.preparar_runtime_vulkan()
+                vulkan_runtime.preparar_runtime_vulkan()
+                loader.assert_called_once_with("/ci/vulkan-1.dll")
+                self.assertIs(vulkan_runtime._dll_directory, directory.return_value)
+
+    def test_missing_runtime_has_actionable_diagnostic(self):
+        import vulkan_runtime
+        with patch.object(vulkan_runtime.sys, "platform", "win32"), patch.dict(
+                "os.environ", {"MAKEHUMANO_VULKAN_LOADER": "/ci/vulkan-1.dll"}), patch.object(
+                vulkan_runtime, "_loader", None), patch.object(vulkan_runtime, "_dll_directory", None):
+            with patch("ctypes.WinDLL", create=True, side_effect=OSError("DLL ausente")), patch(
+                    "os.add_dll_directory", create=True):
+                with self.assertRaisesRegex(RuntimeError, "driver Vulkan"):
+                    vulkan_runtime.preparar_runtime_vulkan()

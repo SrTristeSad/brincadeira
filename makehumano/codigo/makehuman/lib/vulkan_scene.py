@@ -447,6 +447,8 @@ class CenaVulkan:
     """Renderização piloto de objetos G.world na própria janela MakeHuman."""
 
     def __init__(self, canvas):
+        from vulkan_runtime import preparar_runtime_vulkan
+        preparar_runtime_vulkan()
         import wgpu
         from PyQt5 import QtGui
 

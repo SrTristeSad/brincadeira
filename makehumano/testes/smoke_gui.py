@@ -191,8 +191,8 @@ def main():
             args.log_dir.mkdir(parents=True, exist_ok=True)
             shutil.copytree(base, args.log_dir, dirs_exist_ok=True)
         log_text = logfile.read_text(encoding="utf-8", errors="replace")
-        print("--- LOG DE INICIALIZAÇÃO (últimos 15 mil caracteres) ---")
-        print(log_text[-15000:])
+        print("--- LOG COMPLETO DE INICIALIZAÇÃO ---")
+        print(log_text)
         print("--- FIM DO LOG ---")
 
         if iniciou:
