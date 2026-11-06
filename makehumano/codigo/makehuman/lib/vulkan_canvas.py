@@ -42,6 +42,10 @@ def criar_canvas_vulkan(canvas_original):
             self._cena = None
             self._erro_inicializacao = None
             self._pronto = False
+            # O contexto nativo pode criar a instância global wgpu antes
+            # do primeiro request_adapter. O runtime deve existir ANTES.
+            from vulkan_runtime import preparar_runtime_vulkan
+            preparar_runtime_vulkan()
             super().__init__(parent, update_mode="ondemand")
             G.canvas = self
             self.setFocusPolicy(QtCore.Qt.TabFocus)
