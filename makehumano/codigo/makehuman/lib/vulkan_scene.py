@@ -312,6 +312,8 @@ struct Globals {
 @group(0) @binding(2) var amostra: sampler;
 @group(0) @binding(3) var mapa_normais: texture_2d<f32>;
 @group(0) @binding(4) var mapa_litsphere: texture_2d<f32>;
+@group(0) @binding(5) var mapa_ao: texture_2d<f32>;
+@group(0) @binding(6) var mapa_gradiente: texture_2d<f32>;
 struct Entrada {
     @location(0) pos: vec3<f32>,
     @location(1) normal: vec3<f32>,
@@ -366,15 +368,45 @@ struct Fragmento {
         }
     }
     let direcao_visao = normalize(dados.observador.xyz - i.mundo);
+    // Skin GLSL oficial: oclusão ambiente, textura difusa e gradiente
+    // horizontal de temperatura de cor (sampler1D legado em textura 2D).
+    if (dados.shader_preset.x > 5.5 && dados.shader_preset.x < 6.5) {
+        let ao = textureSample(mapa_ao, amostra, uv);
+        var cor_skin = dados.ambiente.rgb * dados.cor.rgb * tex.rgb;
+        if (dados.flags.z > 0.5) {
+            let luz_skin = normalize(dados.luzes_posicao[0].xyz - i.mundo);
+            let ndotl = max(dot(normal, luz_skin), 0.0);
+            if (ndotl > 0.0) {
+                let gradiente_x = clamp(ndotl * ao.b, 0.01, 0.99);
+                let gradiente = textureSample(
+                    mapa_gradiente, amostra,
+                    vec2<f32>(gradiente_x, 0.5),
+                ).rgb;
+                cor_skin += ndotl * ao.b * gradiente * tex.rgb;
+                let meio = normalize(luz_skin + direcao_visao);
+                let brilho = pow(
+                    max(dot(normal, meio), 0.0),
+                    max(dados.especular.w, 0.001),
+                );
+                cor_skin += dados.luzes_cor[0].rgb
+                            * dados.especular.rgb * brilho;
+            }
+        }
+        return vec4<f32>(cor_skin, tex.a * dados.cor.a);
+    }
     // Phong original: iluminação por fragmento, uma luz, cor difusa,
     // ambiente e especular do Material. AO e luzes avançadas pendentes.
     if (dados.shader_preset.x > 2.5 && dados.shader_preset.x < 3.5) {
         let ambiente_phong = dados.ambiente.rgb * dados.shader_parametros.xyz;
-        var color_phong = ambiente_phong * rgb * dados.cor.rgb;
+        var tex_phong = rgb;
+        if (dados.shader_preset.y > 0.5) {
+            tex_phong *= textureSample(mapa_ao, amostra, uv).rgb;
+        }
+        var color_phong = ambiente_phong * tex_phong * dados.cor.rgb;
         if (dados.flags.z > 0.5) {
             let light_dir = normalize(dados.luzes_posicao[0].xyz - i.mundo);
             let ndotl = max(dot(normal, light_dir), 0.0);
-            color_phong += dados.luzes_cor[0].rgb * rgb
+            color_phong += dados.luzes_cor[0].rgb * tex_phong
                            * dados.cor.rgb * ndotl;
             if (ndotl > 0.0) {
                 let half_dir = normalize(light_dir + direcao_visao);
@@ -890,7 +922,8 @@ struct Fragmento {
                 from vulkan_shader import (
                     configuracao_shader_nativo, textura_litsphere_nativa,
                     parametros_extras_shader_nativo,
-                    textura_normalmap_nativa,
+                    textura_normalmap_nativa, textura_ao_shader_nativa,
+                    texturas_skin_nativas,
                 )
                 material_obj = getattr(obj, "material", None)
                 modo_shader, shader_parametros, shader_pendente = (
@@ -942,8 +975,23 @@ struct Fragmento {
                     raise ValueError("View original não inversível") from exc
                 observador = np.array([*posicao_camera, 1.0], np.float32)
                 normal_modelo = matriz_normal_vulkan(modelo)
+                textura_ao = None
+                textura_gradiente = None
+                if modo_shader == 3:
+                    config = getattr(material_obj, "shaderConfig", {}) or {}
+                    if config.get("ambientOcclusion", True):
+                        textura_ao = textura_ao_shader_nativa(material_obj)
+                elif modo_shader == 6:
+                    textura_ao, textura_gradiente = (
+                        texturas_skin_nativas(material_obj)
+                    )
+                    if textura_ao is None or textura_gradiente is None:
+                        raise ValueError(
+                            "Preset skin exige ambientOcclusionMap e gradientMap"
+                        )
                 shader_preset = np.array(
-                    [float(modo_shader), 0, 0, 0], np.float32,
+                    [float(modo_shader), float(textura_ao is not None), 0, 0],
+                    np.float32,
                 )
                 shader_extra = np.asarray(
                     parametros_extras_shader_nativo(material_obj),
@@ -968,6 +1016,8 @@ struct Fragmento {
                 textura = self._textura(getattr(obj, "texture", None))
                 textura_normal = self._textura(caminho_normal)
                 textura_lit = self._textura(textura_litsphere)
+                textura_oclusa = self._textura(textura_ao)
+                textura_grad = self._textura(textura_gradiente)
                 bind = self.device.create_bind_group(
                     layout=pipeline.get_bind_group_layout(0),
                     entries=[
@@ -986,6 +1036,12 @@ struct Fragmento {
                         ),
                         wgpu.BindGroupEntry(
                             binding=4, resource=textura_lit.create_view()
+                        ),
+                        wgpu.BindGroupEntry(
+                            binding=5, resource=textura_oclusa.create_view()
+                        ),
+                        wgpu.BindGroupEntry(
+                            binding=6, resource=textura_grad.create_view()
                         ),
                     ],
                 )
