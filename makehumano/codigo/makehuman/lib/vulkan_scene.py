@@ -204,6 +204,28 @@ def aparencia_material_vulkan(obj):
     return especular_uniform, emissiva_uniform, float(np.clip(opacidade, 0.0, 1.0))
 
 
+def parametros_normalmap_vulkan(obj):
+    """Retorna textura e intensidade da normal map do material original.
+
+    Respeita shaderConfig['normal'] e valida as opções da interface .mhmat.
+    Nenhuma textura extra é amostrada quando o mapa está desativado.
+    """
+    material = getattr(obj, "material", None)
+    if material is None:
+        return None, 0.0
+    caminho = getattr(material, "normalMapTexture", None)
+    config = getattr(material, "shaderConfig", {})
+    if not caminho or not config.get("normal", True):
+        return None, 0.0
+    intensidade = float(getattr(material, "normalMapIntensity", 1.0))
+    if not np.isfinite(intensidade):
+        raise ValueError("Material original: intensidade da normal map inválida")
+    if isinstance(caminho, (str, os.PathLike)) and not os.path.isfile(caminho):
+        return None, 0.0
+    intensidade = float(np.clip(intensidade, 0.0, 1.0))
+    return caminho, intensidade
+
+
 def configuracao_raster_vulkan(obj, *, linhas=False):
     """Converte as regras de face e profundidade da geometria original.
 
@@ -269,6 +291,7 @@ struct Globals {
 @group(0) @binding(0) var<uniform> dados: Globals;
 @group(0) @binding(1) var mapa: texture_2d<f32>;
 @group(0) @binding(2) var amostra: sampler;
+@group(0) @binding(3) var mapa_normais: texture_2d<f32>;
 struct Entrada {
     @location(0) pos: vec3<f32>,
     @location(1) normal: vec3<f32>,
@@ -292,13 +315,36 @@ struct Fragmento {
     return o;
 }
 @fragment fn fs_main(i: Fragmento) -> @location(0) vec4<f32> {
-    let tex = textureSample(mapa, amostra, vec2<f32>(i.uv.x, 1.0-i.uv.y));
+    let uv = vec2<f32>(i.uv.x, 1.0 - i.uv.y);
+    let tex = textureSample(mapa, amostra, uv);
     let usar_textura = dados.flags.y > 0.5;
     let rgb = select(vec3<f32>(1.0), tex.rgb, usar_textura);
     let alfa = select(1.0, tex.a, usar_textura);
     var iluminacao = dados.ambiente.rgb;
     var reflexo = vec3<f32>(0.0);
-    let normal = normalize(i.normal);
+    var normal = normalize(i.normal);
+    if (dados.flags.w > 0.001) {
+        let sample_normal = textureSample(mapa_normais, amostra, uv).xyz
+                            * 2.0 - vec3<f32>(1.0);
+        let dx = dpdx(i.mundo);
+        let dy = dpdy(i.mundo);
+        let duv_dx = dpdx(uv);
+        let duv_dy = dpdy(uv);
+        let determinante = duv_dx.x * duv_dy.y - duv_dx.y * duv_dy.x;
+        if (abs(determinante) > 0.00001) {
+            let tangente = normalize((dx * duv_dy.y - dy * duv_dx.y)
+                                     / determinante);
+            let bitangente = normalize((dy * duv_dx.x - dx * duv_dy.x)
+                                       / determinante);
+            normal = normalize(
+                normal * sample_normal.z
+                + dados.flags.w * (
+                    tangente * sample_normal.x
+                    + bitangente * sample_normal.y
+                )
+            );
+        }
+    }
     let direcao_visao = normalize(dados.observador.xyz - i.mundo);
     for (var j: i32 = 0; j < 8; j = j + 1) {
         if (j >= i32(dados.flags.z)) {
@@ -705,6 +751,8 @@ struct Fragmento {
                 especular, emissiva, opacidade = aparencia_material_vulkan(obj)
                 cor[3] = opacidade
                 flags[2] = float(total_luzes)
+                caminho_normal, intensidade_normal = parametros_normalmap_vulkan(obj)
+                flags[3] = intensidade_normal
                 modelo = np.asarray(cam.getModelMatrix(obj), dtype=np.float32)
                 if modelo.shape != (4, 4) or not np.isfinite(modelo).all():
                     raise ValueError("Modelo da câmera original inválido")
@@ -736,6 +784,7 @@ struct Fragmento {
                     data=indices, usage=wgpu.BufferUsage.INDEX
                 )
                 textura = self._textura(getattr(obj, "texture", None))
+                textura_normal = self._textura(caminho_normal)
                 bind = self.device.create_bind_group(
                     layout=pipeline.get_bind_group_layout(0),
                     entries=[
@@ -748,6 +797,9 @@ struct Fragmento {
                         ),
                         wgpu.BindGroupEntry(
                             binding=2, resource=self.amostra
+                        ),
+                        wgpu.BindGroupEntry(
+                            binding=3, resource=textura_normal.create_view()
                         ),
                     ],
                 )
