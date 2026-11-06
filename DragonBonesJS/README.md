@@ -54,3 +54,9 @@ npm run build
 - Comandos antigos para integrações gráficas ausentes são removidos apenas do subpacote `DragonBones/`.
 - Testes adicionais verificam, após o build, se os pontos de entrada existem e se o pacote pode ser carregado pelo Node.
 - **Não há execução confirmada do build integral**: qualquer falha remanescente do TypeScript 5.8.3 precisa ser corrigida antes de considerar o núcleo estável.
+
+## Compatibilidade da herança TypeScript (em revisão)
+
+O código original sobrescrevia a variável global `__extends` com um helper antigo para Weixin. Ao compilar com TypeScript 5.8 para ES5, essa implementação substituía a versão gerada pelo compilador e perdia a ligação entre construtores usados na herança estática. Removemos somente esse helper legado, permitindo que o compilador forneça sua implementação, e adicionamos dois testes de regressão de herança, sem alterar as classes nem a API pública.
+
+Uma reprodução isolada com TypeScript 5.8.3 e Node.js 22 confirmou a diferença entre o helper antigo e o helper gerado pelo compilador. **Os testes do núcleo completo ainda não foram executados.**

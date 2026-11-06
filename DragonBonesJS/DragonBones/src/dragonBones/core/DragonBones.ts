@@ -366,19 +366,6 @@ if (!Date.now) {
         return new Date().getTime();
     };
 }
-// Weixin can not support typescript extends.
-var __extends: any = function (t: any, e: any) {
-    function r(this: any) {
-        this.constructor = t;
-    }
-    for (var i in e) {
-        if ((e as any).hasOwnProperty(i)) {
-            t[i] = e[i];
-        }
-    }
-    r.prototype = e.prototype, t.prototype = new (r as any)();
-};
-//
 if (typeof global === "undefined" && typeof window !== "undefined") {
     var global = window as any;
 }
