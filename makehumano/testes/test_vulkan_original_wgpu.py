@@ -31,7 +31,8 @@ from vulkan_texture import Texture as TextureVulkan
 from vulkan_skin import preparar_skin, normalizar_cor_fundo
 from vulkan_lighting import dados_iluminacao_cena
 from vulkan_shader import (configuracao_shader_nativo, nome_preset_nativo,
-                           textura_litsphere_nativa, PRESETS_NATIVOS)
+                           textura_litsphere_nativa,
+                           parametros_extras_shader_nativo, PRESETS_NATIVOS)
 
 
 def objeto_original(face=None):
@@ -722,7 +723,7 @@ class TestarPresetXrayOriginalVulkan(unittest.TestCase):
         np.testing.assert_allclose(params, [0.2, 3.5, 0.4, 1.0])
 
     def test_outros_shaders_glsl_nao_sao_marcados_como_portados(self):
-        for nome in ("phong", "toon", "normalmap", "skin"):
+        for nome in ("normalmap", "skin"):
             with self.subTest(shader=nome):
                 modo, _, pendente = configuracao_shader_nativo(
                     self._material(shader="/data/shaders/glsl/" + nome)
@@ -736,7 +737,7 @@ class TestarPresetXrayOriginalVulkan(unittest.TestCase):
         self.assertIsNotNone(pendente)
 
     def test_seletor_so_oferece_preset_portado(self):
-        self.assertEqual(PRESETS_NATIVOS, frozenset(("xray", "litsphere")))
+        self.assertEqual(PRESETS_NATIVOS, frozenset(("xray", "litsphere", "phong", "toon")))
         self.assertEqual(
             nome_preset_nativo("/data/shaders/glsl/xray"), "xray",
         )
@@ -818,6 +819,97 @@ class TestarLitSphereOriginalVulkan(unittest.TestCase):
     def test_sem_imagem_nao_finge_ter_textura_da_pele(self):
         mat = self._material(shaderParameters={})
         self.assertIsNone(textura_litsphere_nativa(mat))
+
+
+class TestarShadersPhongToonOriginal(unittest.TestCase):
+    def _material(self, nome, **kwargs):
+        base = {
+            "shader": "/makehuman/data/shaders/glsl/" + nome,
+            "shaderParameters": {},
+            "shaderConfig": {"diffuse": True},
+            "ambientColor": SimpleNamespace(values=(0.2, 0.3, 0.4)),
+        }
+        base.update(kwargs)
+        return SimpleNamespace(**base)
+
+    def test_phong_preset_da_familia_glsl_original(self):
+        arquivo = (
+            RAIZ / "codigo" / "makehuman" / "data" / "shaders"
+            / "glsl" / "phong_fragment_shader.txt"
+        ).read_text(encoding="utf-8")
+        self.assertIn("Standard per-pixel lighting shader", arquivo)
+        material = self._material("phong")
+        modo, controles, pendente = configuracao_shader_nativo(material)
+        self.assertEqual(modo, 3)
+        self.assertIsNone(pendente)
+        np.testing.assert_allclose(controles, [0.2, 0.3, 0.4, 0.0])
+        np.testing.assert_array_equal(
+            parametros_extras_shader_nativo(material), [0, 0, 0, 0],
+        )
+
+    def test_toon_valores_padrao_do_glsl_original(self):
+        arquivo = (
+            RAIZ / "codigo" / "makehuman" / "data" / "shaders"
+            / "glsl" / "toon_fragment_shader.txt"
+        ).read_text(encoding="utf-8")
+        for nome in (
+            "silhouetteThreshold", "shininess", "ambientIntensity",
+            "specularIntensity", "diffuseIntensity", "specular_th",
+            "diffuse_th",
+        ):
+            self.assertIn("uniform float " + nome, arquivo)
+        material = self._material("toon")
+        modo, controles, pendente = configuracao_shader_nativo(material)
+        self.assertEqual(modo, 4)
+        self.assertIsNone(pendente)
+        np.testing.assert_allclose(controles, [0.2, 20, 0.4, 0.2])
+        np.testing.assert_allclose(
+            parametros_extras_shader_nativo(material), [0.4, 0.3, 0.5, 0],
+        )
+
+    def test_toon_aceita_parametros_mhmat_editaveis(self):
+        material = self._material("toon", shaderParameters={
+            "silhouetteThreshold": "0.35", "shininess": [32.0],
+            "ambientIntensity": 0.15, "specularIntensity": 0.4,
+            "diffuseIntensity": 0.6, "specular_th": 0.45,
+            "diffuse_th": 0.65,
+        })
+        modo, controles, pendente = configuracao_shader_nativo(material)
+        self.assertEqual(modo, 4)
+        self.assertIsNone(pendente)
+        np.testing.assert_allclose(controles, [0.35, 32.0, 0.15, 0.4])
+        np.testing.assert_allclose(
+            parametros_extras_shader_nativo(material), [0.6, 0.45, 0.65, 0],
+        )
+
+    def test_toon_rejeita_nan_ou_vetor_inesperado(self):
+        material = self._material(
+            "toon", shaderParameters={"diffuse_th": float("nan")},
+        )
+        with self.assertRaises(ValueError):
+            parametros_extras_shader_nativo(material)
+        material.shaderParameters = {"shininess": [1.0, 2.0]}
+        with self.assertRaises(ValueError):
+            configuracao_shader_nativo(material)
+
+    def test_phong_rejeita_ambiente_invalido(self):
+        material = self._material(
+            "phong",
+            ambientColor=SimpleNamespace(values=(1, float("nan"), 0)),
+        )
+        with self.assertRaises(ValueError):
+            configuracao_shader_nativo(material)
+
+    def test_editor_nao_anuncia_shaders_nao_portados(self):
+        for nome in ("phong", "toon"):
+            self.assertEqual(
+                nome_preset_nativo("/data/shaders/glsl/" + nome), nome,
+            )
+        for nome in ("normalmap", "skin"):
+            self.assertIsNone(
+                nome_preset_nativo("/data/shaders/glsl/" + nome),
+            )
+        self.assertIsNone(nome_preset_nativo("/plugin/arbitrario/toon"))
 
 
 if __name__ == "__main__":
