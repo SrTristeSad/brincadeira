@@ -37,3 +37,15 @@ def dados_iluminacao_cena(cena):
         cores[indice, :3] = _rgb(luz.color, "Luz")
         cores[indice, 3] = 1.0
     return ambiente, posicoes, cores, len(luzes)
+
+
+def cores_especulares_cena(cena):
+    """Conservar a cor especular independente de Light.color (.mhscene v5)."""
+    cores = np.zeros((8, 4), dtype=np.float32)
+    if cena is None:
+        return cores
+    for indice, luz in enumerate(list(cena.lights)[:8]):
+        # Objetos de teste/integrações anteriores podem ter somente color.
+        cores[indice, :3] = _rgb(getattr(luz, "specular", luz.color), "Luz especular")
+        cores[indice, 3] = 1.0
+    return cores

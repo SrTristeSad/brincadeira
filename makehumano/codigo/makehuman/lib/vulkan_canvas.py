@@ -774,6 +774,31 @@ def criar_canvas_vulkan(canvas_original):
                         raise RuntimeError(
                             "Normalmap: mudar a normal não alterou as cores"
                         )
+                    # A cena original separa Light.color de Light.specular.
+                    # Sem difusa/ambiente, uma luz especular branca ainda
+                    # precisa produzir reflexos; preta deve apagá-los.
+                    def reflexo_da_cena(cor_especular):
+                        self._cena.atualizar_iluminacao(SimpleNamespace(
+                            environment=SimpleNamespace(ambience=(0.0, 0.0, 0.0)),
+                            lights=[SimpleNamespace(
+                                position=np.linalg.inv(np.asarray(view))[:3, 3],
+                                color=(0.0, 0.0, 0.0), specular=cor_especular,
+                            )],
+                        ))
+                        return self._cena.capturar_framebuffer(
+                            [ObjetoNormalSmoke(corpo, mapa_flat)], G.cameras,
+                            160, 120, incluir_alfa=True, cor_fundo=(0, 0, 0, 0),
+                        )
+
+                    # Usar a mesma view real que a cena, sem mover a câmera.
+                    _, view = G.cameras[corpo.cameraMode].getMatrices(0)
+                    try:
+                        reflexo_branco = reflexo_da_cena((1.0, 1.0, 1.0))
+                        reflexo_preto = reflexo_da_cena((0.0, 0.0, 0.0))
+                    finally:
+                        self._cena.atualizar_iluminacao(iluminacao_anterior)
+                    if np.array_equal(reflexo_branco, reflexo_preto):
+                        raise RuntimeError("Light.specular não altera reflexos do shader normalmap")
                     with open(normal_marker, "w", encoding="utf-8") as saida:
                         saida.write(
                             "vulkan-normalmap:160x120:"
