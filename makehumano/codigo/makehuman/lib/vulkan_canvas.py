@@ -12,6 +12,12 @@ from core import G
 import events3d
 
 
+def salvar_frame_smoke(marker, name, pixels):
+    """Conservar capturas reais da GPU junto aos logs opcionais da CI."""
+    from image import Image
+    Image(data=pixels).save(os.path.join(os.path.dirname(marker), name + ".png"))
+
+
 def criar_canvas_vulkan(canvas_original):
     """Adapta os eventos originais mantendo o restante da GUI intocado."""
     # Evita que a seleção automática de wgpu faça fallback ao OpenGL.
@@ -364,6 +370,7 @@ def criar_canvas_vulkan(canvas_original):
                         cobertura = np.count_nonzero(pixels[:, :, 3])
                         if not cobertura:
                             raise RuntimeError("Shader xray não gerou cobertura")
+                        salvar_frame_smoke(xray_marker, "xray", pixels)
                         with open(xray_marker, "w", encoding="utf-8") as saida:
                             saida.write(
                                 "vulkan-xray:160x120:"
@@ -473,6 +480,8 @@ def criar_canvas_vulkan(canvas_original):
                         raise RuntimeError(
                             "Skin shader: gradientes não modificaram as cores"
                         )
+                    salvar_frame_smoke(skin_shader_marker, "skin-red", vermelho_rgba)
+                    salvar_frame_smoke(skin_shader_marker, "skin-blue", azul_rgba)
                     with open(skin_shader_marker, "w", encoding="utf-8") as f:
                         f.write(
                             "vulkan-skin-shader:160x120:"
@@ -670,6 +679,8 @@ def criar_canvas_vulkan(canvas_original):
                         raise RuntimeError("Alpha dentro da malha depende da ordem dos triângulos")
                     if not np.any(mesma_malha_1[:, :, 3] > 0):
                         raise RuntimeError("Malha de teste alpha não desenhou pixels")
+                    salvar_frame_smoke(recorte_marker, "transparent-triangles", mesma_malha_1)
+                    salvar_frame_smoke(recorte_marker, "transparent-triangles-reversed", mesma_malha_2)
                     with open(recorte_marker, "w", encoding="utf-8") as f:
                         f.write(
                             "vulkan-recorte:160x120:"
@@ -799,6 +810,10 @@ def criar_canvas_vulkan(canvas_original):
                         self._cena.atualizar_iluminacao(iluminacao_anterior)
                     if np.array_equal(reflexo_branco, reflexo_preto):
                         raise RuntimeError("Light.specular não altera reflexos do shader normalmap")
+                    salvar_frame_smoke(normal_marker, "normalmap-flat", flat)
+                    salvar_frame_smoke(normal_marker, "normalmap-tilted", inclinado)
+                    salvar_frame_smoke(normal_marker, "specular-white", reflexo_branco)
+                    salvar_frame_smoke(normal_marker, "specular-black", reflexo_preto)
                     with open(normal_marker, "w", encoding="utf-8") as saida:
                         saida.write(
                             "vulkan-normalmap:160x120:"
@@ -887,6 +902,8 @@ def criar_canvas_vulkan(canvas_original):
                         raise RuntimeError(
                             "Phong/Toon: shaders não diferenciaram os pixels"
                         )
+                    salvar_frame_smoke(estilos_marker, "phong", phong_rgba)
+                    salvar_frame_smoke(estilos_marker, "toon", toon_rgba)
                     with open(estilos_marker, "w", encoding="utf-8") as saida:
                         saida.write(
                             "vulkan-phong-toon:160x120:"
@@ -985,6 +1002,7 @@ def criar_canvas_vulkan(canvas_original):
                         raise RuntimeError(
                             "LitSphere: trocar a textura não mudou os pixels"
                         )
+                    salvar_frame_smoke(litsphere_marker, "litsphere", rgba)
                     with open(litsphere_marker, "w", encoding="utf-8") as saida:
                         saida.write(
                             "vulkan-litsphere:160x120:"

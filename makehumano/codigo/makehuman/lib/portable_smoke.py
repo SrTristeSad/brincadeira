@@ -81,6 +81,9 @@ def check_original_tools(app, report_path):
             solid_image = mh.renderToBuffer(320, 240).data.copy()
             human.setSolid(False)
             wire_image = mh.renderToBuffer(320, 240).data.copy()
+            from image import Image
+            Image(data=solid_image).save(str(report.parent / "viewport-solid.png"))
+            Image(data=wire_image).save(str(report.parent / "viewport-wireframe.png"))
             dark_solid = np.count_nonzero(np.all(solid_image[:, :, :3] < 12, axis=2))
             dark_wire = np.count_nonzero(np.all(wire_image[:, :, :3] < 12, axis=2))
             if np.array_equal(solid_image, wire_image) or dark_wire <= dark_solid:
