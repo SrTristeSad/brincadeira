@@ -15,7 +15,9 @@ import time
 
 
 ROOT = Path(__file__).resolve().parents[1]
-APP = ROOT / "executar.py"
+# Iniciar o entrypoint original diretamente. executar.py cria outro processo;
+# encerrá-lo não encerra a GUI filha e deixa logs bloqueados no Windows.
+APP = ROOT / "codigo" / "makehuman" / "makehuman.py"
 TIMEOUT_SECONDS = 90
 
 
