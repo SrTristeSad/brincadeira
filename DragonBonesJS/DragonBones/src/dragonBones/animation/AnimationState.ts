@@ -368,7 +368,7 @@ namespace dragonBones {
 
         private _updateBoneAndSlotTimelines(): void {
             { // Update bone and surface timelines.
-                const boneTimelines: Map<Array<TimelineState>> = {};
+                const boneTimelines: Map<Array<TimelineState>> = Object.create(null);
                 // Create bone timelines map.
                 for (const timeline of this._boneTimelines) {
                     const timelineName = ((timeline.target as BlendState).target as Bone).name;
@@ -494,7 +494,7 @@ namespace dragonBones {
             }
 
             { // Update slot timelines.
-                const slotTimelines: Map<Array<TimelineState>> = {};
+                const slotTimelines: Map<Array<TimelineState>> = Object.create(null);
                 const ffdFlags: Array<number> = [];
                 // Create slot timelines map.
                 for (const timeline of this._slotTimelines) {

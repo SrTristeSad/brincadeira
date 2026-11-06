@@ -124,27 +124,27 @@ namespace dragonBones {
         /**
          * @private
          */
-        public readonly boneTimelines: Map<Array<TimelineData>> = {};
+        public readonly boneTimelines: Map<Array<TimelineData>> = Object.create(null);
         /**
          * @private
          */
-        public readonly slotTimelines: Map<Array<TimelineData>> = {};
+        public readonly slotTimelines: Map<Array<TimelineData>> = Object.create(null);
         /**
          * @private
          */
-        public readonly constraintTimelines: Map<Array<TimelineData>> = {};
+        public readonly constraintTimelines: Map<Array<TimelineData>> = Object.create(null);
         /**
          * @private
          */
-        public readonly animationTimelines: Map<Array<TimelineData>> = {};
+        public readonly animationTimelines: Map<Array<TimelineData>> = Object.create(null);
         /**
          * @private
          */
-        public readonly boneCachedFrameIndices: Map<Array<number>> = {};
+        public readonly boneCachedFrameIndices: Map<Array<number>> = Object.create(null);
         /**
          * @private
          */
-        public readonly slotCachedFrameIndices: Map<Array<number>> = {};
+        public readonly slotCachedFrameIndices: Map<Array<number>> = Object.create(null);
         /**
          * @private
          */

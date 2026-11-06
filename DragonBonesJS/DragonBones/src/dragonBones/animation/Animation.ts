@@ -59,8 +59,8 @@ namespace dragonBones {
         private _inheritTimeScale: number;
         private readonly _animationNames: Array<string> = [];
         private readonly _animationStates: Array<AnimationState> = [];
-        private readonly _animations: Map<AnimationData> = {};
-        private readonly _blendStates: Map<Map<BlendState>> = {};
+        private readonly _animations: Map<AnimationData> = Object.create(null);
+        private readonly _blendStates: Map<Map<BlendState>> = Object.create(null);
         private _armature: Armature;
         private _animationConfig: AnimationConfig = null as any; // Initial value.
         private _lastAnimationState: AnimationState | null;

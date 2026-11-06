@@ -104,7 +104,7 @@ namespace dragonBones {
         /**
          * @private
          */
-        public readonly armatures: Map<ArmatureData> = {};
+        public readonly armatures: Map<ArmatureData> = Object.create(null);
         /**
          * @internal
          */

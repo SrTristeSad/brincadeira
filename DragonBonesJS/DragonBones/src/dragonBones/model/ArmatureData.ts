@@ -103,23 +103,23 @@ namespace dragonBones {
         /**
          * @private
          */
-        public readonly bones: Map<BoneData> = {};
+        public readonly bones: Map<BoneData> = Object.create(null);
         /**
          * @private
          */
-        public readonly slots: Map<SlotData> = {};
+        public readonly slots: Map<SlotData> = Object.create(null);
         /**
          * @private
          */
-        public readonly constraints: Map<ConstraintData> = {};
+        public readonly constraints: Map<ConstraintData> = Object.create(null);
         /**
          * @private
          */
-        public readonly skins: Map<SkinData> = {};
+        public readonly skins: Map<SkinData> = Object.create(null);
         /**
          * @private
          */
-        public readonly animations: Map<AnimationData> = {};
+        public readonly animations: Map<AnimationData> = Object.create(null);
         /**
          * - The default skin data.
          * @version DragonBones 4.5
