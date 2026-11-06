@@ -266,3 +266,11 @@ falhas de GPU são propagadas, sem mascará-las pelo rasterizador CPU legado.
 O smoke passa pelo ExporterUV original, salva e relê PNG RGB 2048x2048 e
 verifica arestas brancas e fundo preto. A captura entra na comparação entre
 fontes e executável.
+
+
+A exportação BVH usa getAtFramePos(noBake=True), preservando transformações
+locais mesmo após o skinning da viewport ter preparado matrizes em cache.
+Conversões de transformations.py usam asarray no lugar do copy=False rígido
+de NumPy 2, permitindo entradas float32 e sequências Python. O smoke chama
+o ExporterBVH original com dois quadros de repouso/T-pose, relê o arquivo e
+compara poses locais e taxa de quadros; nenhuma animação FBX é anunciada.

@@ -12,7 +12,7 @@ def check_original_tools(app, report_path):
     report = Path(report_path)
     human = app.selectedHuman
     required = ("0_modeling_0_modifiers", "3_libraries_material_chooser",
-                "9_export_obj", "9_export_fbx", "9_export_collada", "9_export_stl")
+                "9_export_obj", "9_export_fbx", "9_export_collada", "9_export_stl", "9_export_uvmap", "9_export_bvh")
     missing = [name for name in required if not app.modules.get(name)]
     if missing:
         raise RuntimeError("Plugins essenciais não carregados: " + ", ".join(missing))

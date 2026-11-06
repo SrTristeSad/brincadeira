@@ -17,6 +17,47 @@ class OriginalAnimation(unittest.TestCase):
         data[:, 0, 3] = np.repeat(np.arange(frames)*10., bones)
         return AnimationTrack("test playback", data, frames, rate)
 
+    def test_transform_conversions_accept_float32_and_python_sequences(self):
+        import transformations as tm
+        rotation = tm.euler_matrix(.2, -.4, .6)
+        for source in (rotation.astype(np.float32), rotation.tolist()):
+            angles = tm.euler_from_matrix(source)
+            np.testing.assert_allclose(tm.euler_matrix(*angles), rotation, atol=1e-6)
+            quaternion = tm.quaternion_from_matrix(source)
+            np.testing.assert_allclose(tm.quaternion_matrix(quaternion), rotation, atol=1e-6)
+        projection = tm.projection_matrix([0, 0, 0], [0, 0, 1], perspective=[0, 0, 5])
+        self.assertTrue(np.isfinite(projection).all())
+        np.testing.assert_allclose(tm.unit_vector([3, 0, 4]), [.6, 0, .8])
+        self.assertAlmostEqual(tm.angle_between_vectors([1, 0, 0], [0, 1, 0]), np.pi / 2)
+
+    def test_bvh_export_uses_local_poses_even_after_skinning_bake(self):
+        from types import SimpleNamespace
+        import tempfile
+        from transformations import rotation_matrix
+        bone = SimpleNamespace(name="root", parent=None, index=0,
+                               getRestOffset=lambda: np.zeros(3),
+                               getRestHeadPos=lambda: np.zeros(3),
+                               getRestTailPos=lambda: np.array([0., 1., 0.]),
+                               hasChildren=lambda: False)
+        skel = SimpleNamespace(getJointNames=lambda: ["root"], getBone=lambda name: bone,
+                               containsBone=lambda name: name == "root")
+        poses = np.array([np.eye(4)[:3], rotation_matrix(.4, [1., 0., 0.])[:3]], np.float32)
+        poses[1, :, 3] = [2., 3., 4.]
+        track = AnimationTrack("export test", poses, 2, 24.)
+        unbaked = bvh.createFromSkeleton(skel, track)
+        # A baked cache contains world-space skinning transforms and must not
+        # affect an exporter of local motion, even when that cache is active.
+        track._data_baked = np.tile(np.eye(4, dtype=np.float32)[:3], (2, 1, 1))
+        baked = bvh.createFromSkeleton(skel, track)
+        np.testing.assert_array_equal(unbaked.rootJoint.frames, baked.rootJoint.frames)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "motion.bvh"
+            baked.writeToFile(str(path))
+            loaded = bvh.load(str(path), convertFromZUp=False)
+            restored = loaded.createAnimationTrack(["root"])
+            self.assertEqual(restored.nFrames, 2)
+            np.testing.assert_allclose(restored.getAtFramePos(1, noBake=True), poses[1:2], atol=1e-5)
+
     def test_disabling_looping_holds_last_frame(self):
         track = self.track()
         track.setLooping(False)

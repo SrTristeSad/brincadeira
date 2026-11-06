@@ -78,6 +78,23 @@ def validar_rig_pose(app, directory):
         np.testing.assert_allclose(human.meshData.coord, posed, atol=1e-4)
         human.setToTime(5.)
         np.testing.assert_allclose(human.meshData.coord, posed, atol=1e-4)
+        # O exportador BVH original deve ignorar o cache de skinning gerado
+        # pela viewport e preservar as poses locais dos dois quadros.
+        import bvh
+        from types import SimpleNamespace
+        bvh_exporter = app.modules["9_export_bvh"].ExporterBVH()
+        bvh_exporter.feetOnGround = SimpleNamespace(selected=False)
+        bvh_exporter.taskview = SimpleNamespace(getScale=lambda: (1., "decimeter"))
+        bvh_path = directory / "personagem-animado.bvh"
+        bvh_exporter.export(human, lambda ext: str(bvh_path))
+        exported_bvh = bvh.load(str(bvh_path), convertFromZUp=False)
+        reloaded_track = exported_bvh.createAnimationTrack(human.getSkeleton().getJointNames())
+        if reloaded_track.nFrames != 2 or not np.isclose(reloaded_track.frameRate, 24., rtol=1e-5):
+            raise RuntimeError("BVH não preservou quadros e taxa da animação")
+        for frame in range(2):
+            np.testing.assert_allclose(reloaded_track.getAtFramePos(frame, noBake=True),
+                                       playback.getAtFramePos(frame, noBake=True), atol=1e-4)
+        bvh_validation = {"frames": 2, "bones": bones, "local_pose_roundtrip": True}
         human.setActiveAnimation(official_animation.name)
         human.setToFrame(0)
         model = directory / "personagem-com-rig.mhm"
@@ -112,6 +129,7 @@ def validar_rig_pose(app, directory):
                 "pose_deforms_mesh": True, "rig_pose_undo_redo": True,
                 "animation_playback": True, "non_looping_holds_last": True,
                 "mhm_rig_pose_roundtrip": True, "skinned_exports": ["fbx-binary", "collada"],
+                "bvh_validation": bvh_validation,
                 "fbx_validation": fbx_validation, "collada_validation": dae_validation}
     finally:
         pose_library.loadPose(None)
