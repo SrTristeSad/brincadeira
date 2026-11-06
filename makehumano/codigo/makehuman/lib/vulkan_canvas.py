@@ -639,6 +639,37 @@ def criar_canvas_vulkan(canvas_original):
                         raise RuntimeError(
                             "Camadas translúcidas não alteraram o fundo"
                         )
+                    # Duas camadas da mesma malha: a ordem dos triângulos
+                    # de entrada também não pode alterar a composição alpha.
+                    class MalhaCamadasSmoke(ObjetoRecorteSmoke):
+                        isTextured = False
+
+                        def __init__(self, inverter):
+                            super().__init__(None, np.zeros(3), True, 0)
+                            self.verts = np.concatenate((
+                                corpo.verts - deslocamento,
+                                corpo.verts + deslocamento,
+                            ))
+                            n = len(corpo.verts)
+                            self.norms = np.concatenate((corpo.norms, corpo.norms))
+                            self.UVs = np.concatenate((corpo.UVs, corpo.UVs))
+                            self.color = np.concatenate((
+                                np.tile([255, 20, 20, 128], (n, 1)),
+                                np.tile([20, 20, 255, 128], (n, 1)),
+                            )).astype(np.uint8)
+                            self.primitives = np.concatenate((
+                                corpo.primitives, corpo.primitives + n,
+                            ))
+                            if inverter:
+                                self.primitives = self.primitives[::-1].copy()
+                            self.nTransparentPrimitives = len(self.primitives)
+
+                    mesma_malha_1 = capturar_recorte([MalhaCamadasSmoke(False)])
+                    mesma_malha_2 = capturar_recorte([MalhaCamadasSmoke(True)])
+                    if not np.array_equal(mesma_malha_1, mesma_malha_2):
+                        raise RuntimeError("Alpha dentro da malha depende da ordem dos triângulos")
+                    if not np.any(mesma_malha_1[:, :, 3] > 0):
+                        raise RuntimeError("Malha de teste alpha não desenhou pixels")
                     with open(recorte_marker, "w", encoding="utf-8") as f:
                         f.write(
                             "vulkan-recorte:160x120:"

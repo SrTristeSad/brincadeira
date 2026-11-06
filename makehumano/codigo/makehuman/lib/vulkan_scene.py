@@ -48,7 +48,7 @@ def assinatura_textura(caminho):
 
 
 
-def preparar_malha_original(obj):
+def preparar_malha_original(obj, camera=None):
     """Retorna vértices float32 [n,12] e triângulos uint32 de Object3D.
 
     O objeto aqui é lib/object3d.Object3D (já desenhado por glmodule), não
@@ -94,11 +94,18 @@ def preparar_malha_original(obj):
     if np.any(face < 0) or np.any(face >= n):
         raise ValueError("Object3D original: índice de face fora da malha")
     face = np.asarray(face, dtype=np.uint32)
+    material = getattr(obj, "material", None)
+    total_transparentes = int(getattr(obj, "nTransparentPrimitives", 0))
+    if bool(getattr(material, "transparent", False)) or float(getattr(material, "opacity", 1.0)) < 1.0:
+        total_transparentes = len(face)
+    total_transparentes = min(max(total_transparentes, 0), len(face))
+    transparentes = np.arange(len(face)) >= len(face) - total_transparentes
     if face.shape[1] == 4:
         # MakeHuman mantém triangulações na sequência das faces visíveis.
         indices = np.concatenate(
             (face[:, [0, 1, 2]], face[:, [0, 2, 3]]), axis=0
         )
+        transparentes = np.tile(transparentes, 2)
     else:
         indices = face
     if face.shape[1] == 2:
@@ -106,15 +113,40 @@ def preparar_malha_original(obj):
         indices = indices[indices[:, 0] != indices[:, 1]]
     else:
         # Quads degenerados são usados pelo MakeHuman para representar tris.
-        indices = indices[
+        validos = (
             (indices[:, 0] != indices[:, 1])
             & (indices[:, 1] != indices[:, 2])
             & (indices[:, 0] != indices[:, 2])
-        ]
+        )
+        indices = indices[validos]
+        transparentes = transparentes[validos]
+        if camera is not None and np.any(transparentes):
+            indices = ordenar_triangulos_vulkan(obj, camera, indices, transparentes)
     if not np.isfinite(vertices).all():
         raise ValueError("Object3D original: coordenadas não finitas")
     return (np.ascontiguousarray(vertices),
             np.ascontiguousarray(indices.reshape(-1), dtype=np.uint32))
+
+
+def ordenar_triangulos_vulkan(obj, camera, triangulos, transparentes):
+    """Ordenar faces alpha em espaço da câmera sem modificar a malha original.
+
+    Faces opacas permanecem primeiro. Quads já foram triangulados e os
+    triângulos degenerados removidos. Recalcular por câmera também atende
+    rotações e modificadores. Interseções cíclicas ainda exigem OIT ou split.
+    """
+    if not getattr(camera, "updated", True):
+        camera.updateCamera()
+        camera.updated = True
+    _, view = camera.getMatrices(0)
+    modelview = np.asarray(view, dtype=np.float64) @ np.asarray(
+        camera.getModelMatrix(obj), dtype=np.float64)
+    centros = np.mean(np.asarray(obj.verts)[triangulos[transparentes]], axis=1)
+    centros = np.column_stack((centros, np.ones(len(centros)))) @ modelview.T
+    if not np.isfinite(centros).all() or np.any(np.abs(centros[:, 3]) < 1e-8):
+        raise ValueError("Triângulo translúcido não projetável")
+    ordem = np.argsort(centros[:, 2] / centros[:, 3], kind="stable")
+    return np.concatenate((triangulos[~transparentes], triangulos[transparentes][ordem]))
 
 
 def matriz_wgpu(camera, obj, *, tamanho_origem=None, tamanho_destino=None):
@@ -985,7 +1017,7 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
                 if productionRender and getattr(obj, "excludeFromProduction", False):
                     continue
                 try:
-                    vertices, indices = preparar_malha_original(obj)
+                    vertices, indices = preparar_malha_original(obj, cameras[obj.cameraMode])
                 except ValueError as erro:
                     if "primitiva não triangular" not in str(erro):
                         raise
