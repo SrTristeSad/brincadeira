@@ -340,6 +340,7 @@ def criar_canvas_vulkan(canvas_original):
                     # nova cena Vulkan, sem depender do bitmap do widget.
                     from pathlib import Path
                     from image import Image
+                    import numpy as np
                     captura_png = str(Path(render_marker).with_suffix(".png"))
                     pos_x = G.windowWidth // 2 - 80
                     pos_y = G.windowHeight // 2 - 60
