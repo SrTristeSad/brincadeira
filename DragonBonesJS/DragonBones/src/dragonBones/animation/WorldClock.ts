@@ -196,6 +196,12 @@ namespace dragonBones {
             }
 
             if (this._animatebles.indexOf(value) < 0) {
+                // A custom IAnimatable may expose clock as a simple field rather
+                // than a setter. Detach it explicitly from its previous owner.
+                if (value.clock !== null && value.clock !== this) {
+                    value.clock.remove(value);
+                }
+
                 this._animatebles.push(value);
                 value.clock = this;
             }

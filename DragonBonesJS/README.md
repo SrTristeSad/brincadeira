@@ -72,3 +72,9 @@ Foram acrescentados cinco testes de regressão, totalizando **31 testes definido
 O pool de `BaseObject` não usa mais `String(constructor)` como chave. Duas classes distintas podem ter o mesmo `toString()`, especialmente após minificação, e acabavam recebendo objetos uma da outra. Agora os identificadores internos são atribuídos pela **identidade do construtor**, sem alterar métodos públicos nem exigir APIs novas de runtime. A troca usa um registro de construtores em memória e mantém o alvo ES5. Foram acrescentados três testes de regressão.
 
 O defeito foi reproduzido em JavaScript isolado; o build completo e a suíte completa do núcleo ainda precisam ser executados.
+
+## Correção de troca de relógio (em revisão)
+
+Ao transferir um objeto que implementa `IAnimatable` com `clock` como propriedade simples, o `WorldClock.add()` agora o remove explicitamente do relógio anterior antes de associá-lo ao novo. Sem isso, o objeto podia receber atualizações duas vezes (uma de cada relógio). Foram adicionados três testes de regressão para transferências normais, transferências durante a atualização e adições repetidas. A interface pública permanece igual.
+
+O comportamento anterior e a correção foram reproduzidos num caso JavaScript isolado. A suíte completa do DragonBonesJS ainda não foi executada.

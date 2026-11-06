@@ -202,3 +202,46 @@ test("WorldClock reentrant updates do not compact the active iteration", () => {
     assert.equal(item.clock, null);
     assert.equal(clock._animatebles.length, 0);
 });
+
+test("moving a plain IAnimatable between clocks removes its old owner", () => {
+    const original = new WorldClock();
+    const destination = new WorldClock();
+    const child = animatable();
+
+    original.add(child);
+    destination.add(child);
+
+    assert.equal(child.clock, destination);
+    original.advanceTime(0.25);
+    destination.advanceTime(0.5);
+    assert.deepEqual(child.updates, [0.5]);
+});
+
+test("moving an animatable during an update does not advance it twice", () => {
+    const original = new WorldClock();
+    const destination = new WorldClock();
+    const child = animatable();
+    const transfer = {
+        clock: null,
+        advanceTime() {
+            destination.add(child);
+        }
+    };
+
+    original.add(transfer);
+    original.add(child);
+    original.advanceTime(0.25);
+    destination.advanceTime(0.5);
+
+    assert.equal(child.clock, destination);
+    assert.deepEqual(child.updates, [0.5]);
+});
+
+test("readding an animatable to its current owner does not duplicate updates", () => {
+    const clock = new WorldClock();
+    const child = animatable();
+    clock.add(child);
+    clock.add(child);
+    clock.advanceTime(0.25);
+    assert.deepEqual(child.updates, [0.25]);
+});
