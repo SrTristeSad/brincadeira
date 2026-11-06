@@ -60,3 +60,9 @@ npm run build
 O código original sobrescrevia a variável global `__extends` com um helper antigo para Weixin. Ao compilar com TypeScript 5.8 para ES5, essa implementação substituía a versão gerada pelo compilador e perdia a ligação entre construtores usados na herança estática. Removemos somente esse helper legado, permitindo que o compilador forneça sua implementação, e adicionamos dois testes de regressão de herança, sem alterar as classes nem a API pública.
 
 Uma reprodução isolada com TypeScript 5.8.3 e Node.js 22 confirmou a diferença entre o helper antigo e o helper gerado pelo compilador. **Os testes do núcleo completo ainda não foram executados.**
+
+## Estabilidade do relógio de animação (em revisão)
+
+O `WorldClock` agora libera referências imediatamente em `remove()` e `clear()` quando não há atualização em andamento, reduzindo o acúmulo de posições vazias entre quadros. Durante `advanceTime()`, as remoções continuam sendo adiadas até o término da atualização mais externa. O bloco `finally` também libera posições após exceções em callbacks. Não há alteração intencional da API pública ou do formato de animações.
+
+Foram acrescentados cinco testes de regressão, totalizando **31 testes definidos** no núcleo. Em uma reprodução **isolada** do relógio, compilada com TypeScript 5.8.3 e executada com Node 22, sete casos de referência passaram; **isso não substitui a execução de `npm test` no projeto DragonBonesJS completo**, que segue pendente.

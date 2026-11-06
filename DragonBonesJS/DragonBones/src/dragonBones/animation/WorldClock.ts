@@ -66,6 +66,9 @@ namespace dragonBones {
         private _systemTime: number = 0.0;
         private readonly _animatebles: Array<IAnimatable | null> = [];
         private _clock: WorldClock | null = null;
+        // Keep additions and removals safe during nested update callbacks.
+        private _advancingDepth: number = 0;
+        private _needsCompaction: boolean = false;
         /**
          * - Creating a Worldclock instance. Typically, you do not need to create Worldclock instance.
          * When multiple Worldclock instances are running at different speeds, can achieving some specific animation effects, such as bullet time.
@@ -122,35 +125,32 @@ namespace dragonBones {
                 this.time += passedTime;
             }
 
-            let i = 0, r = 0, l = this._animatebles.length;
-            for (; i < l; ++i) {
-                const animatable = this._animatebles[i];
-                if (animatable !== null) {
-                    if (r > 0) {
-                        this._animatebles[i - r] = animatable;
-                        this._animatebles[i] = null;
+            this._advancingDepth++;
+            try {
+                const length = this._animatebles.length;
+                for (let i = 0; i < length; ++i) {
+                    const animatable = this._animatebles[i];
+                    if (animatable !== null) {
+                        animatable.advanceTime(passedTime);
                     }
-
-                    animatable.advanceTime(passedTime);
-                }
-                else {
-                    r++;
                 }
             }
+            finally {
+                this._advancingDepth--;
+                // Compact only after the outermost update finishes. This prevents
+                // reentrant updates from shifting entries under the active loop.
+                if (this._advancingDepth === 0 && this._needsCompaction) {
+                    let writeIndex = 0;
+                    for (let readIndex = 0; readIndex < this._animatebles.length; ++readIndex) {
+                        const animatable = this._animatebles[readIndex];
+                        if (animatable !== null) {
+                            this._animatebles[writeIndex++] = animatable;
+                        }
+                    }
 
-            if (r > 0) {
-                l = this._animatebles.length;
-                for (; i < l; ++i) {
-                    const animateble = this._animatebles[i];
-                    if (animateble !== null) {
-                        this._animatebles[i - r] = animateble;
-                    }
-                    else {
-                        r++;
-                    }
+                    this._animatebles.length = writeIndex;
+                    this._needsCompaction = false;
                 }
-
-                this._animatebles.length -= r;
             }
         }
         /**
@@ -215,8 +215,18 @@ namespace dragonBones {
         public remove(value: IAnimatable): void {
             const index = this._animatebles.indexOf(value);
             if (index >= 0) {
-                this._animatebles[index] = null;
-                value.clock = null;
+                if (this._advancingDepth > 0) {
+                    this._animatebles[index] = null;
+                    this._needsCompaction = true;
+                }
+                else {
+                    // No active frame: release the reference immediately.
+                    this._animatebles.splice(index, 1);
+                }
+
+                if (value.clock === this) {
+                    value.clock = null;
+                }
             }
         }
         /**
@@ -230,14 +240,21 @@ namespace dragonBones {
          * @language zh_CN
          */
         public clear(): void {
-            // Keep the array length stable while advanceTime() may be iterating.
-            // Nulling entries releases references and lets the next tick compact it.
+            // Mark entries before detaching; a child's clock setter may call remove().
+            // Preserve indices while advanceTime() is running.
             for (let i = 0, l = this._animatebles.length; i < l; ++i) {
                 const animatable = this._animatebles[i];
                 this._animatebles[i] = null;
                 if (animatable !== null) {
                     animatable.clock = null;
                 }
+            }
+
+            if (this._advancingDepth === 0) {
+                this._animatebles.length = 0;
+            }
+            else {
+                this._needsCompaction = true;
             }
         }
         /**

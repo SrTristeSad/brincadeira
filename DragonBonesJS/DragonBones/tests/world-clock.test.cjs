@@ -126,3 +126,79 @@ test("WorldClock.clear is safe when called during advanceTime", () => {
     assert.equal(first.updates, 1);
     assert.deepEqual(later.updates, []);
 });
+
+test("WorldClock.remove releases slots immediately outside advanceTime", () => {
+    const clock = new WorldClock();
+    const first = animatable();
+    const second = animatable();
+    clock.add(first);
+    clock.add(second);
+    clock.remove(first);
+    assert.equal(clock._animatebles.length, 1);
+    assert.strictEqual(clock._animatebles[0], second);
+    clock.remove(second);
+    assert.equal(clock._animatebles.length, 0);
+});
+
+test("WorldClock.clear does not retain unused slots between frames", () => {
+    const clock = new WorldClock();
+    for (let i = 0; i < 20; ++i) {
+        const child = animatable();
+        clock.add(child);
+        clock.clear();
+        assert.equal(clock._animatebles.length, 0);
+        assert.equal(child.clock, null);
+    }
+});
+
+test("WorldClock.clear compacts after a callback in the same frame", () => {
+    const clock = new WorldClock();
+    const later = animatable();
+    const first = {
+        clock: null,
+        advanceTime() {
+            clock.clear();
+        }
+    };
+    clock.add(first);
+    clock.add(later);
+    clock.advanceTime(0.1);
+    assert.equal(clock._animatebles.length, 0);
+    assert.deepEqual(later.updates, []);
+});
+
+test("WorldClock cleans up correctly after a callback throws", () => {
+    const clock = new WorldClock();
+    const failing = {
+        clock: null,
+        advanceTime() {
+            throw new Error("expected test exception");
+        }
+    };
+    clock.add(failing);
+    assert.throws(() => clock.advanceTime(0.1), /expected test exception/);
+    clock.clear();
+    assert.equal(clock._animatebles.length, 0);
+});
+
+test("WorldClock reentrant updates do not compact the active iteration", () => {
+    const clock = new WorldClock();
+    let reentered = false;
+    const item = {
+        clock: null,
+        calls: 0,
+        advanceTime() {
+            this.calls++;
+            if (!reentered) {
+                reentered = true;
+                clock.advanceTime(0.1);
+                clock.remove(this);
+            }
+        }
+    };
+    clock.add(item);
+    clock.advanceTime(0.1);
+    assert.equal(item.calls, 2);
+    assert.equal(item.clock, null);
+    assert.equal(clock._animatebles.length, 0);
+});
