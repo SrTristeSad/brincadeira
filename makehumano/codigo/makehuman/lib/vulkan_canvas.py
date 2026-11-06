@@ -482,6 +482,135 @@ def criar_canvas_vulkan(canvas_original):
                         "MAKEHUMANO_VULKAN: skin shader WGSL pixels="
                         + str(diferentes), flush=True,
                     )
+                recorte_marker = os.environ.get(
+                    "MAKEHUMANO_VULKAN_RECORTE_FILE"
+                )
+                if recorte_marker and not os.path.exists(recorte_marker):
+                    # Teste funcional: uma camada de alpha zero à frente
+                    # não pode ocultar a malha opaca posicionada atrás.
+                    import numpy as np
+                    from types import SimpleNamespace
+                    from image import Image
+
+                    candidatos = [
+                        obj for obj in G.world
+                        if obj.visibility and obj.solid
+                        and len(obj.primitives) > 100
+                    ]
+                    if not candidatos:
+                        raise RuntimeError("Recorte alfa: malha ausente")
+                    corpo = max(candidatos, key=lambda o: len(o.primitives))
+                    camera = G.cameras[corpo.cameraMode]
+                    if not getattr(camera, "updated", True):
+                        camera.updateCamera()
+                        camera.updated = True
+                    _, view = camera.getMatrices(0)
+                    view = np.asarray(view, dtype=np.float64)
+                    modelo = np.asarray(
+                        camera.getModelMatrix(corpo), dtype=np.float64,
+                    )
+                    eixo_camera = view[:3, :3] @ modelo[:3, :3]
+                    deslocamento = np.linalg.solve(
+                        eixo_camera, np.array([0.0, 0.0, 0.2]),
+                    )
+
+                    def objeto_transformado(delta):
+                        base = np.asarray(
+                            corpo.object.transform, dtype=np.float32,
+                        ).copy()
+                        mov = np.eye(4, dtype=np.float32)
+                        mov[:3, 3] = delta
+                        return SimpleNamespace(
+                            transform=base @ mov,
+                            lockRotation=corpo.object.lockRotation,
+                        )
+
+                    transparente = Image(
+                        data=np.zeros((4, 4, 4), dtype=np.uint8),
+                    )
+                    vermelho = Image(data=np.tile(
+                        np.array([255, 0, 0, 255], dtype=np.uint8),
+                        (4, 4, 1),
+                    ))
+                    verde = Image(data=np.tile(
+                        np.array([0, 255, 0, 255], dtype=np.uint8),
+                        (4, 4, 1),
+                    ))
+
+                    class MaterialRecorteSmoke:
+                        shader = None
+                        shaderParameters = {}
+                        shaderConfig = {"normal": False}
+                        normalMapTexture = None
+                        transparent = False
+                        opacity = 1.0
+
+                        def __init__(self, material):
+                            self.original = material
+
+                        def __getattr__(self, nome):
+                            return getattr(self.original, nome)
+
+                    class ObjetoRecorteSmoke:
+                        shadeless = True
+                        isTextured = True
+                        cull = 0
+                        depthless = False
+                        visibility = True
+
+                        def __init__(self, imagem, delta, cortado, ordem):
+                            self.original = corpo
+                            self.texture = imagem
+                            self.material = MaterialRecorteSmoke(corpo.material)
+                            self.object = objeto_transformado(delta)
+                            self.nTransparentPrimitives = int(cortado)
+                            self.priority = ordem
+
+                        def __getattr__(self, nome):
+                            return getattr(self.original, nome)
+
+                    atras = ObjetoRecorteSmoke(
+                        verde, -deslocamento, False, 1,
+                    )
+                    frente_vazio = ObjetoRecorteSmoke(
+                        transparente, deslocamento, True, 0,
+                    )
+                    frente_opaco = ObjetoRecorteSmoke(
+                        vermelho, deslocamento, False, 0,
+                    )
+
+                    def capturar_recorte(objetos):
+                        return self._cena.capturar_framebuffer(
+                            objetos, G.cameras, 160, 120,
+                            incluir_alfa=True, cor_fundo=(0, 0, 0, 0),
+                        )
+
+                    apenas_atras = capturar_recorte([atras])
+                    com_vazio = capturar_recorte([frente_vazio, atras])
+                    com_frente = capturar_recorte([frente_opaco, atras])
+                    if not np.any(apenas_atras[:, :, 3] > 0):
+                        raise RuntimeError("Recorte alfa: fundo invisível")
+                    if not np.array_equal(apenas_atras, com_vazio):
+                        raise RuntimeError(
+                            "Recorte alfa: camada vazia alterou o fundo"
+                        )
+                    diferencas = int(np.count_nonzero(np.any(
+                        apenas_atras[:, :, :3] != com_frente[:, :, :3],
+                        axis=2,
+                    )))
+                    if not diferencas:
+                        raise RuntimeError(
+                            "Recorte alfa: camada opaca não alterou a imagem"
+                        )
+                    with open(recorte_marker, "w", encoding="utf-8") as f:
+                        f.write(
+                            "vulkan-recorte:160x120:"
+                            + str(diferencas) + "\n"
+                        )
+                    print(
+                        "MAKEHUMANO_VULKAN: alpha test, pixels="
+                        + str(diferencas), flush=True,
+                    )
                 normal_marker = os.environ.get(
                     "MAKEHUMANO_VULKAN_NORMALMAP_FILE"
                 )
