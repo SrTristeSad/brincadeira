@@ -11,6 +11,7 @@ em `motor_wgpu`. O estado abaixo distingue testes exercitados de paridade final.
 | Dependências de plugins dinâmicos ausentes no Python congelado | Hook PyInstaller analisa módulos/plugins; smoke chama exportadores reais |
 | Falha ao preparar perfil podia retornar sucesso | Exceção propagada e testes de regressão |
 | Diagnóstico limitado a erro no import de `mhmain` | Handler cobre inicialização e exceções não tratadas; iniciador captura stdout/stderr UTF-8 |
+| Instância nativa inicialmente permitia todos os backends | Configuração explícita apenas de Vulkan antes de criar o contexto, além da seleção do adaptador |
 | Busca de DLL Vulkan no processo congelado Windows | Loader explícito e diretório de dependências mantidos vivos; validar resultado do workflow antes de aprovar o ZIP |
 | Transparência só ordenava objetos | Ordenação também de triângulos por profundidade de câmera; teste GPU inverte faces da mesma malha |
 | Cor difusa substituía `Light.specular` | Uniforms separados e comparação GPU com luz especular branca/preta |
@@ -21,7 +22,7 @@ em `motor_wgpu`. O estado abaixo distingue testes exercitados de paridade final.
 
 ## Validação local
 
-A suíte completa executou **228 testes com sucesso**, usando Python 3.12,
+A suíte completa executou **229 testes com sucesso**, usando Python 3.12,
 NumPy 2.5.4 e Qt 5.15.14. Os testes Qt de gravação PNG verificam os canais,
 alfa e imagens com largura não alinhada. Os dados binários verificam Unicode
 em grupos de malha, tags de proxies e metadados de licença. A criação local do

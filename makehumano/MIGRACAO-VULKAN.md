@@ -28,7 +28,7 @@
 | Iluminação `.mhscene` | Até oito luzes pontuais, ambiente e reflexo Blinn-Phong | Cores difusa e especular independentes preservadas; falta atenuação/foco e luzes de área |
 | Shader xray original (.mhmat) | WGSL nativo com `edgefalloff`, `intensity`, cor ambiente e alfa de contorno | Execução GPU validada; comparar imagem |
 | Shader LitSphere (pele padrão) | WGSL usa normal em espaço de câmera, textura de LitSphere original e `AdditiveShading`; `autoBlendSkin` usa `EthnicSkinBlender` original | Captura GPU e testes de parâmetros; equivalência visual pendente |
-| Shader Phong original | WGSL usa o primeiro ponto de luz da cena, ambiente, difusa, especular e emissão do material original | Port da base; falta AO e comparação visual |
+| Shader Phong original | WGSL usa o primeiro ponto de luz da cena, ambiente, difusa, especular e emissão do material original | AO implementado; comparação visual completa pendente |
 | Shader Toon original | WGSL reproduz limiar da silhueta e faixas de luz por `smoothstep` com sete parâmetros do GLSL | Port da base; testar equivalência visual |
 | Shader normalmap oficial | WGSL usa mapa de normais e iluminação difusa/especular em espaço tangente derivado das UVs | Base implementada; validação visual e tangentes originais pendentes |
 | Shader skin oficial | WGSL amostra mapa AO e gradiente horizontal de cor convertido do antigo sampler1D | Base implementada; requer ambos os recursos e comparação visual |
@@ -36,13 +36,13 @@
 | Seleção do shader no editor de materiais | Seis presets oficiais são reconhecidos; os parâmetros xray/LitSphere/Toon são editáveis na interface original | Validar interações e requisitos de textura para skin/normalmap |
 | Equivalência dos shaders GLSL | Os seis presets têm caminhos WGSL; normalmap/skin e recursos avançados ainda não reproduzem integralmente os shaders legados | **Parcial** |
 | Shaders GLSL arbitrários | `vulkan_shader.Shader.supported()` permanece falso; nenhum compilador GLSL genérico | **Pendente** |
-
 | Imagens e ativos binários com NumPy 2 | `tobytes`/`frombuffer` e índices UTF-8; conversão QImage unificada | Roundtrip PNG/RGBA e dados binários validados |
 | Wireframe original (`Ctrl+F`) | Superfície sem textura + arestas pretas por passes Vulkan; quads não recebem diagonais extras | Teste CPU e comparação GPU sólido/wireframe |
 | Imports históricos `texture` e `shader` | Encaminham às implementações Vulkan, sem importar PyOpenGL | Corpos OpenGL removidos; GLSL personalizado continua sem suporte |
 
 ## Arquitetura
 
+- A instância nativa wgpu é configurada exclusivamente com o backend Vulkan antes de criar o contexto; não inicializa GL/D3D/Metal.
 - `qtui.py` conserva os eventos da interface original e cria sempre `CanvasVulkan` como único canvas da GUI.
 - O smoke `testes/smoke_gui.py` inicia com o mesmo comando da GUI real, **sem `--noshaders`**, e `mhmain.py` não exibe o aviso modal GLSL antigo; a ausência de compilação GLSL arbitrária ainda é informada no log.
 - `mh.py` preserva os nomes de API utilizados pelos plugins existentes, mas encaminha os serviços Vulkan ao canvas.

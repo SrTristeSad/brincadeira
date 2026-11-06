@@ -44,7 +44,9 @@ são exportados com a malha original e olhos padrão; animações, roupas extern
 importação desses arquivos em outras aplicações ainda exigem validação.
 
 No Windows, a CI instala Mesa/Lavapipe e seu loader Vulkan para renderizar por
-CPU no runner sem GPU física. Esse driver é **exclusivo do ambiente de teste**;
+CPU no runner sem GPU física. O driver de teste Lavapipe MSVC 26.2.6 é baixado com SHA-256 verificado;
+o loader vem do MSYS2. O ICD é registrado temporariamente na VM de CI,
+porque o loader ignora a seleção por variável de ambiente em processos elevados. Esse driver é **exclusivo do ambiente de teste**;
 o ZIP usa o driver Vulkan instalado pelo usuário. A aplicação pré-carrega o
 loader de `System32` com seu diretório de dependências registrado, evitando
 que a busca de DLLs do PyInstaller esconda o runtime. `MAKEHUMANO_VULKAN_LOADER`
@@ -88,3 +90,12 @@ O artefato `Diagnostico-portatil-*` inclui os logs do smoke e a lista de imports
 não resolvidos do PyInstaller. Essa lista também contém imports opcionais e
 específicos de outros sistemas: cada aviso precisa ser interpretado, sem tratar
 uma build bem-sucedida como prova de compatibilidade completa.
+
+## Evidências desta etapa
+
+- [CI e pacotes da revisão funcional](https://github.com/SrTristeSad/brincadeira/actions/runs/42169128245)
+- [CPU, Vulkan e GUI com/sem PyOpenGL](https://github.com/SrTristeSad/brincadeira/actions/runs/42169135995)
+
+Consultar a conclusão dos jobs antes de aprovar um ZIP. O teste pelos fontes
+usa diretamente `codigo/makehuman/makehuman.py`, evitando deixar processos
+filhos abertos ao encerrar o iniciador `executar.py` durante o smoke Windows.
