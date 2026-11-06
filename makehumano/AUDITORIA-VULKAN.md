@@ -60,6 +60,14 @@ com o renderer original nem validação em outra GPU.
   não deixa pixels antigos na viewport. Há regressão com PNG válido
   substituído via `os.replace`.
 
+- **Primitivas auxiliares de ponto:** objetos originais com índices
+  `N×1` agora usam `point-list` na pipeline Vulkan, mantendo índices,
+  coordenadas e cores RGBA. O smoke da GUI gera um ponto temporário sobre
+  a geometria da cena original, renderiza em framebuffer real, verifica
+  cobertura de alfa e registra `points.json` sem modificar o personagem.
+  A rasterização de pontos tem tamanho padrão de um pixel; tamanhos
+  personalizados de GL_POINTS ainda não possuem equivalência comprovada.
+
 Estas correções são parciais: não demonstram paridade visual com OpenGL,
 compatibilidade de cabelos/roupas ausentes nem execução em GPUs físicas.
 Conferir a CI do PR de compatibilidade antes de considerá-las aprovadas.
