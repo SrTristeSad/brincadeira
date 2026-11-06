@@ -64,7 +64,7 @@ def main():
         print(f"Iniciando GUI: {APP}", flush=True)
         with logfile.open("wb") as log:
             processo = subprocess.Popen(
-                [sys.executable, "-u", str(APP), "--noshaders"],
+                [sys.executable, "-u", str(APP)],
                 cwd=ROOT,
                 env=ambiente,
                 stdout=log,
