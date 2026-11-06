@@ -24,7 +24,10 @@
 | Material `.mhmat` | Difusa, opacidade, brilho especular, emissão, back/front cull, depthless | Pipeline WGSL; equivalência visual pendente |
 | Normal maps `.mhmat` | Textura e intensidade originais; base tangente derivada de UVs no fragmento | Pipeline validada na CI; comparação visual pendente |
 | Iluminação `.mhscene` | Até oito luzes pontuais, ambiente e reflexo Blinn-Phong | Aproximação; falta atenuação/foco/especular de cena |
-| Shaders personalizados GLSL | `vulkan_shader.Shader` anuncia suporte indisponível | **Pendente** |
+| Shader xray original (.mhmat) | WGSL nativo com `edgefalloff`, `intensity`, cor ambiente e alfa de contorno | Compilação/execução GPU testadas; comparar imagem |
+| Seleção do shader no editor de materiais | Opção xray restaurada no editor original, com parâmetros editáveis | Smoke da GUI e testes de registro de preset; validar interação manual |
+| Shaders GLSL restantes | `phong`, `toon`, `litsphere`, `normalmap` e `skin` ainda sem equivalentes integrais | **Pendente** |
+| Shaders GLSL arbitrários | `vulkan_shader.Shader.supported()` permanece falso; nenhum compilador GLSL genérico | **Pendente** |
 
 ## Arquitetura
 
@@ -58,7 +61,7 @@ python -m unittest discover -s makehumano/testes -p 'test_*wgpu.py' -v
 
 ## Pendências que impedem o lançamento
 
-- Converter shaders GLSL personalizados e seus uniforms/atributos para WGSL.
+- Converter os cinco presets GLSL restantes e seus uniforms/atributos para WGSL. O xray original já possui port nativo e seleção no editor, mas GLSL arbitrário ainda não é executável.
 - Concluir a equivalência de transparência e ordenação de superfícies translúcidas, especialmente materiais sobrepostos; variantes de culling/depthless já foram adicionadas.
 - Reproduzir atenuação/especular/foco das luzes de cena, outros comportamentos avançados de materiais. A transformação de normais já usa inversa-transposta do modelo.
 - Criar testes comparativos de imagens, incluindo reflexos, alfa, normal maps e culling, porque o smoke só verifica inicialização e integridade básica.
