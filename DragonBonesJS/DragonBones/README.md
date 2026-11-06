@@ -48,3 +48,9 @@ Foram adicionados dois testes de regressão ao pacote. A compilação integral p
 `BaseFactory.replaceAnimation()` agora copia somente as entradas próprias de cada catálogo de animações ao mesclar dados, usando `Object.keys()` (ES5). Isso evita propagar propriedades herdadas de objetos externos para o conjunto de animações do esqueleto. O modo de substituição total e a precedência das animações recebidas continuam iguais.
 
 Foram acrescentados três testes de regressão. A compilação completa do motor permanece pendente.
+
+## Carregamento em módulos (AMD / exports)
+
+O adaptador legado agora registra a saída AMD **sem uma dependência circular sobre `dragonBones`** e preenche o objeto fornecido em ambientes que expõem apenas `exports`, em vez de simplesmente reatribuir uma variável local. O caminho CommonJS (`module.exports`) e o fallback global continuam preservados. O alvo da compilação permanece ES5.
+
+O defeito e a correção foram reproduzidos num módulo TypeScript mínimo compilado com TypeScript 5.8.3 e executado em Node.js 22. Os quatro novos testes de distribuição exercitam os dois artefatos do projeto, após o build completo.

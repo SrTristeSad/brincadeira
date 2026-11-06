@@ -377,10 +377,16 @@ if (typeof exports === "object" && typeof module === "object") {
     module.exports = dragonBones;
 }
 else if (typeof define === "function" && define["amd"]) {
-    define(["dragonBones"], function () { return dragonBones; });
+    // Register the library itself; do not require "dragonBones" from within
+    // its own AMD module (that creates a circular dependency).
+    define([], function () { return dragonBones; });
 }
 else if (typeof exports === "object") {
-    exports = dragonBones;
+    // Assign exported members to the supplied exports object instead of
+    // rebinding the local variable (which callers cannot observe).
+    for (const key of Object.keys(dragonBones)) {
+        exports[key] = (dragonBones as any)[key];
+    }
 }
 else if (typeof global !== "undefined") {
     global.dragonBones = dragonBones;
