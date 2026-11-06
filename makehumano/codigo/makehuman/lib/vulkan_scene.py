@@ -13,6 +13,7 @@ import numpy as np
 from vulkan_material_maps import parametros_mapa, mapa_transparencia_ativo
 from vulkan_area_lights import amostrar_luzes, MAX_LUZES_VULKAN
 from vulkan_displacement import posicoes_render
+from vulkan_buffers import CacheBuffersVulkan
 
 
 def pixels_textura_rgba(dados):
@@ -903,6 +904,7 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
             mag_filter="linear", min_filter="linear"
         )
         self._texturas = {}
+        self._buffers = CacheBuffersVulkan(self.device, wgpu)
         self._depth = None
         self._depth_size = None
         self._cor_msaa = None
@@ -1362,14 +1364,19 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
                     cores_especulares.reshape(-1), mapas_parametros,
                     direcoes_luzes.reshape(-1), atenuacoes_luzes.reshape(-1), amostragem_luzes,
                 )).astype(np.float32)
-                buf_u = self.device.create_buffer_with_data(
-                    data=uniforms, usage=wgpu.BufferUsage.UNIFORM
-                )
-                buf_v = self.device.create_buffer_with_data(
-                    data=vertices, usage=wgpu.BufferUsage.VERTEX
-                )
-                buf_i = self.device.create_buffer_with_data(
-                    data=indices, usage=wgpu.BufferUsage.INDEX
+                # Não recriar buffers GPU a cada movimento de câmera ou
+                # morph. Passes de wireframe usam chaves distintas porque
+                # ambos são codificados antes de submeter o render pass.
+                origem_buffers = obj.original if isinstance(
+                    obj, _PasseWireframe
+                ) else obj
+                passe_buffers = (
+                    "wireframe-linhas" if linhas
+                    else "wireframe-preenchimento"
+                ) if isinstance(obj, _PasseWireframe) else "principal"
+                buf_v, buf_i, buf_u = self._buffers.atualizar(
+                    origem_buffers, vertices, indices, uniforms,
+                    passe=passe_buffers,
                 )
                 textura = self._textura(getattr(obj, "texture", None))
                 textura_normal = self._textura(caminho_normal)
