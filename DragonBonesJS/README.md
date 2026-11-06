@@ -66,3 +66,9 @@ Uma reprodução isolada com TypeScript 5.8.3 e Node.js 22 confirmou a diferenç
 O `WorldClock` agora libera referências imediatamente em `remove()` e `clear()` quando não há atualização em andamento, reduzindo o acúmulo de posições vazias entre quadros. Durante `advanceTime()`, as remoções continuam sendo adiadas até o término da atualização mais externa. O bloco `finally` também libera posições após exceções em callbacks. Não há alteração intencional da API pública ou do formato de animações.
 
 Foram acrescentados cinco testes de regressão, totalizando **31 testes definidos** no núcleo. Em uma reprodução **isolada** do relógio, compilada com TypeScript 5.8.3 e executada com Node 22, sete casos de referência passaram; **isso não substitui a execução de `npm test` no projeto DragonBonesJS completo**, que segue pendente.
+
+## Correção de identificação do pool (em revisão)
+
+O pool de `BaseObject` não usa mais `String(constructor)` como chave. Duas classes distintas podem ter o mesmo `toString()`, especialmente após minificação, e acabavam recebendo objetos uma da outra. Agora os identificadores internos são atribuídos pela **identidade do construtor**, sem alterar métodos públicos nem exigir APIs novas de runtime. A troca usa um registro de construtores em memória e mantém o alvo ES5. Foram acrescentados três testes de regressão.
+
+O defeito foi reproduzido em JavaScript isolado; o build completo e a suíte completa do núcleo ainda precisam ser executados.

@@ -45,3 +45,51 @@ test("pool dictionaries safely handle inherited JavaScript object keys", () => {
     assert.strictEqual(second, first);
     BaseObject.clearPool(PrototypeKeyObject);
 });
+
+class SharedNameA extends BaseObject {
+    static toString() { return "[class dragonBones.Duplicate]"; }
+    _onClear() { }
+}
+
+class SharedNameB extends BaseObject {
+    static toString() { return "[class dragonBones.Duplicate]"; }
+    _onClear() { }
+}
+
+class InheritedClassName extends BaseObject {
+    // Inherits the BaseObject.toString() method, which deliberately throws.
+    _onClear() { }
+}
+
+test("pools never mix classes with matching toString values", () => {
+    const a = BaseObject.borrowObject(SharedNameA);
+    a.returnToPool();
+    const b = BaseObject.borrowObject(SharedNameB);
+    assert.ok(b instanceof SharedNameB);
+    assert.notStrictEqual(b, a);
+    b.returnToPool();
+    BaseObject.clearPool(SharedNameA);
+    BaseObject.clearPool(SharedNameB);
+});
+
+test("borrowObject supports subclasses without a static toString override", () => {
+    const child = BaseObject.borrowObject(InheritedClassName);
+    assert.ok(child instanceof InheritedClassName);
+    child.returnToPool();
+    BaseObject.clearPool(InheritedClassName);
+});
+
+test("setMaxCount is isolated when different classes have the same string name", () => {
+    BaseObject.setMaxCount(SharedNameA, 0);
+    try {
+        const a = BaseObject.borrowObject(SharedNameA);
+        a.returnToPool();
+        const b = BaseObject.borrowObject(SharedNameB);
+        b.returnToPool();
+        assert.strictEqual(BaseObject.borrowObject(SharedNameB), b);
+    } finally {
+        BaseObject.setMaxCount(SharedNameA, 3000);
+        BaseObject.clearPool(SharedNameA);
+        BaseObject.clearPool(SharedNameB);
+    }
+});
