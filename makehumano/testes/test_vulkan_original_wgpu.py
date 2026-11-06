@@ -33,7 +33,8 @@ from vulkan_lighting import dados_iluminacao_cena
 from vulkan_shader import (configuracao_shader_nativo, nome_preset_nativo,
                            textura_litsphere_nativa,
                            parametros_extras_shader_nativo,
-                           textura_normalmap_nativa, PRESETS_NATIVOS)
+                           textura_normalmap_nativa, textura_ao_shader_nativa,
+                           texturas_skin_nativas, PRESETS_NATIVOS)
 
 
 def objeto_original(face=None):
@@ -724,7 +725,7 @@ class TestarPresetXrayOriginalVulkan(unittest.TestCase):
         np.testing.assert_allclose(params, [0.2, 3.5, 0.4, 1.0])
 
     def test_outros_shaders_glsl_nao_sao_marcados_como_portados(self):
-        for nome in ("skin",):
+        for nome in ("shadermuitoantigo", "inventado"):
             with self.subTest(shader=nome):
                 modo, _, pendente = configuracao_shader_nativo(
                     self._material(shader="/data/shaders/glsl/" + nome)
@@ -738,7 +739,7 @@ class TestarPresetXrayOriginalVulkan(unittest.TestCase):
         self.assertIsNotNone(pendente)
 
     def test_seletor_so_oferece_preset_portado(self):
-        self.assertEqual(PRESETS_NATIVOS, frozenset(("xray", "litsphere", "phong", "toon", "normalmap")))
+        self.assertEqual(PRESETS_NATIVOS, frozenset(("xray", "litsphere", "phong", "toon", "normalmap", "skin")))
         self.assertEqual(
             nome_preset_nativo("/data/shaders/glsl/xray"), "xray",
         )
@@ -906,10 +907,9 @@ class TestarShadersPhongToonOriginal(unittest.TestCase):
             self.assertEqual(
                 nome_preset_nativo("/data/shaders/glsl/" + nome), nome,
             )
-        for nome in ("skin",):
-            self.assertIsNone(
-                nome_preset_nativo("/data/shaders/glsl/" + nome),
-            )
+        self.assertEqual(
+            nome_preset_nativo("/data/shaders/glsl/skin"), "skin",
+        )
         self.assertEqual(
             nome_preset_nativo("/data/shaders/glsl/normalmap"), "normalmap",
         )
@@ -971,6 +971,66 @@ class TestarPresetNormalMapOriginalVulkan(unittest.TestCase):
 
     def test_nao_registra_shader_customizado_com_mesmo_nome(self):
         self.assertIsNone(nome_preset_nativo("/plugins/custom/normalmap"))
+
+
+class TestarShaderSkinOriginalVulkan(unittest.TestCase):
+    def _material(self, **kwargs):
+        rgb = np.ones((2, 2, 4), dtype=np.uint8)
+        ao = SimpleNamespace(width=2, height=2, data=rgb)
+        grad = SimpleNamespace(
+            width=4, height=1,
+            data=np.ones((1, 4, 4), dtype=np.uint8),
+        )
+        args = dict(
+            shader="/data/shaders/glsl/skin",
+            shaderParameters={
+                "ambientOcclusionMap": ao, "gradientMap": grad,
+            },
+            shaderConfig={"diffuse": True, "ambientOcclusion": True},
+        )
+        args.update(kwargs)
+        return SimpleNamespace(**args)
+
+    def test_preset_skin_reconhecido_com_contrato_glsl(self):
+        arquivo = (
+            RAIZ / "codigo" / "makehuman" / "data" / "shaders"
+            / "glsl" / "skin_fragment_shader.txt"
+        ).read_text(encoding="utf-8")
+        self.assertIn("uniform sampler1D gradientMap", arquivo)
+        self.assertIn("uniform sampler2D ambientOcclusionMap", arquivo)
+        material = self._material()
+        modo, params, pendente = configuracao_shader_nativo(material)
+        self.assertEqual(modo, 6)
+        self.assertIsNone(pendente)
+        np.testing.assert_array_equal(params, [0, 0, 0, 0])
+        ao, grad = texturas_skin_nativas(material)
+        self.assertIs(ao, material.shaderParameters["ambientOcclusionMap"])
+        self.assertIs(grad, material.shaderParameters["gradientMap"])
+
+    def test_reutiliza_aomap_texture_do_material_original(self):
+        with tempfile.TemporaryDirectory() as pasta:
+            caminho = Path(pasta) / "ao.png"
+            caminho.write_bytes(b"teste")
+            material = self._material(
+                shaderParameters={
+                    "aomapTexture": str(caminho), "gradientMap": "nao_existe",
+                },
+            )
+            self.assertEqual(textura_ao_shader_nativa(material), str(caminho))
+            with self.assertRaises(ValueError):
+                texturas_skin_nativas(material)
+
+    def test_ao_e_gradiente_obrigatorios(self):
+        material = self._material(shaderParameters={})
+        self.assertEqual(texturas_skin_nativas(material), (None, None))
+        material.shaderParameters = {"gradientMap": 5}
+        self.assertIsNone(texturas_skin_nativas(material)[0])
+
+    def test_skin_nao_e_render_skin_de_baking_uv(self):
+        self.assertEqual(
+            nome_preset_nativo("/data/shaders/glsl/skin"), "skin",
+        )
+        self.assertIsNone(nome_preset_nativo("/plugins/skin"))
 
 
 if __name__ == "__main__":
