@@ -70,19 +70,20 @@ Salvo nova autorização explícita do criador, **não desenvolver**:
 - A cópia do MakeHuman original está em `codigo/makehuman/`.
 - Foram feitos ajustes e testes iniciais de compatibilidade com Python moderno,
   mas a compatibilidade completa do aplicativo precisa ser verificada.
-- Existe um protótipo de Vulkan isolado em `motor_wgpu/`. Ele pode servir como
-  **referência técnica para a migração**, mas **não substitui** o motor
-  OpenGL do MakeHuman original. A existência desse protótipo não significa
-  que a migração esteja concluída.
+- O antigo editor Vulkan independente foi removido da árvore ativa por decisão
+  do criador. Seu histórico permanece no Git. A integração Vulkan piloto da
+  janela original está em `codigo/makehuman/lib/vulkan_*.py` e **ainda não
+  substitui** integralmente o motor OpenGL.
 - Auditoria inicial encontrou dependências diretas em `lib/qtui.py`
   (`QOpenGLWidget`), `lib/glmodule.py`, `lib/shader.py`,
   `lib/texture.py`, `lib/mh.py`, shaders GLSL, no plugin
   `plugins/4_rendering_opengl/` e em `codigo/requirements.txt`
   (`PyOpenGL`). Isso não é uma lista exaustiva.
-- Recursos experimentais já desenvolvidos no protótipo são **histórico de
-  pesquisa, não novos requisitos**. Não devem comandar os próximos trabalhos
-  nem ser apresentados como conclusão do objetivo principal.
-- Nenhum código existente deve ser apagado apenas para corrigir o planejamento.
+- Recursos do antigo editor independente são **histórico de pesquisa, não novos
+  requisitos**. Não devem comandar os próximos trabalhos nem ser apresentados
+  como conclusão do objetivo principal.
+- O código da aplicação original não deve ser apagado apenas para corrigir o
+  planejamento; remoções do motor OpenGL dependem de equivalência validada.
 
 ## Ordem de execução
 
@@ -98,8 +99,8 @@ Salvo nova autorização explícita do criador, **não desenvolver**:
 5. Eliminar os módulos OpenGL obsoletos, referências ativas ao PyOpenGL,
    shaders exclusivamente GLSL e plugins de OpenGL substituídos. Validar que
    a aplicação inicia e opera **sem PyOpenGL nem contexto OpenGL**.
-6. Documentar a execução do próprio MakeHuman atualizado, sem exigir o
-   visualizador experimental separado.
+6. Documentar a execução do próprio MakeHuman atualizado, sem editor
+   experimental separado.
 
 ## Critério de conclusão
 
@@ -114,10 +115,10 @@ A validação de conclusão exige demonstrar que:
 - As funcionalidades gráficas equivalentes existentes foram verificadas.
 - O OpenGL obsoleto foi retirado do código ativo após a migração; a história
   original permanece acessível pelo Git e com seus créditos/licenças.
-- O MakeHuman atualizado funciona **na interface original**, não somente
-  no visualizador `motor_wgpu/`.
+- O MakeHuman atualizado funciona **na interface original**, não em um editor
+  separado.
 
-Testes isolados do protótipo paralelo **não satisfazem** esses critérios.
+Testes isolados do piloto Vulkan **não satisfazem**, por si sós, esses critérios.
 
 Este documento é a referência de escopo para as próximas alterações.
 Qualquer ampliação exige decisão explícita do criador.

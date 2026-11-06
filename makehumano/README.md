@@ -15,11 +15,11 @@ Ainda faltam migração e validação da infraestrutura gráfica completa (mater
 | Caminho | Função |
 | --- | --- |
 | `codigo/` | Cópia versionada do MakeHuman original, com recursos, licenças e alterações em desenvolvimento. **Não excluir** arquivos originais sem verificar dependências. |
-| `motor_wgpu/` | Protótipo Vulkan independente, mantido **como referência técnica**, não como produto a entregar. Consulte [seu histórico](motor_wgpu/README.md). |
-| `testes/` | Testes de regressão da modelagem, do protótipo, da integração e smoke test gráfico. |
+| `testes/` | Testes de regressão da modelagem e da integração Vulkan na janela original, além do smoke test gráfico. |
 | `diagnostico.py` | Verifica dependências disponíveis e sintaxe dos arquivos Python. |
 | `executar.py` | Inicia a aplicação original presente em `codigo/makehuman/`. |
 | `importar_original.py` | Ferramenta de reimportação do upstream, **não necessária para uso normal desta cópia**. |
+| `requirements-vulkan-piloto.txt` | Dependências adicionais do Vulkan piloto na interface original. |
 | `ESCOPO.md` | Objetivos, limites e critérios de conclusão do projeto. |
 
 ## Executar a aplicação original
@@ -36,14 +36,14 @@ python executar.py --noshaders
 
 A execução comum ainda utiliza OpenGL durante a migração e requer ambiente gráfico com as bibliotecas Qt e drivers apropriados. O parâmetro `--noshaders` facilita o teste inicial, mas **não representa a renderização final**.
 
-Para experimentar a integração Vulkan na **janela original**, instale também as dependências do protótipo. Exemplo de shell Linux/macOS:
+Para experimentar a integração Vulkan na **janela original**, instale as dependências adicionais do próprio piloto. Exemplo de shell Linux/macOS:
 
 ```bash
-python -m pip install -r motor_wgpu/requirements.txt
+python -m pip install -r requirements-vulkan-piloto.txt
 MAKEHUMANO_VULKAN_PILOT=1 WGPU_BACKEND_TYPE=Vulkan python executar.py --noshaders
 ```
 
-Esse modo é **experimental**; ele ainda necessita de dependências legadas e não deve ser tratado como substituição concluída do OpenGL. Não confundir com o aplicativo independente em `motor_wgpu/`.
+Esse modo é **experimental**; ele ainda necessita de dependências legadas e não deve ser tratado como substituição concluída do OpenGL.
 
 ## Testes
 
@@ -57,7 +57,7 @@ O teste gráfico da GUI precisa de ambiente com suporte a Qt e renderização; o
 
 - `testar-makehumano.yml`: Python 3.12/3.13, sintaxe e regressões.
 - `smoke-gui-makehumano.yml`: abertura da interface original.
-- `testar-wgpu.yml`: testes do protótipo e do piloto Vulkan na GUI original.
+- `testar-vulkan-makehumano.yml`: testes do Vulkan conectado à GUI original, sem editor independente.
 
 **Atenção à reimportação:** `codigo/` já está versionado e contém alterações próprias. Executar `python importar_original.py --atualizar` troca a cópia de trabalho por outra do upstream e move a anterior para um backup local. Não use esse comando para atualizar uma instalação existente sem primeiro revisar suas alterações.
 
@@ -68,7 +68,7 @@ O teste gráfico da GUI precisa de ambiente com suporte a Qt e renderização; o
 3. Comprovar equivalência funcional e visual com testes de regressão.
 4. Remover o motor OpenGL **somente após** a substituição e a validação.
 
-O protótipo independente serve apenas de base de pesquisa. O histórico das experiências anteriores está em [motor_wgpu/README.md](motor_wgpu/README.md) e no Git; não é necessário duplicá-lo aqui.
+O editor experimental independente foi removido da árvore ativa. Seu histórico continua disponível nos commits antigos do Git. O trabalho futuro é exclusivamente na aplicação original.
 
 ## Licenças e proveniência
 
