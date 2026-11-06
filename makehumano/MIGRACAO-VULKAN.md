@@ -246,3 +246,10 @@ incluindo rotação orbital, em vez do atributo obsoleto `mesh.transform`.
 O controlador de smoke interrompe a inicialização ao detectar um traceback
 ou erro de desenho, preservando o diagnóstico sem repetir a mesma falha
 até o timeout.
+
+As chaves de arquivo do cache CPU/GPU são normalizadas, de modo que caminhos
+relativos/absolutos e barras `/` ou `\` no Windows identifiquem o mesmo
+recurso. Imagens em memória têm identidade separada do arquivo de origem,
+evita-se assim misturar versões de Image e de arquivos. O workflow executa
+a regressão de cópias de trabalho no sistema alvo antes de empacotar; a
+verificação de separadores Windows roda no runner Windows.

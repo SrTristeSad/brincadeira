@@ -41,6 +41,9 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r makehumano/codigo/requirements.txt "pyinstaller>=6.10,<7"
 
+      - name: Verificar edição e recarga de texturas no sistema alvo
+        run: python -m unittest discover -s makehumano/testes -p "test_texture_working_copy.py" -v
+
       - name: Construir executável com dependências incluídas
         shell: bash
         run: |

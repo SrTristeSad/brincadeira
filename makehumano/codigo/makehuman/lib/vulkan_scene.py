@@ -975,11 +975,16 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
         if caminho is None:
             self._texturas.clear()
         else:
+            from vulkan_texture import chave_arquivo
+            # Também remove entradas antigas/fallbacks armazenadas pelo
+            # caminho literal, além da chave canônica dos arquivos válidos.
             self._texturas.pop(str(caminho), None)
+            if isinstance(caminho, (str, os.PathLike)):
+                self._texturas.pop(chave_arquivo(caminho), None)
 
     def _textura(self, caminho):
         from image import Image
-        from vulkan_texture import getTexture
+        from vulkan_texture import getTexture, chave_arquivo
         resource = caminho
         file_path = isinstance(caminho, (str, os.PathLike))
         if isinstance(caminho, Image) or (file_path and os.path.isfile(caminho)):
@@ -989,7 +994,7 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
             and hasattr(resource, "width") and hasattr(resource, "height")
         )
         if dinamica:
-            chave = str(caminho) if file_path else ("imagem", id(caminho))
+            chave = chave_arquivo(caminho) if file_path else ("imagem", id(caminho))
             origem = np.asarray(resource.data)
             assinatura = (
                 getattr(resource, "modified", None), origem.shape,

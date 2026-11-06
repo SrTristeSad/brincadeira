@@ -34,7 +34,7 @@ em `motor_wgpu`. O estado abaixo distingue testes exercitados de paridade final.
 
 ## Validação local
 
-A suíte completa executou **300 testes com sucesso**, usando Python 3.12,
+A suíte completa executou **303 testes sem falhas** (um específico do Windows é pulado localmente), usando Python 3.12,
 NumPy 2.5.4 e Qt 5.15.14. Os testes Qt de gravação PNG verificam os canais,
 alfa e imagens com largura não alinhada. Os dados binários verificam Unicode
 em grupos de malha, tags de proxies e metadados de licença. A criação local do

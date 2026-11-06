@@ -19,6 +19,11 @@ NOTFOUND_TEXTURE = getSysDataPath("textures/texture_notfound.png")
 _textureCache = {}
 
 
+def chave_arquivo(path):
+    """Mesma chave para caminhos relativos/absolutos e barras no Windows."""
+    return os.path.normcase(os.path.abspath(os.fspath(path)))
+
+
 class Texture:
     """Compatibilidade com a API original sem glGenTextures/glBindTexture."""
 
@@ -99,7 +104,9 @@ def getTexture(path, cache=None):
     if cache is None:
         cache = _textureCache
     if isinstance(path, Image):
-        key = getattr(path, "sourcePath", id(path))
+        # A cópia de uma Image é independente do arquivo que a originou.
+        # Misturar chaves também misturava versões float de Image com mtime.
+        key = ("image", id(path))
         atual = cache.get(key)
         if atual is None:
             atual = Texture(path)
@@ -116,10 +123,11 @@ def getTexture(path, cache=None):
         return None
     stat = os.stat(path)
     mtime = stat.st_mtime_ns
-    cached = cache.get(path)
+    key = chave_arquivo(path)
+    cached = cache.get(key)
     if cached is None:
         cached = Texture(path)
-        cache[path] = cached
+        cache[key] = cached
     elif (getattr(cached, "_source_version", None) != mtime
           or getattr(cached, "_source_size", None) != stat.st_size):
         cached.loadImage(path)
@@ -134,7 +142,5 @@ def reloadTextures():
 
 
 def reloadTexture(path):
-    if isinstance(path, os.PathLike):
-        path = os.fspath(path)
-    _textureCache.pop(path, None)
+    _textureCache.pop(chave_arquivo(path), None)
     _invalidar(path)
