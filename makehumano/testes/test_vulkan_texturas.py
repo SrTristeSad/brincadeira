@@ -125,6 +125,23 @@ class TestarTexturasDaGuiOriginal(unittest.TestCase):
         self.assertEqual(textura.format, "rgba8unorm")
         self.assertEqual(textura.usage, 3)
 
+    def test_png_real_do_qt_chega_ao_buffer_de_upload(self):
+        """Valida QImage real; a GPU continua simulada."""
+        from PyQt5 import QtGui
+
+        caminho = Path(self.temp.name) / "imagem_real.png"
+        imagem = QtGui.QImage(2, 1, QtGui.QImage.Format_RGBA8888)
+        imagem.setPixelColor(0, 0, QtGui.QColor(10, 20, 30, 40))
+        imagem.setPixelColor(1, 0, QtGui.QColor(50, 60, 70, 80))
+        self.assertTrue(imagem.save(str(caminho), "PNG"))
+
+        cache_qt = CacheTexturasVulkan(self.device, WgpuFalso, QtGui)
+        textura = cache_qt.obter(str(caminho))
+        self.assertEqual(textura.size, (2, 1, 1))
+        self.assertEqual(
+            textura.pixels, bytes((10, 20, 30, 40, 50, 60, 70, 80))
+        )
+
     def test_arquivo_inalterado_reutiliza_textura_sem_upload(self):
         self.caminho.write_bytes(bytes((1, 2, 3, 4)))
         primeiro = self.cache.obter(self.caminho)
