@@ -234,6 +234,8 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "Falha na regressão de runtime Vulkan ausente" }
             python makehumano/testes/smoke_gui.py --executable dist/MakeHumano/MakeHumano.exe --log-dir portable-logs
             if ($LASTEXITCODE -ne 0) { throw "Falha no smoke da GUI Windows" }
+            python makehumano/testes/compare_portable_frames.py source-windows-logs portable-logs
+            if ($LASTEXITCODE -ne 0) { throw "Render Windows difere entre fontes e pacote" }
           } finally {
             Remove-ItemProperty -Path $driverRegistry -Name $env:VK_DRIVER_FILES -ErrorAction SilentlyContinue
           }

@@ -843,6 +843,8 @@ class MHApplication(gui3d.Application, mh.Application):
         if functional_file:
             from portable_smoke import check_original_tools
             check_original_tools(self, functional_file)
+        self._startup_complete = True
+        G.canvas.request_redraw()
         ready_file = os.environ.get("MAKEHUMANO_SMOKE_READY_FILE")
         if ready_file:
             with open(ready_file, "w", encoding="utf-8") as marker:

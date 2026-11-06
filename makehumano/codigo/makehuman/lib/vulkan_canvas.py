@@ -269,7 +269,10 @@ def criar_canvas_vulkan(canvas_original):
                     + str(self._cena.objetos_desenhados),
                     flush=True,
                 )
-            if self._cena.objetos_desenhados:
+            if (self._cena.objetos_desenhados
+                    and getattr(self.app, "_startup_complete", False)):
+                # Capturar somente a cena final, após plugins, iluminação
+                # e morph targets; quadros durante a carga não são referência.
                 # Exercita o picking da janela original em smoke (sem
                 # glReadPixels); o valor RGB mantém contrato de FaceGroups.
                 picking = os.environ.get("MAKEHUMANO_VULKAN_PICK_FILE")
