@@ -193,23 +193,27 @@ jobs:
           msystem: MINGW64
           install: mingw-w64-x86_64-mesa
 
+      - name: Preparar Lavapipe MSVC para renderização Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP "makehumano-mesa-msvc.7z"
+          Invoke-WebRequest -Uri "https://github.com/pal1000/mesa-dist-win/releases/download/26.2.6/mesa3d-26.2.6-release-msvc.7z" -OutFile $archive
+          $expected = "B2E00615FEABA45942343C265CC8C5F576142CA682C1AC6661922D4B72492877"
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash -ne $expected) { throw "Hash Mesa MSVC inválido" }
+          & "C:\Program Files\7-Zip\7z.exe" x $archive "-o$env:RUNNER_TEMP\makehumano-mesa-msvc" -y | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "Falha ao extrair Mesa MSVC" }
+
       - name: Abrir GUI congelada e exercitar ferramentas no Windows
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $mesa = "${{ steps.mesa.outputs.msys2-location }}\mingw64"
           $env:PATH = "$mesa\bin;$env:PATH"
-          $env:VK_DRIVER_FILES = "$mesa\share\vulkan\icd.d\lvp_icd.x86_64.json"
-          # PyInstaller muda a busca de DLLs: o loader deve estar ao lado do
-          # executável durante o teste. Removê-lo antes de publicar o pacote.
-          # O loader MinGW também depende das DLLs de runtime do Mesa.
-          # O bootloader congelado altera a busca de DLLs; manter o conjunto
-          # completo no diretório do .exe durante o teste, sem distribuí-lo.
-          $driverDlls = Get-ChildItem "$mesa\bin\*.dll"
-          foreach ($dll in $driverDlls) {
-            if (Test-Path "dist/MakeHumano/$($dll.Name)") { throw "Colisão de DLL de teste: $($dll.Name)" }
-            Copy-Item $dll.FullName dist/MakeHumano/
-          }
+          # Usar o driver MSVC estático no mesmo ABI do Python/Qt; o
+          # Lavapipe MinGW do MSYS2 apresentou heap corruption no render.
+          $driver = Join-Path $env:RUNNER_TEMP "makehumano-mesa-msvc\x64"
+          $env:VK_DRIVER_FILES = "$driver\lvp_icd.x86_64.json"
           $env:MAKEHUMANO_VULKAN_LOADER = "$mesa\bin\vulkan-1.dll"
           $env:VK_LOADER_DEBUG = "error,warn"
           $env:PYTHONUTF8 = "1"
@@ -232,9 +236,6 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "Falha no smoke da GUI Windows" }
           } finally {
             Remove-ItemProperty -Path $driverRegistry -Name $env:VK_DRIVER_FILES -ErrorAction SilentlyContinue
-            foreach ($dll in $driverDlls) {
-              Remove-Item "dist/MakeHumano/$($dll.Name)" -ErrorAction SilentlyContinue
-            }
           }
 
       - name: Verificar GUI congelada e ferramentas no Linux
