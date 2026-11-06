@@ -207,7 +207,7 @@ class Scene(object):
         try:
             hfile = open(path, 'rb')
         except IOError as e:
-            log.warning('Could not load %s: %s', path, e[1])
+            log.warning('Could not load %s: %s', path, e)
             return False
         except Exception as e:
             log.error('Failed to load scene file %s\nError: %s',
@@ -257,7 +257,7 @@ class Scene(object):
         try:
             hfile = open(path, 'wb')
         except IOError as e:
-            log.warning('Could not save %s: %s', path, e[1])
+            log.warning('Could not save %s: %s', path, e)
             return False
         except Exception as e:
             log.error('Failed to save scene file %s\nError: %s\n',

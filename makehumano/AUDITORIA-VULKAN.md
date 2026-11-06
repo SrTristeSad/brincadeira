@@ -20,12 +20,13 @@ em `motor_wgpu`. O estado abaixo distingue testes exercitados de paridade final.
 | `tostring`/`fromstring` binário incompatíveis com NumPy atual | Escrita/leitura modernizada em imagens, grupos de malha, proxies e licenças; roundtrips UTF-8 e PNG, incluindo correção de canais RGBA |
 | Mapas especulares e de transparência ignorados | Texturas e intensidades originais no WGSL; testes GPU branco/preto/cinza e intensidade zero |
 | Foco e atenuação sem efeito | Cone por posição/foco/ângulo e atenuação por distância; capturas GPU controladas |
+| Erros de acesso a `.mhscene` geravam outra exceção | Tratamento de `OSError` compatível com Python 3; roundtrip de luzes, arquivo ausente e permissão negada testados |
 | Softness alterava a atenuação no editor original | Evento agora atualiza `areaLightSize`, com regressão nos widgets reais; não implementa luzes de área |
 | Plugins/exportadores só carregavam | Smoke altera geometria, salva/reabre MHM e exporta OBJ/FBX/DAE/STL, verificando estrutura dos arquivos |
 
 ## Validação local
 
-A suíte completa executou **242 testes com sucesso**, usando Python 3.12,
+A suíte completa executou **245 testes com sucesso**, usando Python 3.12,
 NumPy 2.5.4 e Qt 5.15.14. Os testes Qt de gravação PNG verificam os canais,
 alfa e imagens com largura não alinhada. Os dados binários verificam Unicode
 em grupos de malha, tags de proxies e metadados de licença. A criação local do
