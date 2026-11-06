@@ -214,6 +214,12 @@ jobs:
           $env:VK_LOADER_DEBUG = "error,warn"
           $env:PYTHONUTF8 = "1"
           $env:MAKEHUMANO_VULKAN_DEBUG = "1"
+          # Runners Windows são elevados: o loader ignora VK_DRIVER_FILES
+          # nesse caso. Registrar o ICD só nesta VM de CI (DWORD 0 = ativo).
+          $driverRegistry = "HKLM:\SOFTWARE\Khronos\Vulkan\Drivers"
+          if (!(Test-Path $env:VK_DRIVER_FILES)) { throw "Manifesto Lavapipe ausente" }
+          New-Item -Path $driverRegistry -Force | Out-Null
+          New-ItemProperty -Path $driverRegistry -Name $env:VK_DRIVER_FILES -PropertyType DWord -Value 0 -Force | Out-Null
           try {
             Remove-Item Env:MAKEHUMANO_PORTABLE_SELFTEST -ErrorAction SilentlyContinue
             python makehumano/testes/diagnostico_vulkan_windows.py
@@ -223,6 +229,7 @@ jobs:
             python makehumano/testes/smoke_gui.py --executable dist/MakeHumano/MakeHumano.exe --log-dir portable-logs
             if ($LASTEXITCODE -ne 0) { throw "Falha no smoke da GUI Windows" }
           } finally {
+            Remove-ItemProperty -Path $driverRegistry -Name $env:VK_DRIVER_FILES -ErrorAction SilentlyContinue
             foreach ($dll in $driverDlls) {
               Remove-Item "dist/MakeHumano/$($dll.Name)" -ErrorAction SilentlyContinue
             }
