@@ -1,0 +1,142 @@
+name: MakeHumano - ZIP portátil de testes
+
+on:
+  push:
+    paths:
+      - ".github/workflows/empacotar-makehumano.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  portatil:
+    name: ZIP portátil ${{ matrix.nome }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            nome: Windows
+          - os: ubuntu-24.04
+            nome: Linux
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: makehumano/motor_wgpu/requirements.txt
+
+      - name: Instalar bibliotecas e empacotador
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r makehumano/codigo/requirements.txt "pyinstaller>=6.10,<7"
+
+      - name: Construir executável com dependências incluídas
+        shell: bash
+        run: |
+          python -m PyInstaller --noconfirm --clean --onedir --console \
+            --name MakeHumano \
+            --collect-all PyQt5 \
+            --collect-all numpy \
+            --collect-all wgpu \
+            --collect-all rendercanvas \
+            --hidden-import PyQt5.QtWidgets \
+            --hidden-import PyQt5.QtCore \
+            --hidden-import PyQt5.QtGui \
+            --hidden-import PyQt5.QtSvg \
+            --hidden-import wgpu.backends.wgpu_native \
+            --hidden-import rendercanvas.qt \
+            makehumano/codigo/makehuman/makehuman.py
+
+      - name: Copiar recursos originais, plugins, targets e modelos
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os
+          import shutil
+          from pathlib import Path
+
+          origem = Path("makehumano/codigo/makehuman")
+          destino = Path("dist/MakeHumano")
+          assert (destino / ("MakeHumano.exe" if os.name == "nt" else "MakeHumano")).exists()
+          for item in origem.iterdir():
+              if item.name in {"__pycache__", ".git"}:
+                  continue
+              alvo = destino / item.name
+              if item.is_dir():
+                  shutil.copytree(item, alvo, dirs_exist_ok=True,
+                                  ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+              elif item.is_file():
+                  shutil.copy2(item, alvo)
+          exigidos = ("data", "plugins", "lib", "apps", "shared", "core")
+          for nome in exigidos:
+              assert (destino / nome).is_dir(), f"Recurso obrigatório ausente: {nome}"
+          print("Recursos copiados:", ", ".join(exigidos))
+          PY
+
+      - name: Criar iniciadores e instruções
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          pasta = Path("dist/MakeHumano")
+          (pasta / "LEIA-ME.txt").write_text(
+              "MAKEHUMANO - TESTE VULKAN (NAO E VERSAO FINAL)\n\n"
+              "WINDOWS: clique duas vezes em Iniciar-MakeHumano.bat.\n"
+              "LINUX: execute ./Iniciar-MakeHumano.sh em um terminal.\n\n"
+              "O Python e as bibliotecas Python estao inclusos no pacote.\n"
+              "Ainda e necessario ter drivers de video com Vulkan.\n"
+              "Alguns plugins, shaders e funcoes de edicao podem apresentar falhas.\n"
+              "Codigo original baseado no MakeHuman (AGPLv3).\n",
+              encoding="utf-8",
+          )
+          (pasta / "Iniciar-MakeHumano.bat").write_text(
+              '@echo off\r\ncd /d "%~dp0"\r\n'
+              'set WGPU_BACKEND_TYPE=Vulkan\r\n'
+              '"%~dp0MakeHumano.exe" %*\r\n'
+              'if errorlevel 1 pause\r\n',
+              encoding="utf-8",
+          )
+          script = pasta / "Iniciar-MakeHumano.sh"
+          script.write_text(
+              '#!/usr/bin/env sh\n'
+              'cd "$(dirname "$0")" || exit 1\n'
+              'export WGPU_BACKEND_TYPE=Vulkan\n'
+              'exec ./MakeHumano "$@"\n',
+              encoding="utf-8",
+          )
+          script.chmod(0o755)
+          PY
+
+      - name: Teste rápido do executável Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $exe = Resolve-Path "dist/MakeHumano/MakeHumano.exe"
+          $processo = Start-Process -FilePath $exe -ArgumentList "--license" -WorkingDirectory "dist/MakeHumano" -Wait -PassThru
+          if ($processo.ExitCode -ne 0) { throw "Executável Windows não inicializou: $($processo.ExitCode)" }
+          Write-Output "Executável Windows iniciou e encerrou sem erro."
+
+      - name: Teste rápido do executável Linux
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          cd dist/MakeHumano
+          timeout 40 ./MakeHumano --license
+          test -x ./Iniciar-MakeHumano.sh
+
+      - name: Disponibilizar o ZIP portátil
+        uses: actions/upload-artifact@v4
+        with:
+          name: MakeHumano-${{ matrix.nome }}-Vulkan-portatil
+          path: dist/MakeHumano/
+          if-no-files-found: error
+          compression-level: 6
+          retention-days: 30
