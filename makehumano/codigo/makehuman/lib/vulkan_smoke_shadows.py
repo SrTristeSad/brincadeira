@@ -118,8 +118,20 @@ def validar_sombras(cena, cameras, mundo, directory):
         blocker.excludeFromProduction = False
         # Fração transmitida é medida no receptor, fora da projeção visual
         # dos cartões. A área dark foi determinada por um oclusor opaco.
+        def linear_rgb(image):
+            rgb = image[:, :, :3].astype(float)/255.
+            if cena.formato.endswith('-srgb'):
+                rgb = np.where(rgb <= .04045, rgb/12.92, ((rgb+.055)/1.055)**2.4)
+            return rgb
+
+        def expected_fraction(fraction):
+            rgb = linear_rgb(on) + fraction*(linear_rgb(off)-linear_rgb(on))
+            if cena.formato.endswith('-srgb'):
+                rgb = np.where(rgb <= .0031308, rgb*12.92, 1.055*rgb**(1./2.4)-.055)
+            return rgb*255.
+
         def check_fraction(image, fraction, label):
-            expected = on[:, :, :3].astype(float) + fraction*(off[:, :, :3].astype(float)-on[:, :, :3])
+            expected = expected_fraction(fraction)
             error = np.max(np.abs(image[:, :, :3].astype(float)[dark]-expected[dark]))
             if error > 3.:
                 debug_path = Path(directory)
