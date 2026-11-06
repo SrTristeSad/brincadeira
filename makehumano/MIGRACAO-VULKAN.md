@@ -22,6 +22,7 @@
 | `mh.renderSkin` | `vulkan_skin.render_skin`: linhas, triângulos e quads UV | Smoke UV mínimo |
 | `mh.Texture` | `vulkan_texture.Texture` em memória CPU | Implementação provisória |
 | Material `.mhmat` | Difusa, opacidade, brilho especular, emissão, back/front cull, depthless | Pipeline WGSL; equivalência visual pendente |
+| Malhas com `transparentPrimitives` | Desativa escrita de profundidade e descarta fragmentos de alfa zero (`glAlphaFunc(GL_GREATER, 0)` original) | Smoke GPU de camadas sobrepostas; alpha-to-coverage/MSAA pendentes |
 | Normal maps `.mhmat` | Textura e intensidade originais; base tangente derivada de UVs no fragmento | Pipeline validada na CI; comparação visual pendente |
 | Iluminação `.mhscene` | Até oito luzes pontuais, ambiente e reflexo Blinn-Phong | Aproximação; falta atenuação/foco/especular de cena |
 | Shader xray original (.mhmat) | WGSL nativo com `edgefalloff`, `intensity`, cor ambiente e alfa de contorno | Execução GPU validada; comparar imagem |
@@ -38,6 +39,7 @@
 ## Arquitetura
 
 - `qtui.py` conserva os eventos da interface original e cria sempre `CanvasVulkan` como único canvas da GUI.
+- O smoke `testes/smoke_gui.py` inicia com o mesmo comando da GUI real, **sem `--noshaders`**, e `mhmain.py` não exibe o aviso modal GLSL antigo; a ausência de compilação GLSL arbitrária ainda é informada no log.
 - `mh.py` preserva os nomes de API utilizados pelos plugins existentes, mas encaminha os serviços Vulkan ao canvas.
 - `vulkan_scene.py` compartilha o adaptador e dispositivo GPU entre viewport, render offscreen e baking UV.
 - `vulkan_offscreen.py` executa a conversão dos pixels BGRA/RGBA e o alinhamento WebGPU de 256 bytes.
@@ -68,7 +70,7 @@ python -m unittest discover -s makehumano/testes -p 'test_*wgpu.py' -v
 ## Pendências que impedem o lançamento
 
 - Alcançar equivalência **visual** dos seis presets oficiais WGSL. Normalmap deriva tangentes no fragmento, Skin usa gradiente de uma linha em textura 2D, e Phong incorporou AO; diferenças com o GLSL original ainda precisam ser quantificadas. GLSL arbitrário continua sem compilação.
-- Concluir a equivalência de transparência e ordenação de superfícies translúcidas, especialmente materiais sobrepostos; variantes de culling/depthless já foram adicionadas.
+- Concluir a ordenação de superfícies translúcidas, blend de múltiplas camadas e `alphaToCoverage`/MSAA; os recortes com alfa zero e `transparentPrimitives` já foram corrigidos no depth buffer e testados na GPU.
 - Reproduzir atenuação/especular/foco das luzes de cena, outros comportamentos avançados de materiais. A transformação de normais já usa inversa-transposta do modelo.
 - Criar testes comparativos de imagens, incluindo reflexos, alfa, normal maps e culling, porque o smoke só verifica inicialização e integridade básica.
 - Completar paridade de `renderSkin` para formatos de imagem, texturas dinâmicas e render pass acumulativo.
