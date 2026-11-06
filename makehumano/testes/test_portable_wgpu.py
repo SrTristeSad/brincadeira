@@ -50,3 +50,25 @@ class PortableStartupErrors(unittest.TestCase):
                     except RuntimeError:
                         sys.excepthook(*sys.exc_info())
                     self.assertIs(previous.call_args.args[0], RuntimeError)
+
+
+class OriginalModuleCompatibility(unittest.TestCase):
+    def test_original_texture_import_uses_vulkan_implementation(self):
+        sys.path.insert(0, str(ROOT / "codigo/makehuman/lib"))
+        import texture
+        import vulkan_texture
+        self.assertIs(texture.Texture, vulkan_texture.Texture)
+        self.assertIs(texture.getTexture, vulkan_texture.getTexture)
+        image = texture.Texture(size=(3, 2), components=4)
+        self.assertEqual(image.data.shape, (2, 3, 4))
+        self.assertIsNone(image.textureId)
+        self.assertFalse(any(name == "OpenGL" or name.startswith("OpenGL.") for name in sys.modules))
+
+    def test_original_shader_import_does_not_attempt_opengl(self):
+        sys.path.insert(0, str(ROOT / "codigo/makehuman/lib"))
+        import shader
+        import vulkan_shader
+        self.assertIs(shader.Shader, vulkan_shader.Shader)
+        self.assertFalse(shader.Shader.supported())
+        with self.assertRaisesRegex(NotImplementedError, "GLSL"):
+            shader.getShader("/custom/shader")
