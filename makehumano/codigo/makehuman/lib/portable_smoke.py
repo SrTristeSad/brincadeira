@@ -115,12 +115,15 @@ def check_original_tools(app, report_path):
 
         from vulkan_smoke_rig import validar_rig_pose
         rig_pose = validar_rig_pose(app, report.parent)
+        from vulkan_smoke_proxies import validar_proxies
+        proxies = validar_proxies(app, report.parent)
         report.write_text(json.dumps({
             "modifier": modifier.fullName,
             "mhm_roundtrip": True,
             "modifier_undo_redo": True,
             "wireframe": True,
             "rig_pose": rig_pose,
+            "proxies": proxies,
             "exports": ["obj", "fbx-binary", "collada", "stl-binary", "uv-png"],
             "plugins": sorted(name for name, module in app.modules.items() if module),
         }, indent=2), encoding="utf-8")
