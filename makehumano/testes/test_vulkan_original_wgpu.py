@@ -601,6 +601,20 @@ class TestarRegrasDeRasterOriginalVulkan(unittest.TestCase):
             ("none", False, "less-equal"),
         )
 
+    def test_malhas_com_primitivas_recortadas_nao_escrevem_profundidade(self):
+        obj = self._obj()
+        obj.nTransparentPrimitives = 12
+        self.assertEqual(
+            configuracao_raster_vulkan(obj),
+            ("none", False, "less-equal"),
+        )
+        # Objetos originalmente opacos preservam Z quando não há recorte.
+        obj.nTransparentPrimitives = 0
+        self.assertEqual(
+            configuracao_raster_vulkan(obj),
+            ("none", True, "less-equal"),
+        )
+
     def test_depthless_ignora_z_e_overlay_de_linhas_nao_grava(self):
         self.assertEqual(
             configuracao_raster_vulkan(self._obj(depthless=True)),
