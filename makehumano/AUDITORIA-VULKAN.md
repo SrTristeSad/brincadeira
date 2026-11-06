@@ -72,6 +72,24 @@ Estas correções são parciais: não demonstram paridade visual com OpenGL,
 compatibilidade de cabelos/roupas ausentes nem execução em GPUs físicas.
 Conferir a CI do PR de compatibilidade antes de considerá-las aprovadas.
 
+## Reutilização de buffers de geometria GPU
+
+A viewport Vulkan agora aplica o cache `vulkan_buffers.CacheBuffersVulkan`
+ao desenho real de `G.world`, incorporando a ideia do PR #3 na versão
+avançada. Buffers VERTEX/INDEX/UNIFORM reaproveitam sua alocação enquanto
+o tamanho permanece estável; modificadores e poses ainda enviam as posições
+atuais; câmeras/luzes/materiais ainda enviam os uniforms atuais. Índices
+mudados in-place são comparados e reenviados, incluindo troca de máscaras de
+faces com o mesmo número de índices. O cache usa `WeakKeyDictionary` e
+chaves independentes para a superfície e as arestas do modo wireframe
+(`Ctrl+F`), evitando sobrescrever recursos antes da submissão do desenho.
+Objetos temporários sem suporte a weakref usam a rota sem cache.
+
+Há testes para reuso, invalidação, máscaras, crescimento de buffers, passagens
+wireframe e descarte de objetos. A CI deve validar também a execução real da
+GUI no Vulkan. Isto é uma **redução de alocações GPU**, não uma medição de
+FPS nem demonstração de equivalência com o renderer OpenGL original.
+
 ## Comparação visual reproduzível OpenGL × Vulkan
 
 Foi incluído `testes/comparar_opengl_vulkan.py`, com testes de regressão
