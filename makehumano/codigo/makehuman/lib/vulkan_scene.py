@@ -392,6 +392,26 @@ struct Fragmento {
             alfa * dados.cor.a * i.cor.a,
         );
     }
+    // Normalmap original: luz em espaço tangente. A base TBN é calculada
+    // de derivadas da malha (acima), em vez do atributo GLSL gl_Tangent.
+    // Usa a primeira luz e alfa opaco do fragment shader legado.
+    if (dados.shader_preset.x > 4.5 && dados.shader_preset.x < 5.5) {
+        let tex_color = tex.rgb;
+        var rgb_normalmap = dados.ambiente.rgb * dados.cor.rgb * tex_color;
+        if (dados.flags.z > 0.5) {
+            let direcao = normalize(dados.luzes_posicao[0].xyz - i.mundo);
+            let difusa = max(dot(direcao, normal), 0.0);
+            rgb_normalmap += dados.luzes_cor[0].rgb * dados.cor.rgb
+                             * tex_color * difusa;
+            let especular_normal = pow(
+                clamp(dot(reflect(-direcao, normal), direcao_visao), 0.0, 1.0),
+                max(dados.especular.w, 0.001),
+            );
+            rgb_normalmap += dados.luzes_cor[0].rgb
+                             * dados.especular.rgb * especular_normal;
+        }
+        return vec4<f32>(rgb_normalmap, 1.0);
+    }
     // Toon original: limiar de silhueta, faixas de difusa e especular
     // com smoothstep, primeira luz e alfa da textura difusa.
     if (dados.shader_preset.x > 3.5 && dados.shader_preset.x < 4.5) {
@@ -870,6 +890,7 @@ struct Fragmento {
                 from vulkan_shader import (
                     configuracao_shader_nativo, textura_litsphere_nativa,
                     parametros_extras_shader_nativo,
+                    textura_normalmap_nativa,
                 )
                 material_obj = getattr(obj, "material", None)
                 modo_shader, shader_parametros, shader_pendente = (
@@ -895,6 +916,14 @@ struct Fragmento {
                 cor[3] = opacidade
                 flags[2] = float(total_luzes)
                 caminho_normal, intensidade_normal = parametros_normalmap_vulkan(obj)
+                if modo_shader == 5:
+                    caminho_normal = textura_normalmap_nativa(material_obj)
+                    if caminho_normal is None:
+                        raise ValueError(
+                            "Preset normalmap exige normalmapTexture válida"
+                        )
+                    # O GLSL normalmap sempre utiliza a normal amostrada.
+                    intensidade_normal = 1.0
                 flags[3] = intensidade_normal
                 modelo = np.asarray(cam.getModelMatrix(obj), dtype=np.float32)
                 if modelo.shape != (4, 4) or not np.isfinite(modelo).all():
