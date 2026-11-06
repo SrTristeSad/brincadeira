@@ -543,6 +543,7 @@ struct Fragmento {
     o.cor = v.cor;
     return o;
 }
+__SOMBRAS_WGSL__
 fn fator_luz(indice: i32, mundo: vec3<f32>) -> f32 {
     let delta = mundo - dados.luzes_posicao[indice].xyz;
     let distancia2 = dot(delta, delta);
@@ -552,7 +553,9 @@ fn fator_luz(indice: i32, mundo: vec3<f32>) -> f32 {
         let direcao = delta * inverseSqrt(max(distancia2, 0.000000000001));
         fator *= select(0.0, 1.0, dot(direcao, foco.xyz) >= foco.w);
     }
-    return fator * dados.luzes_atenuacao[indice].y;
+    if (fator <= 0.0) { return 0.0; }
+    return fator * dados.luzes_atenuacao[indice].y
+           * shadow_visibility(mundo, dados.luzes_posicao[indice].xyz);
 }
 fn cor_fragmento(i: Fragmento) -> vec4<f32> {
     let uv = vec2<f32>(i.uv.x, 1.0 - i.uv.y);
@@ -799,7 +802,8 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
     return resultado;
 }
 """
-        shader = self.device.create_shader_module(code=codigo.replace("__CAPACIDADE_LUZES__", str(MAX_LUZES_VULKAN)))
+        from vulkan_shadows import WGSL as sombras_wgsl
+        shader = self.device.create_shader_module(code=codigo.replace("__CAPACIDADE_LUZES__", str(MAX_LUZES_VULKAN)).replace("__SOMBRAS_WGSL__", sombras_wgsl))
         # Preserva a cobertura alpha dos materiais (inclusive textura alpha)
         # para que a máscara de produção venha da GPU, não da captura Qt.
         blend = wgpu.BlendState(
@@ -1188,7 +1192,11 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
         )
         cores_especulares = cores_especulares_cena(cena_amostrada, MAX_LUZES_VULKAN)
         direcoes_luzes, atenuacoes_luzes = parametros_foco_atenuacao(cena_amostrada, MAX_LUZES_VULKAN)
-        amostragem_luzes = np.array([amostras_primeira, 0., 0., 0.], np.float32)
+        from vulkan_shadows import preparar_buffers
+        shadow_nodes, shadow_triangles, shadow_count, shadow_bias = preparar_buffers(
+            self, mundo, cameras, productionRender,
+        )
+        amostragem_luzes = np.array([amostras_primeira, 0., shadow_count, shadow_bias], np.float32)
         self.objetos_desenhados = 0
         self.linhas_desenhadas = 0
         if mundo is not None:
@@ -1321,6 +1329,10 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
                 if caminho_normal is None:
                     mapa_bump, forca_bump = parametros_mapa(material_obj, "bump")
                 mapas_parametros = np.array([forca_spec, forca_trans, forca_bump, forca_ao], np.float32)
+                amostragem_luzes[1] = float(
+                    getattr(material_obj, "receiveShadows", True)
+                    and obj.cameraMode == 0 and not flags[0]
+                )
                 uniforms = np.concatenate((
                     mvp.T.reshape(-1), modelo.T.reshape(-1),
                     normal_modelo.T.reshape(-1), view.T.reshape(-1),
@@ -1375,6 +1387,8 @@ fn cor_fragmento(i: Fragmento) -> vec4<f32> {
                         wgpu.BindGroupEntry(binding=7, resource=textura_spec.create_view()),
                         wgpu.BindGroupEntry(binding=8, resource=textura_trans.create_view()),
                         wgpu.BindGroupEntry(binding=9, resource=textura_altura.create_view()),
+                        wgpu.BindGroupEntry(binding=10, resource=wgpu.BufferBinding(buffer=shadow_nodes)),
+                        wgpu.BindGroupEntry(binding=11, resource=wgpu.BufferBinding(buffer=shadow_triangles)),
                     ],
                 )
                 passagem.set_bind_group(0, bind)
