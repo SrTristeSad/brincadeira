@@ -488,14 +488,28 @@ class MaterialEditorTaskView(gui3d.TaskView):
         if not sh:
             # Parâmetros nativos visíveis no MESMO editor de materiais.
             modo, controles, _ = shader.configuracao_shader_nativo(mat)
-            if modo in (1, 2):
-                campos = (
-                    (("edgefalloff", 1), ("intensity", 2))
-                    if modo == 1 else (("AdditiveShading", 0),)
-                )
-                for nome, indice in campos:
+            if modo in (1, 2, 4):
+                if modo == 1:
+                    campos = (
+                        ("edgefalloff", controles[1]),
+                        ("intensity", controles[2]),
+                    )
+                elif modo == 2:
+                    campos = (("AdditiveShading", controles[0]),)
+                else:
+                    extras = shader.parametros_extras_shader_nativo(mat)
+                    campos = (
+                        ("silhouetteThreshold", controles[0]),
+                        ("shininess", controles[1]),
+                        ("ambientIntensity", controles[2]),
+                        ("specularIntensity", controles[3]),
+                        ("diffuseIntensity", extras[0]),
+                        ("specular_th", extras[1]),
+                        ("diffuse_th", extras[2]),
+                    )
+                for nome, valor in campos:
                     widget = self.paramBox.addWidget(
-                        ScalarValue(nome, controles[indice]),
+                        ScalarValue(nome, valor),
                     )
 
                     def registrar_ativacao(widget_atual, parametro):
