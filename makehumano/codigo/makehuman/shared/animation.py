@@ -189,7 +189,9 @@ class AnimationTrack(object):
         elif self.interpolationType == 1:
             # Linear interpolation
             idx1 = frameIdx*self.nBones
-            idx2 = ((frameIdx+1) % self.nFrames) * self.nBones
+            next_frame = ((frameIdx+1) % self.nFrames if self.loop
+                          else min(frameIdx+1, self.nFrames-1))
+            idx2 = next_frame * self.nBones
             return data[idx1:idx1+self.nBones] * (1-fraction) + \
                    data[idx2:idx2+self.nBones] * fraction
         elif self.interpolationType == 2:
@@ -232,7 +234,7 @@ class AnimationTrack(object):
         return self.loop
 
     def setLooping(self, enabled):
-        self.looping = enabled
+        self.loop = bool(enabled)
 
     def getPlaytime(self):
         """
@@ -241,24 +243,25 @@ class AnimationTrack(object):
         return float(self.nFrames)/self.frameRate
 
     def sparsify(self, newFrameRate):
+        newFrameRate = float(newFrameRate)
+        if not np.isfinite(newFrameRate) or newFrameRate <= 0:
+            raise ValueError("Animation frame rate must be finite and positive")
         if newFrameRate > self.frameRate:
             raise RuntimeError("Cannot sparsify animation: new framerate %s is higher than old framerate %s." % (newFrameRate, self.frameRate))
-
-        # Number of frames to drop
-        dropFrames = int(float(self.frameRate)/float(newFrameRate))
-        if dropFrames <= 0:
+        if newFrameRate == self.frameRate:
             return
-        indxs = []
-        count = 0
-        for frameI in range(0,self.dataLen,self.nBones):
-            if count == 0:
-                indxs.extend(list(range(frameI,frameI+self.nBones)))
-            count = (count + 1) % dropFrames
-        data = self.data[indxs]
-        self.data = data
+        # Select source frames by playback time, including non-integral
+        # ratios (60 -> 24 fps). Never reinterpret baked skin matrices as
+        # raw poses; the new track must be baked again for its skeleton.
+        count = max(1, int(np.ceil(self.nFrames * newFrameRate / self.frameRate)))
+        frames = np.floor(np.arange(count) * (self.frameRate/newFrameRate)).astype(np.intp)
+        frames = np.minimum(frames, self.nFrames-1)
+        poses = self._data.reshape(self.nFrames, self.nBones, 3, 4)
+        self._data = poses[frames].reshape(-1, 3, 4).copy()
+        self._data_baked = None
         self.frameRate = newFrameRate
-        self.dataLen = len(self.data)
-        self.nFrames = self.dataLen/self.nBones
+        self.dataLen = len(self._data)
+        self.nFrames = len(frames)
 
 class Pose(AnimationTrack):
     """

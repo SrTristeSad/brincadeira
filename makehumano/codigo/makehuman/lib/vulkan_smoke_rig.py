@@ -63,6 +63,24 @@ def validar_rig_pose(app, directory):
         np.testing.assert_allclose(human.meshData.coord, rest, atol=1e-4)
         app.redo()
         np.testing.assert_allclose(human.meshData.coord, posed, atol=1e-4)
+        # Track temporário de dois quadros, composto apenas do repouso e da
+        # pose oficial. Exercita reprodução/skinning sem criar assets novos.
+        from animation import AnimationTrack
+        official_animation = human.getActiveAnimation()
+        pose_data = official_animation.getAtFramePos(0, noBake=True).copy()
+        identity = np.tile(np.eye(4, dtype=np.float32)[:3], (len(pose_data), 1, 1))
+        playback = AnimationTrack("makehumano-smoke-playback", np.concatenate((identity, pose_data)), 2, 24.)
+        playback.setLooping(False)
+        human.addAnimation(playback)
+        human.setActiveAnimation(playback.name)
+        human.setToFrame(0)
+        np.testing.assert_allclose(human.meshData.coord, rest, atol=1e-4)
+        human.setToFrame(1)
+        np.testing.assert_allclose(human.meshData.coord, posed, atol=1e-4)
+        human.setToTime(5.)
+        np.testing.assert_allclose(human.meshData.coord, posed, atol=1e-4)
+        human.setActiveAnimation(official_animation.name)
+        human.setToFrame(0)
         model = directory / "personagem-com-rig.mhm"
         human.save(str(model))
         text = model.read_text(encoding="utf-8")
@@ -109,6 +127,7 @@ def validar_rig_pose(app, directory):
         Image(data=posed_image).save(str(directory / "rig-tpose.png"))
         return {"bones": bones, "weighted_vertices": int(np.count_nonzero(totals)),
                 "pose_deforms_mesh": True, "rig_pose_undo_redo": True,
+                "animation_playback": True, "non_looping_holds_last": True,
                 "mhm_rig_pose_roundtrip": True, "skinned_exports": ["fbx-binary", "collada"]}
     finally:
         pose_library.loadPose(None)
