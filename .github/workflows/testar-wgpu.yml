@@ -8,6 +8,7 @@ on:
       - "makehumano/codigo/makehuman/lib/qtui.py"
       - "makehumano/testes/smoke_gui.py"
       - "makehumano/testes/test_*wgpu.py"
+      - "makehumano/testes/verificar_pixels_vulkan.py"
       - ".github/workflows/testar-wgpu.yml"
   workflow_dispatch:
 
@@ -99,3 +100,11 @@ jobs:
         run: |
           xvfb-run -a -s "-screen 0 1280x800x24" \
             python -u makehumano/testes/smoke_gui.py
+
+      - name: Conferir pixels de blend e profundidade na CenaVulkan original
+        env:
+          WGPU_BACKEND_TYPE: Vulkan
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: |
+          python -u -m unittest discover \
+            -s makehumano/testes -p 'verificar_pixels_vulkan.py' -v
