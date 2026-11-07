@@ -12,8 +12,8 @@ import numpy as np
 
 
 def dados_textura_alfa_parcial(lado=32, alfa=128):
-    if lado != 32 or alfa not in (128, 255):
-        raise ValueError("Controle exige 32×32 RGBA com alfa 128 ou 255")
+    if lado != 32 or alfa not in (64, 128, 192, 255):
+        raise ValueError("Controle exige 32×32 RGBA com alfa 64, 128, 192 ou 255")
     y, x = np.indices((lado, lado))
     checker = ((x // 8 + y // 8) % 2) == 0
     pixels = np.zeros((lado, lado, 4), dtype=np.uint8)
@@ -40,7 +40,7 @@ def bytes_png_textura_alfa_parcial(*, alfa=128):
 
 
 def salvar_textura_alfa_parcial(caminho, *, alfa=128):
-    """Persistência fora do repo, para controles A=128 ou A=255."""
+    """Persistência fora do repo, para controles A=64, 128, 192 ou 255."""
     dados = dados_textura_alfa_parcial(alfa=alfa)
     data = bytes_png_textura_alfa_parcial(alfa=alfa)
     destino = Path(caminho)
