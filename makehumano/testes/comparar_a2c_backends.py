@@ -172,6 +172,79 @@ def comparar_manifestos(gl, vk):
             "amostras e shader entre OpenGL e Vulkan."
         ),
     }
+    varredura = {}
+    for alfa in (64, 128, 192):
+        metadata_gl = gl["texturas_varredura"][str(alfa)]
+        metadata_vk = vk["texturas_varredura"][str(alfa)]
+        for campo in ("sha256_png", "sha256_rgba", "alfa_textura"):
+            _assert(metadata_gl[campo] == metadata_vk[campo],
+                    f"Textura alpha {alfa} GL/VK divergiu: {campo}")
+        _assert(metadata_gl["alfa_textura"] == alfa,
+                "Alfa no manifesto não coincide com valor solicitado")
+        if alfa == 128:
+            par = ("4x_sem_a2c_sem_blend_com_z", "4x_com_a2c")
+            comparison_key = "somente_a2c_4x"
+        else:
+            par = (
+                f"4x_a{alfa:03d}_sem_a2c_sem_blend_com_z",
+                f"4x_a{alfa:03d}_com_a2c",
+            )
+            comparison_key = f"somente_a2c_4x_alfa{alfa}"
+        for backend, manifesto in (("OpenGL", gl), ("Vulkan", vk)):
+            for indice, nome in enumerate(par):
+                c = manifesto["controles"].get(nome)
+                esperado = indice == 1
+                _assert(c is not None,
+                        f"Controle alpha {alfa} ausente no {backend}: {nome}")
+                _assert(
+                    c["captura_rgb"] is True
+                    and c["amostras"] == 4
+                    and c["alfa_textura"] == alfa
+                    and c["sha256_textura_png"] == metadata_gl["sha256_png"]
+                    and c["nTransparentPrimitives"] > 0
+                    and c["blend_habilitado_observado"] is False
+                    and c["escrita_z_observada"] is True
+                    and c["pipeline_a2c_observado"] is esperado,
+                    f"Estados alpha {alfa} incorretos no {backend}: {nome}",
+                )
+                if backend == "OpenGL":
+                    _assert(
+                        c["amostras_fbo_observadas"] == 4
+                        and c["rastros_gl"]["draw_states"]
+                        and all(
+                            d == {"blend": False, "escrita_z": True,
+                                  "a2c": esperado}
+                            for d in c["rastros_gl"]["draw_states"]
+                        ),
+                        f"GL não confirmou alpha/A2C durante draw: {nome}",
+                    )
+                else:
+                    _assert(
+                        c["pipeline_chave_cache_confirmada"] is True
+                        and c["rastros_pipeline_corpo"]
+                        and all(
+                            d["blend_habilitado_previsto"] is False
+                            and d["escrita_z_prevista"] is True
+                            and d["a2c_calculado"] is esperado
+                            for d in c["rastros_pipeline_corpo"]
+                        ),
+                        f"Vulkan não confirmou variante alpha/A2C: {nome}",
+                    )
+        varredura[str(alfa)] = {
+            "controles": list(par),
+            "sha256_textura_png": metadata_gl["sha256_png"],
+            "opengl": gl["comparacao"][comparison_key],
+            "vulkan": vk["comparacao"][comparison_key],
+        }
+    relatorio["varredura_alfa_4x"] = {
+        "estado": "CAPTURADA_COM_ESTADOS_FIXOS",
+        "niveis": varredura,
+        "nota": (
+            "Alfa é de textura RGBA, não material.opacity. Os resultados "
+            "do FBO resolvido não revelam diretamente sample masks, "
+            "especialmente sob sobreposição de triângulos."
+        ),
+    }
     relatorio["estado"] = "CONTROLES_RGB_4X_EM_AMBOS_BACKENDS"
     relatorio["mudanca_4x_off_on_rgb"] = {
         "opengl": gl["comparacao"]["a2c_4x_off_vs_on"],
