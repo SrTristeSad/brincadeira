@@ -303,11 +303,26 @@ namespace dragonBones {
 
         public advanceTime(passedTime: number): void {
             if (this._objects.length > 0) {
-                for (const object of this._objects) {
-                    object.returnToPool();
+                let processed = 0;
+                try {
+                    // Return objects added by callbacks in the same update, as before.
+                    while (processed < this._objects.length) {
+                        // Claim the entry before user-extensible _onClear() runs.
+                        // A failed clear must not be retried on the next frame.
+                        const object = this._objects[processed++];
+                        object.returnToPool();
+                    }
                 }
-
-                this._objects.length = 0;
+                finally {
+                    // Keep unprocessed objects when a returnToPool() throws.
+                    // Avoid shifting the array in the normal, fully drained case.
+                    if (processed === this._objects.length) {
+                        this._objects.length = 0;
+                    }
+                    else {
+                        this._objects.splice(0, processed);
+                    }
+                }
             }
 
             this._clock.advanceTime(passedTime);
