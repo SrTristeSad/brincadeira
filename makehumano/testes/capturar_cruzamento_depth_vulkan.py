@@ -37,7 +37,7 @@ def shader_face(face, a2c):
 """.format(pontos, cor)
 
 
-def capturar_coplanares_vulkan(cena, destino_json):
+def capturar_cruzamento_depth_vulkan(cena, destino_json):
     wgpu, device = cena.wgpu, cena.device
     destino_json = Path(destino_json)
     controles = {}
