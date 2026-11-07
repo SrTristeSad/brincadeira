@@ -60,3 +60,7 @@ O defeito e a correção foram reproduzidos num módulo TypeScript mínimo compi
 O adaptador AMD/CommonJS/`exports` foi extraído de `core/DragonBones.ts` para `core/ModuleExports.ts` e adicionado **por último** ao `tsconfig.json`. Assim, todos os membros de `dragonBones` já existem quando a distribuição os exporta. Isso corrige especialmente o caminho `exports` sem módulo CommonJS, que antes recebia somente classes declaradas no primeiro arquivo. A interface pública e o formato ES5 continuam preservados. O verificador estrutural impede que o adaptador volte a ser compilado antes do núcleo.
 
 Validado em reprodução TypeScript 5.8.3 (`outFile`, ES5) com três arquivos de classes e adaptador ao final: AMD, CommonJS e `exports` receberam todas as classes no Node 22. A execução do projeto completo permanece pendente.
+
+## Ordenação de ossos e referências inválidas
+
+`ArmatureData.sortBones()` agora verifica se uma volta completa na lista não conseguiu ordenar nenhum osso. Em esqueletos válidos, preserva a ordem determinada pelas relações entre pais e restrições; em dados inválidos (ciclos ou referências ausentes), lança um erro identificável e **restaura a ordem original dos ossos** antes de interromper. Isso substitui um laço potencialmente infinito sem alterar a API. Quatro testes foram adicionados para hierarquias válidas e dependências impossíveis.
