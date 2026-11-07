@@ -502,3 +502,35 @@ SHA-256 alfa OpenGL `9bdb92051bc6ddd683186daf2af842bb3e3b5df191af292b6a2548a45b4
 **A2C:** `renderAlphaMask` original força `have_multisample=False` durante o passe, logo NÃO valida alpha-to-coverage. Além disso, o GL original só liga `GL_SAMPLE_ALPHA_TO_COVERAGE` na ramificação com `nTransparentPrimitives>0`, suporte multisample e a flag ativada; o Vulkan exige `amostras>1`, material/objeto translúcido e `alphaToCoverage=True`. Os harnesses apenas registram a disponibilidade de amostras e o número de primitivas transparentes; não reivindicam teste de A2C. Uma comparação válida exigirá um objeto elegível e captura RGB com MSAA nos dois drivers, sem inferir equivalência do pipeline a partir da API de máscara.
 
 **Status nesta revisão:** implementação de diagnóstico preparada, **não comprovada em GPU ainda**. Nenhum shader, pipeline, framebuffer, tela ou asset do MakeHumano foi editado. Somente testes, harnesses efêmeros, workflow e documentação da branch `makehumano/protocolo-paridade-visual-20261106`.
+
+## 24. Controle `material.opacity=0.5` medido e bloqueio de A2C no runner
+
+**Run pareado:** [GitHub Actions 42337045566](https://github.com/SrTristeSad/brincadeira/actions/runs/42337045566), commit `f8e486f038a77853f9c1fd711bb4c92730eca46b`, jobs Vulkan `vulkan-gui-original` e `vulkan-gui-sem-opengl` SUCCESS; teste Python 3.12 e 3.13 SUCCESS; smoke GUI SUCCESS. O workflow de evento PR adicional foi iniciado separadamente. OpenGL upstream `a8bc2d54ff0ac92e78ff71431b1023eda42bf482`/Mesa llvmpipe × Vulkan candidato `e5c443154d883cafd4aa28595791afe27fbdc74c`/Lavapipe, dois processos isolados.
+
+**Entradas rigorosamente controladas:** textura RGBA 32×32 com o mesmo xadrez RGB, A=255, arquivo PNG temporário com SHA-256 idêntico `6eabd598ca596aecdfc61f84f2e1beca62b9d2d83bdbd9212b6d6a3128f89dec`, SHA-256 dos pixels RGBA `f58d2be5c96929ac1f8aca2fbb8fd783e32a039bf3a9d35c116f38b60e0f3d94`, shader Phong com `DIFFUSE`, `material.opacity=0.5`, `transparent=True`, `alphaToCoverage=False`, demais condições de câmera e luz iguais. O comparador confere esses parâmetros e os checksums do alfa da API nos dois PNGs, sem interpolar ou inventar um canal alfa RGB.
+
+| Medição `mh.renderAlphaMask(1024,768)` | OpenGL | Vulkan |
+| --- | ---: | ---: |
+| Pixels alfa=0 | 741.254 | 741.250 |
+| Pixels alfa=128 | 0 | 44.152 |
+| Pixels alfa=192 | 0 | 798 |
+| Pixels alfa=224 | 0 | 88 |
+| Pixels alfa=240 | 0 | 4 |
+| Pixels alfa=255 | **45.178** | 140 |
+| Pixels alfa intermediário | **0** | **45.042** |
+| Alfa médio sobre a cobertura comum | **255,0** | **129,7215** |
+| Pixels cujo alfa mudou em relação à captura original opaca do mesmo backend | **0** | **45.042** |
+
+| Métrica de comparação | Resultado |
+| --- | ---: |
+| Pixels alfa fora da tolerância 8 | **45.058 / 786.432** (**5,72942098%**) |
+| IoU da cobertura `A>0` | **0,9992035046** |
+| Erro médio absoluto do alfa | **7,20274099** |
+| Erro máximo alfa | 255 |
+| Limites propostos de máscara parcial (IoU ≥0,995, erro de pixels ≤0,5%) | **NÃO atendidos para `opacity=0.5`** |
+
+**Conclusão limitada à semântica Phong:** com textura difusa opaca, `material.opacity=0.5` **não altera** a saída alfa da API OpenGL, mas altera a saída Vulkan. É coerente com GLSL histórico `final_color.a = tex_color.a`, que sobrescreve o alfa do material, e WGSL que multiplica por `dados.cor.a`. A identidade da textura foi comprovada por hash; não é o problema anterior de `Image` sem `sourcePath`. O sucesso operacional do job NÃO representa aprovação de equivalência de opacidade.
+
+**A2C não foi exercitado nesta execução:** OpenGL no runner reportou `glmodule.have_multisample=false` e `nTransparentPrimitives=0`, portanto a ramificação `GL_SAMPLE_ALPHA_TO_COVERAGE` não seria acionada; Vulkan reportou `cena.amostras=1` e `nTransparentPrimitives=0`. Além disso, a API OpenGL `renderAlphaMask` desativa o multisampling deliberadamente. A2C precisa ser avaliado com um objeto elegível, multisampling efetivo nos dois ambientes e capturas RGB, nunca inferido deste teste. Não alterar malhas ou pipelines de produção apenas para satisfazer o teste no runner.
+
+**Decisão de produto permanece reservada ao criador:** portar a peculiaridade GLSL de ignorar `material.opacity` no Phong versus manter a semântica atual Vulkan. As decisões anteriores de luz eye-space, offscreen sRGB e canais R/B continuam independentes. Nenhum shader, framebuffer, pipeline, UI ou asset de produção foi alterado e o PR permanece DRAFT.
