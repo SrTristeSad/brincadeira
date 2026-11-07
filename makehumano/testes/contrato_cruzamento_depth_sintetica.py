@@ -24,7 +24,7 @@ CASOS_CRUZAMENTO = (
 Z_VERMELHO = (0.30, 0.70, 0.30)
 Z_AZUL = 0.50
 ALFA_A2C = 128
-PROBES_YX = ((32, 32), (40, 50))
+PROBES_YX = ((32, 32), (42, 45))
 FAIXA_Z = 0.030  # largura apenas da ANÁLISE, não altera o depth test
 
 
@@ -101,8 +101,8 @@ def classe_esperada(caso, ponto):
     _nome, a2c, z_write, ordem = caso
     if ponto not in PROBES_YX:
         raise ValueError("Probe não definido")
-    # Em (32,32) o vermelho está à frente, em (40,50) está atrás.
-    if ponto == (40, 50):
+    # Em (32,32) o vermelho está à frente, em (42,45) está atrás.
+    if ponto == (42, 45):
         return "azul"
     if not z_write and ordem == "vermelho_primeiro":
         return "azul"
