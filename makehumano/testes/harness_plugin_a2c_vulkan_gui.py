@@ -262,6 +262,15 @@ def load(app):
                              amostras=4, transparencia=True, a2c=False,
                              sem_blend=True, escrever_z=True, alfa_textura=128)
 
+            # Prova independente do corpo/Phong: mesmo loader, sampler e
+            # recurso de textura, mas um triângulo sem overdraw. Mantém
+            # blending OFF e A2C OFF em 1× e 4×.
+            from auditar_alpha_textura_gpu import verificar_textura_na_gpu
+            auditoria_rgba = verificar_textura_na_gpu(
+                cena, {alfa: caminho for alfa, (caminho, _meta)
+                       in texturas_varredura.items()}
+            )
+
             documento = json.loads(provisorio.read_text(encoding="utf-8"))
             documento.update({
                 "backend": "Vulkan",
@@ -274,6 +283,7 @@ def load(app):
                     str(alfa): meta for alfa, (_path, meta) in
                     sorted(texturas_varredura.items())
                 },
+                "auditoria_rgba_gpu_sem_overdraw": auditoria_rgba,
                 "amostras_iniciais": amostras_originais,
                 "suporte_msaa": suporte,
                 "controles": registros,
