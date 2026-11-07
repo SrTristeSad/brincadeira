@@ -1,7 +1,7 @@
 """Contrato compartilhado do ensaio GPU A2C sintético GL/Vulkan.
 
 Sem imagem de personagem, textura, Phong, sombras, blending ou depth.
-RGBA8 linear, triângulo de tela cheia, framebuffer resolvido a 64x64.
+RGBA8 linear, triângulos de tela cheia ou com aresta subpixel, resolvidos a 64x64.
 Não presume quantização específica das implementações de A2C.
 """
 import hashlib
@@ -20,7 +20,42 @@ CASOS = (
     ("4x_a128_a2c_on", 4, True, 128),
     ("4x_a192_a2c_on", 4, True, 192),
     ("4x_a255_a2c_on", 4, True, 255),
+    # Aresta diagonal com vértices em coordenadas subpixel (64x64).
+    ("aresta_1x_a255_a2c_off", 1, False, 255),
+    ("aresta_4x_a255_a2c_off", 4, False, 255),
+    ("aresta_4x_a128_a2c_off", 4, False, 128),
+    ("aresta_4x_a255_a2c_on", 4, True, 255),
+    ("aresta_4x_a064_a2c_on", 4, True, 64),
+    ("aresta_4x_a128_a2c_on", 4, True, 128),
+    ("aresta_4x_a192_a2c_on", 4, True, 192),
 )
+
+# Todos os backends recebem estes MESMOS vértices no plano de clip.
+# As coordenadas mapearão a frações de pixel de 1/8 e 1/4.
+VERTICES_TELA = (
+    (-1.0, -1.0),
+    (3.0, -1.0),
+    (-1.0, 3.0),
+)
+VERTICES_ARESTA = (
+    (-0.84765625, -0.78515625),
+    (0.91015625, -0.59765625),
+    (-0.34765625, 0.91015625),
+)
+
+
+def vertices_do_caso(nome):
+    if nome.startswith("aresta_"):
+        return VERTICES_ARESTA
+    if nome.startswith(("1x_", "4x_")):
+        return VERTICES_TELA
+    raise ValueError("Geometria sintética desconhecida: " + str(nome))
+
+
+def geometria_do_caso(nome):
+    vertices_do_caso(nome)  # valida o nome
+    return "aresta_subpixel" if nome.startswith("aresta_") else "tela_cheia"
+
 
 
 def registrar_rgb(rgb):
