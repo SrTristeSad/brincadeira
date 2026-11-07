@@ -153,6 +153,24 @@ def modelos():
             for amostras in (1, 4)
         },
     }
+    for alfa in (64, 128, 192):
+        name = f"4x_a{alfa:03d}_sem_a2c_sem_blend_com_z_sem_sombras"
+        baseline = (
+            "4x_sem_a2c_sem_blend_com_z" if alfa == 128 else
+            f"4x_a{alfa:03d}_sem_a2c_sem_blend_com_z"
+        )
+        c = copy.deepcopy(vk["controles"][baseline])
+        c["controle_sombras_desligadas"] = True
+        c["recebe_sombras_material_observado"] = False
+        for x in c["rastros_pipeline_corpo"]:
+            x["recebe_sombras_material_observado"] = False
+        vk["controles"][name] = c
+    for chave in ("alfa64_vs128_off_sem_sombras",
+                  "alfa192_vs128_off_sem_sombras",
+                  "alfa128_sombras_on_vs_off"):
+        vk["comparacao"][chave] = {
+            "pixels_divergentes": 0 if "vs128" in chave else 18,
+        }
     return gl, vk
 
 
@@ -238,6 +256,25 @@ class TesteContratoA2C(unittest.TestCase):
                 "controles"]["64"]["pixels_rgb_diferentes_de_a128"
             ], 4,
         )
+
+    def test_receive_shadows_desligado_no_vulkan(self):
+        gl, vk = modelos()
+        d = comparar_manifestos(gl, vk)
+        self.assertEqual(
+            d["controle_alpha_sem_sombras"]["estado"],
+            "RECEIVE_SHADOWS_OFF_OBSERVADO_NO_DRAW",
+        )
+        self.assertIn("alfa64_vs128_off_sem_sombras",
+                      d["controle_alpha_sem_sombras"]["comparacoes"])
+
+    def test_rejeita_controle_de_sombra_ainda_ativo(self):
+        gl, vk = modelos()
+        key = "4x_a192_sem_a2c_sem_blend_com_z_sem_sombras"
+        vk["controles"][key]["rastros_pipeline_corpo"][0][
+            "recebe_sombras_material_observado"
+        ] = True
+        with self.assertRaisesRegex(ValueError, "sombras"):
+            comparar_manifestos(gl, vk)
 
     def test_nao_testavel_sem_driver_gl_4x(self):
         gl, vk = modelos()
