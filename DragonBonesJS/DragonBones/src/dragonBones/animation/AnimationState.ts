@@ -806,17 +806,25 @@ namespace dragonBones {
          * @internal
          */
         public advanceTime(passedTime: number, cacheFrameRate: number): void {
-            // Update fade time.
+            // An invalid delta must not corrupt the fade timer or timelines.
+            if (!isFinite(passedTime)) {
+                return;
+            }
+
+            // Update fade time. Individual playback speed does not scale fades.
             if (this._fadeState !== 0 || this._subFadeState !== 0) {
                 this._advanceFadeTime(passedTime);
             }
             // Update time.
             if (this._playheadState === 3) { // 11
-                if (this.timeScale !== 1.0) {
-                    passedTime *= this.timeScale;
+                const scaledTime = passedTime * this.timeScale;
+                // A mutable state speed can overflow independently of Animation
+                // and WorldClock. Leave the playhead retryable after a bad tick.
+                if (!isFinite(scaledTime) || !isFinite(this._time + scaledTime)) {
+                    return;
                 }
 
-                this._time += passedTime;
+                this._time += scaledTime;
             }
             // Update timeline.
             if (this._timelineDirty !== 0) {

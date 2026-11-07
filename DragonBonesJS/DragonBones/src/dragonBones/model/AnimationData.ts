@@ -232,36 +232,84 @@ namespace dragonBones {
         /**
          * @internal
          */
+        public _getCacheFrameCount(frameRate: number): number {
+            // Validate without allocating so ArmatureData can check every clip
+            // before committing the armature's cache frame rate.
+            // An animation without its armature cannot build the bone/slot
+            // cache tables. Reject it before committing any cache state.
+            if (this.parent === null || !(frameRate > 0.0) || !isFinite(frameRate) || !isFinite(this.scale) ||
+                !(this.duration >= 0.0) || !isFinite(this.duration)) {
+                return 0;
+            }
+
+            const cacheFrameRate = Math.max(Math.ceil(frameRate * this.scale), 1.0);
+            const cacheFrameCount = Math.ceil(cacheFrameRate * this.duration) + 1; // Cache one more frame.
+            if (!isFinite(cacheFrameRate) || !isFinite(cacheFrameCount) || cacheFrameCount > 4294967295) {
+                return 0;
+            }
+
+            // A clip cached independently cannot be reused with a different
+            // effective rate or a changed duration.
+            if (this.cacheFrameRate > 0.0 &&
+                (this.cacheFrameRate !== cacheFrameRate || this.cachedFrames.length !== cacheFrameCount)) {
+                return 0;
+            }
+
+            return cacheFrameCount;
+        }
+        /**
+         * @internal
+         */
         public cacheFrames(frameRate: number): void {
-            if (this.cacheFrameRate > 0.0) { // TODO clear cache.
+            if (this.cacheFrameRate > 0.0) {
                 return;
             }
 
-            this.cacheFrameRate = Math.max(Math.ceil(frameRate * this.scale), 1.0);
-            const cacheFrameCount = Math.ceil(this.cacheFrameRate * this.duration) + 1; // Cache one more frame.
-
-            this.cachedFrames.length = cacheFrameCount;
-            for (let i = 0, l = this.cacheFrames.length; i < l; ++i) {
-                this.cachedFrames[i] = false;
+            const cacheFrameCount = this._getCacheFrameCount(frameRate);
+            if (cacheFrameCount === 0) {
+                return;
             }
 
-            for (const bone of this.parent.sortedBones) {
-                const indices = new Array<number>(cacheFrameCount);
-                for (let i = 0, l = indices.length; i < l; ++i) {
-                    indices[i] = -1;
+            const cacheFrameRate = Math.max(Math.ceil(frameRate * this.scale), 1.0);
+            try {
+                this.cachedFrames.length = cacheFrameCount;
+                // Initialize every frame flag, not the parameter count of cacheFrames().
+                for (let i = 0, l = this.cachedFrames.length; i < l; ++i) {
+                    this.cachedFrames[i] = false;
                 }
 
-                this.boneCachedFrameIndices[bone.name] = indices;
-            }
+                for (const bone of this.parent.sortedBones) {
+                    const indices = new Array<number>(cacheFrameCount);
+                    for (let i = 0, l = indices.length; i < l; ++i) {
+                        indices[i] = -1;
+                    }
 
-            for (const slot of this.parent.sortedSlots) {
-                const indices = new Array<number>(cacheFrameCount);
-                for (let i = 0, l = indices.length; i < l; ++i) {
-                    indices[i] = -1;
+                    this.boneCachedFrameIndices[bone.name] = indices;
                 }
 
-                this.slotCachedFrameIndices[slot.name] = indices;
+                for (const slot of this.parent.sortedSlots) {
+                    const indices = new Array<number>(cacheFrameCount);
+                    for (let i = 0, l = indices.length; i < l; ++i) {
+                        indices[i] = -1;
+                    }
+
+                    this.slotCachedFrameIndices[slot.name] = indices;
+                }
             }
+            catch (error) {
+                // Discard partially created indices and allow a later retry.
+                this.cachedFrames.length = 0;
+                for (let k in this.boneCachedFrameIndices) {
+                    delete this.boneCachedFrameIndices[k];
+                }
+                for (let k in this.slotCachedFrameIndices) {
+                    delete this.slotCachedFrameIndices[k];
+                }
+                throw error;
+            }
+
+            // Only publish a cache rate once all index tables are ready.
+            this.cacheFrameRate = cacheFrameRate;
         }
         /**
          * @private

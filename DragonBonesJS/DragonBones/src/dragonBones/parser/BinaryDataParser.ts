@@ -214,7 +214,8 @@ namespace dragonBones {
 
             if (DataParser.BONE in rawData) {
                 const rawTimeliness = rawData[DataParser.BONE];
-                for (let k in rawTimeliness) {
+                // Ignore inherited entries from externally supplied timeline maps.
+                for (const k of Object.keys(rawTimeliness || {})) {
                     const rawTimelines = rawTimeliness[k] as Array<number>;
                     const bone = this._armature.getBone(k);
                     if (bone === null) {
@@ -232,7 +233,7 @@ namespace dragonBones {
 
             if (DataParser.SLOT in rawData) {
                 const rawTimeliness = rawData[DataParser.SLOT];
-                for (let k in rawTimeliness) {
+                for (const k of Object.keys(rawTimeliness || {})) {
                     const rawTimelines = rawTimeliness[k] as Array<number>;
                     const slot = this._armature.getSlot(k);
                     if (slot === null) {
@@ -250,7 +251,7 @@ namespace dragonBones {
 
             if (DataParser.CONSTRAINT in rawData) {
                 const rawTimeliness = rawData[DataParser.CONSTRAINT];
-                for (let k in rawTimeliness) {
+                for (const k of Object.keys(rawTimeliness || {})) {
                     const rawTimelines = rawTimeliness[k] as Array<number>;
                     const constraint = this._armature.getConstraint(k);
                     if (constraint === null) {
@@ -392,7 +393,11 @@ namespace dragonBones {
         }
 
         public parseDragonBonesData(rawData: any, scale: number = 1): DragonBonesData | null {
-            console.assert(rawData !== null && rawData !== undefined && rawData instanceof ArrayBuffer, "Data error.");
+            // Reject invalid or truncated input before creating typed array views.
+            if (!(rawData instanceof ArrayBuffer) || rawData.byteLength < 12) {
+                console.assert(false, "Data error.");
+                return null;
+            }
 
             const tag = new Uint8Array(rawData, 0, 8);
             if (
@@ -406,10 +411,30 @@ namespace dragonBones {
             }
 
             const headerLength = new Uint32Array(rawData, 8, 1)[0];
+            // The declared JSON header must fit in the remaining buffer.
+            if (headerLength === 0 || headerLength > rawData.byteLength - 12) {
+                console.assert(false, "Incomplete binary header.");
+                return null;
+            }
+
             const headerBytes = new Uint8Array(rawData, 8 + 4, headerLength);
             const headerString = this._decodeUTF8(headerBytes);
-            const header = JSON.parse(headerString);
-            //
+            let header: any;
+            try {
+                header = JSON.parse(headerString);
+            }
+            catch (_error) {
+                console.assert(false, "Invalid binary header JSON.");
+                return null;
+            }
+
+            // JSON primitives and arrays cannot describe a DragonBones skeleton.
+            if (header === null || typeof header !== "object" || Array.isArray(header)) {
+                console.assert(false, "Invalid binary header object.");
+                return null;
+            }
+
+            // Do not mutate parser state until the header has been validated.
             this._binaryOffset = 8 + 4 + headerLength;
             this._binary = rawData;
 

@@ -66,6 +66,41 @@ namespace dragonBones {
         private _systemTime: number = 0.0;
         private readonly _animatebles: Array<IAnimatable | null> = [];
         private _clock: WorldClock | null = null;
+        // Keep additions and removals safe during nested update callbacks.
+        private _advancingDepth: number = 0;
+        private _needsCompaction: boolean = false;
+
+        private _compactAnimatables(): void {
+            let writeIndex = 0;
+            for (let readIndex = 0; readIndex < this._animatebles.length; ++readIndex) {
+                const animatable = this._animatebles[readIndex];
+                if (animatable !== null) {
+                    this._animatebles[writeIndex++] = animatable;
+                }
+            }
+
+            this._animatebles.length = writeIndex;
+            this._needsCompaction = false;
+        }
+
+        // Unlink an entry without invoking its clock setter. Also used to
+        // roll back registrations when external setters throw or reject them.
+        private _removeAnimatableReference(value: IAnimatable): boolean {
+            const index = this._animatebles.indexOf(value);
+            if (index < 0) {
+                return false;
+            }
+
+            if (this._advancingDepth > 0) {
+                this._animatebles[index] = null;
+                this._needsCompaction = true;
+            }
+            else {
+                this._animatebles.splice(index, 1);
+            }
+
+            return true;
+        }
         /**
          * - Creating a Worldclock instance. Typically, you do not need to create Worldclock instance.
          * When multiple Worldclock instances are running at different speeds, can achieving some specific animation effects, such as bullet time.
@@ -101,56 +136,54 @@ namespace dragonBones {
 
             const currentTime = Date.now() * 0.001;
 
-            if (passedTime < 0.0) {
+            // Negative finite values request automatic elapsed time.
+            // -Infinity is invalid and must not trigger an automatic update.
+            if (passedTime < 0.0 && isFinite(passedTime)) {
                 passedTime = currentTime - this._systemTime;
             }
 
             this._systemTime = currentTime;
 
+            // Invalid timing values must not poison this clock or its children.
+            // _systemTime is updated above, allowing the next valid tick to recover.
+            if (!isFinite(passedTime) || !isFinite(this.timeScale)) {
+                return;
+            }
+
             if (this.timeScale !== 1.0) {
                 passedTime *= this.timeScale;
             }
 
-            if (passedTime === 0.0) {
+            // Finite operands may still overflow during multiplication.
+            if (!isFinite(passedTime) || passedTime === 0.0) {
                 return;
             }
 
-            if (passedTime < 0.0) {
-                this.time -= passedTime;
-            }
-            else {
-                this.time += passedTime;
-            }
-
-            let i = 0, r = 0, l = this._animatebles.length;
-            for (; i < l; ++i) {
-                const animatable = this._animatebles[i];
-                if (animatable !== null) {
-                    if (r > 0) {
-                        this._animatebles[i - r] = animatable;
-                        this._animatebles[i] = null;
-                    }
-
-                    animatable.advanceTime(passedTime);
-                }
-                else {
-                    r++;
-                }
+            // Reject accumulated-time overflow before updating child clocks.
+            const nextTime = this.time + Math.abs(passedTime);
+            if (!isFinite(nextTime)) {
+                return;
             }
 
-            if (r > 0) {
-                l = this._animatebles.length;
-                for (; i < l; ++i) {
-                    const animateble = this._animatebles[i];
-                    if (animateble !== null) {
-                        this._animatebles[i - r] = animateble;
-                    }
-                    else {
-                        r++;
+            this.time = nextTime;
+
+            this._advancingDepth++;
+            try {
+                const length = this._animatebles.length;
+                for (let i = 0; i < length; ++i) {
+                    const animatable = this._animatebles[i];
+                    if (animatable !== null) {
+                        animatable.advanceTime(passedTime);
                     }
                 }
-
-                this._animatebles.length -= r;
+            }
+            finally {
+                this._advancingDepth--;
+                // Compact only after the outermost update finishes. This prevents
+                // reentrant updates from shifting entries under the active loop.
+                if (this._advancingDepth === 0 && this._needsCompaction) {
+                    this._compactAnimatables();
+                }
             }
         }
         /**
@@ -171,7 +204,15 @@ namespace dragonBones {
             }
 
             let ancestor: IAnimatable | null = value;
+            const visited: Array<IAnimatable> = [];
             while (ancestor !== this && ancestor !== null) {
+                // External IAnimatable implementations may expose a corrupt clock
+                // cycle. Never let a hierarchy lookup spin forever.
+                if (visited.indexOf(ancestor) >= 0) {
+                    return false;
+                }
+
+                visited.push(ancestor);
                 ancestor = ancestor.clock;
             }
 
@@ -196,8 +237,38 @@ namespace dragonBones {
             }
 
             if (this._animatebles.indexOf(value) < 0) {
+                // A custom IAnimatable may expose clock as a simple field rather
+                // than a setter. Detach it explicitly from its previous owner.
+                if (value.clock !== null && value.clock !== this) {
+                    value.clock.remove(value);
+                }
+
+                // Reserve a slot before calling the setter: WorldClock.clock
+                // can synchronously call add() on this same owner.
                 this._animatebles.push(value);
-                value.clock = this;
+                let attached = false;
+                try {
+                    value.clock = this;
+                    attached = value.clock === this;
+                }
+                finally {
+                    // An external IAnimatable may throw or reject ownership.
+                    // Never advance an entry that does not belong to this clock.
+                    if (!attached) {
+                        this._removeAnimatableReference(value);
+                        // A setter may have changed its owner before throwing.
+                        // Undo the stale back-reference without masking the
+                        // original exception if the cleanup setter also fails.
+                        try {
+                            if (value.clock === this) {
+                                value.clock = null;
+                            }
+                        }
+                        catch (_cleanupError) {
+                            // Preserve the registration error.
+                        }
+                    }
+                }
             }
         }
         /**
@@ -213,9 +284,7 @@ namespace dragonBones {
          * @language zh_CN
          */
         public remove(value: IAnimatable): void {
-            const index = this._animatebles.indexOf(value);
-            if (index >= 0) {
-                this._animatebles[index] = null;
+            if (this._removeAnimatableReference(value) && value.clock === this) {
                 value.clock = null;
             }
         }
@@ -230,13 +299,26 @@ namespace dragonBones {
          * @language zh_CN
          */
         public clear(): void {
-            // Keep the array length stable while advanceTime() may be iterating.
-            // Nulling entries releases references and lets the next tick compact it.
-            for (let i = 0, l = this._animatebles.length; i < l; ++i) {
-                const animatable = this._animatebles[i];
-                this._animatebles[i] = null;
-                if (animatable !== null) {
-                    animatable.clock = null;
+            // Treat clear as an active traversal. Reentrant clock setters must
+            // not shift the indices we are currently visiting.
+            this._advancingDepth++;
+            try {
+                for (let i = 0, l = this._animatebles.length; i < l; ++i) {
+                    const animatable = this._animatebles[i];
+                    this._animatebles[i] = null;
+                    if (animatable !== null) {
+                        animatable.clock = null;
+                    }
+                }
+            }
+            finally {
+                this._advancingDepth--;
+                // Discard entries detached by this call, but preserve any new
+                // animatables added by a clock setter during the traversal.
+                // Also remove holes when a setter throws before clear finishes.
+                this._needsCompaction = true;
+                if (this._advancingDepth === 0) {
+                    this._compactAnimatables();
                 }
             }
         }

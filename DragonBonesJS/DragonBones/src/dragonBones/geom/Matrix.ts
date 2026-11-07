@@ -238,7 +238,9 @@ namespace dragonBones {
             if (bA === 0.0 && cA === 0.0) {
                 this.b = this.c = 0.0;
                 if (aA === 0.0 || dA === 0.0) {
-                    this.a = this.b = this.tx = this.ty = 0.0;
+                    // Match the fallback used for other singular matrices.
+                    // A singular transform has no mathematical inverse.
+                    return this.identity();
                 }
                 else {
                     aA = this.a = 1.0 / aA;

@@ -1744,9 +1744,9 @@ namespace dragonBones {
 
             if (DataParser.VALUE in rawData || DataParser.COLOR in rawData) {
                 const rawColor = DataParser.VALUE in rawData ? rawData[DataParser.VALUE] : rawData[DataParser.COLOR];
-                for (let k in rawColor) { // Detects the presence of color.
-                    // tslint:disable-next-line:no-unused-expression
-                    k;
+                // A color frame must contain its own color properties. Inherited
+                // enumerable properties are not part of the animation data.
+                if (rawColor != null && Object.keys(Object(rawColor)).length > 0) {
                     this._parseColorTransform(rawColor, this._helpColorTransform);
                     colorOffset = this._colorArray.length;
                     this._colorArray.length += 8;
@@ -1759,7 +1759,6 @@ namespace dragonBones {
                     this._colorArray[colorOffset++] = Math.round(this._helpColorTransform.greenOffset);
                     this._colorArray[colorOffset++] = Math.round(this._helpColorTransform.blueOffset);
                     colorOffset -= 8;
-                    break;
                 }
             }
 

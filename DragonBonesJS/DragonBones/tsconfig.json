@@ -60,6 +60,7 @@
     "./src/dragonBones/parser/DataParser.ts",
     "./src/dragonBones/parser/ObjectDataParser.ts",
     "./src/dragonBones/parser/BinaryDataParser.ts",
-    "./src/dragonBones/factory/BaseFactory.ts"
+    "./src/dragonBones/factory/BaseFactory.ts",
+    "./src/dragonBones/core/ModuleExports.ts"
   ]
 }

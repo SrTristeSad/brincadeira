@@ -293,6 +293,9 @@ namespace dragonBones {
         private readonly _clock: WorldClock = new WorldClock();
         private readonly _events: Array<EventObject> = [];
         private readonly _objects: Array<BaseObject> = [];
+        // Nested advanceTime() calls must not process the same queue twice.
+        private _drainingObjects: boolean = false;
+        private _dispatchingEvents: boolean = false;
         private _eventManager: IEventDispatcher = null as any;
 
         public constructor(eventManager: IEventDispatcher) {
@@ -302,32 +305,64 @@ namespace dragonBones {
         }
 
         public advanceTime(passedTime: number): void {
-            if (this._objects.length > 0) {
-                for (const object of this._objects) {
-                    object.returnToPool();
+            if (this._objects.length > 0 && !this._drainingObjects) {
+                this._drainingObjects = true;
+                let processed = 0;
+                try {
+                    // Return objects added by callbacks in the same update, as before.
+                    while (processed < this._objects.length) {
+                        // Claim the entry before user-extensible _onClear() runs.
+                        // A failed clear must not be retried on the next frame.
+                        const object = this._objects[processed++];
+                        object.returnToPool();
+                    }
                 }
-
-                this._objects.length = 0;
+                finally {
+                    // Keep unprocessed objects when a returnToPool() throws.
+                    // Avoid shifting the array in the normal, fully drained case.
+                    if (processed === this._objects.length) {
+                        this._objects.length = 0;
+                    }
+                    else {
+                        this._objects.splice(0, processed);
+                    }
+                    this._drainingObjects = false;
+                }
             }
 
             this._clock.advanceTime(passedTime);
 
-            if (this._events.length > 0) {
-                for (let i = 0; i < this._events.length; ++i) {
-                    const eventObject = this._events[i];
-                    const armature = eventObject.armature;
+            if (this._events.length > 0 && !this._dispatchingEvents) {
+                this._dispatchingEvents = true;
+                let processed = 0;
+                try {
+                    // Keep dispatching events added by callbacks in this frame.
+                    while (processed < this._events.length) {
+                        const eventObject = this._events[processed];
+                        try {
+                            const armature = eventObject.armature;
 
-                    if (armature._armatureData !== null) { // May be armature disposed before advanceTime.
-                        armature.eventDispatcher.dispatchDBEvent(eventObject.type, eventObject);
-                        if (eventObject.type === EventObject.SOUND_EVENT) {
-                            this._eventManager.dispatchDBEvent(eventObject.type, eventObject);
+                            if (armature._armatureData !== null) { // May be armature disposed before advanceTime.
+                                armature.eventDispatcher.dispatchDBEvent(eventObject.type, eventObject);
+                                if (eventObject.type === EventObject.SOUND_EVENT) {
+                                    this._eventManager.dispatchDBEvent(eventObject.type, eventObject);
+                                }
+                            }
+                        }
+                        finally {
+                            // Even if a listener throws, this event is already
+                            // delivered and must return to the pool exactly once.
+                            processed++;
+                            this.bufferObject(eventObject);
                         }
                     }
-
-                    this.bufferObject(eventObject);
                 }
-
-                this._events.length = 0;
+                finally {
+                    // Preserve any undelivered events for the next update.
+                    // Never re-dispatch an event whose listener threw.
+                    this._events.splice(0, processed);
+                    this._dispatchingEvents = false;
+                }
             }
         }
 
@@ -366,35 +401,6 @@ if (!Date.now) {
         return new Date().getTime();
     };
 }
-// Weixin can not support typescript extends.
-var __extends: any = function (t: any, e: any) {
-    function r(this: any) {
-        this.constructor = t;
-    }
-    for (var i in e) {
-        if ((e as any).hasOwnProperty(i)) {
-            t[i] = e[i];
-        }
-    }
-    r.prototype = e.prototype, t.prototype = new (r as any)();
-};
-//
 if (typeof global === "undefined" && typeof window !== "undefined") {
     var global = window as any;
-}
-//
-declare var exports: any;
-declare var module: any;
-declare var define: any;
-if (typeof exports === "object" && typeof module === "object") {
-    module.exports = dragonBones;
-}
-else if (typeof define === "function" && define["amd"]) {
-    define(["dragonBones"], function () { return dragonBones; });
-}
-else if (typeof exports === "object") {
-    exports = dragonBones;
-}
-else if (typeof global !== "undefined") {
-    global.dragonBones = dragonBones;
 }

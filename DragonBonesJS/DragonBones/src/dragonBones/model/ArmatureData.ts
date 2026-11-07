@@ -231,6 +231,7 @@ namespace dragonBones {
             const sortHelper = this.sortedBones.concat();
             let index = 0;
             let count = 0;
+            let stalled = 0;
             this.sortedBones.length = 0;
             while (count < total) {
                 const bone = sortHelper[index++];
@@ -238,43 +239,67 @@ namespace dragonBones {
                     index = 0;
                 }
 
-                if (this.sortedBones.indexOf(bone) >= 0) {
-                    continue;
-                }
-
-                let flag = false;
-                for (let k in this.constraints) { // Wait constraint.
-                    const constraint = this.constraints[k];
-                    if (constraint.root === bone && this.sortedBones.indexOf(constraint.target) < 0) {
-                        flag = true;
-                        break;
+                let blocked = this.sortedBones.indexOf(bone) >= 0;
+                if (!blocked) {
+                    for (let k in this.constraints) { // Wait constraint.
+                        const constraint = this.constraints[k];
+                        if (constraint.root === bone && this.sortedBones.indexOf(constraint.target) < 0) {
+                            blocked = true;
+                            break;
+                        }
                     }
                 }
 
-                if (flag) {
-                    continue;
+                if (!blocked && bone.parent !== null && this.sortedBones.indexOf(bone.parent) < 0) { // Wait parent.
+                    blocked = true;
                 }
 
-                if (bone.parent !== null && this.sortedBones.indexOf(bone.parent) < 0) { // Wait parent.
+                if (blocked) {
+                    // A complete traversal without adding a bone means a
+                    // circular dependency or an absent parent/constraint target.
+                    if (++stalled >= total) {
+                        // A failed sort must not leave a partially reordered rig.
+                        this.sortedBones.length = 0;
+                        for (const originalBone of sortHelper) {
+                            this.sortedBones.push(originalBone);
+                        }
+                        throw new Error("Unable to sort bones in armature '" + this.name +
+                            "': cyclic or unresolved bone dependencies.");
+                    }
+
                     continue;
                 }
 
                 this.sortedBones.push(bone);
                 count++;
+                stalled = 0;
             }
         }
         /**
          * @internal
          */
         public cacheFrames(frameRate: number): void {
-            if (this.cacheFrameRate > 0) { // TODO clear cache.
+            // A nonpositive or nonfinite rate must not initialize the
+            // armature and its animations with different cache rates.
+            if (this.cacheFrameRate > 0 || !(frameRate > 0) || !isFinite(frameRate)) {
                 return;
             }
 
-            this.cacheFrameRate = frameRate;
+            // Do not initialize any clip until all animations can be cached.
+            // Invalid metadata must leave the whole armature retryable.
             for (let k in this.animations) {
-                this.animations[k].cacheFrames(this.cacheFrameRate);
+                if (this.animations[k]._getCacheFrameCount(frameRate) === 0) {
+                    return;
+                }
             }
+
+            for (let k in this.animations) {
+                this.animations[k].cacheFrames(frameRate);
+            }
+
+            // A clip can throw while building its indices. Keep the armature
+            // retryable until every clip finishes initialization.
+            this.cacheFrameRate = frameRate;
         }
         /**
          * @internal
