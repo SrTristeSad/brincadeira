@@ -33,6 +33,14 @@ def criar_fixture():
         for d in c_sem["rastros_pipeline_corpo"]:
             d["recebe_sombras_material_observado"] = False
         vk["controles"][nome + "_sem_sombras"] = c_sem
+        vk["controles"][nome + "_repeticao_apos_sombras"] = copy.deepcopy(c)
+        vk["comparacao"][
+            "repeticao_a2c_" + ("on" if esperado_a2c else "off") + "_apos_sombras"
+        ] = {
+            "arrays_identicos": True,
+            "pixels_divergentes": 0,
+            "erro_maximo_rgb": 0,
+        }
     pareamento = {"estado": "CONTROLES_RGB_4X_EM_AMBOS_BACKENDS"}
     return gl, vk, pareamento
 
@@ -119,6 +127,22 @@ class TesteComparacaoSombras(unittest.TestCase):
         gl, vk, p = criar_fixture()
         vk["textura_controle"]["sha256_png"] = "e" * 64
         with self.assertRaisesRegex(ValueError, "Textura"):
+            auditar_controles(gl, vk, p)
+
+    def test_rejeita_diferenca_rgb_apos_restaurar_sombras(self):
+        gl, vk, p = criar_fixture()
+        vk["comparacao"]["repeticao_a2c_on_apos_sombras"][
+            "arrays_identicos"
+        ] = False
+        with self.assertRaisesRegex(ValueError, "não restaurada"):
+            auditar_controles(gl, vk, p)
+
+    def test_rejeita_hash_distinto_apos_restauracao(self):
+        gl, vk, p = criar_fixture()
+        vk["controles"]["4x_sem_a2c_repeticao_apos_sombras"][
+            "sha256_rgb"
+        ] = "f" * 64
+        with self.assertRaisesRegex(ValueError, "RGB não foi restaurado"):
             auditar_controles(gl, vk, p)
 
     def test_rejeita_relatorio_sem_pareamento_anterior(self):
