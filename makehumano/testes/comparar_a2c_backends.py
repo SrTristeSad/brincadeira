@@ -347,6 +347,55 @@ def comparar_manifestos(gl, vk):
             )
         },
     }
+    sombreados = {}
+    for alfa in (64, 128, 192):
+        nome = f"4x_a{alfa:03d}_sem_a2c_sem_blend_com_z_sem_sombras"
+        c = vk["controles"].get(nome)
+        _assert(c is not None, "Falta controle receiveShadows: " + nome)
+        _assert(
+            c["captura_rgb"] is True
+            and c["amostras"] == 4
+            and c["nTransparentPrimitives"] > 0
+            and c["alfa_textura"] == alfa
+            and c["sha256_textura_png"] ==
+                vk["texturas_varredura"][str(alfa)]["sha256_png"]
+            and c["blend_habilitado_observado"] is False
+            and c["escrita_z_observada"] is True
+            and c["pipeline_a2c_observado"] is False
+            and c["controle_sombras_desligadas"] is True
+            and c["recebe_sombras_material_observado"] is False
+            and c["pipeline_chave_cache_confirmada"] is True
+            and c["rastros_pipeline_corpo"]
+            and all(
+                d["recebe_sombras_material_observado"] is False
+                and d["a2c_calculado"] is False
+                and d["blend_habilitado_previsto"] is False
+                and d["escrita_z_prevista"] is True
+                for d in c["rastros_pipeline_corpo"]
+            ),
+            "Recebimento de sombras não isolado na GPU: " + nome,
+        )
+        sombreados[str(alfa)] = {
+            "controle": nome, "sha256_rgb": c["sha256_rgb"]
+        }
+    relatorio["controle_alpha_sem_sombras"] = {
+        "estado": "RECEIVE_SHADOWS_OFF_OBSERVADO_NO_DRAW",
+        "controles": sombreados,
+        "comparacoes": {
+            nome: vk["comparacao"][nome]
+            for nome in (
+                "alfa64_vs128_off_sem_sombras",
+                "alfa192_vs128_off_sem_sombras",
+                "alfa128_sombras_on_vs_off",
+            )
+        },
+        "criterio_investigacao": (
+            "Se alfa64/192 vs128 deixa de alterar RGB com sombras desligadas, "
+            "o acoplamento de alfa por shadow_visibility explica a "
+            "divergência do controle A2C OFF sem modificar produção."
+        ),
+        "sem_homologacao": True,
+    }
     relatorio["estado"] = "CONTROLES_RGB_4X_EM_AMBOS_BACKENDS"
     relatorio["mudanca_4x_off_on_rgb"] = {
         "opengl": gl["comparacao"]["a2c_4x_off_vs_on"],
