@@ -138,7 +138,8 @@ def load(app):
                                 )
                             ),
                             "escrita_z_prevista": bool(
-                                escrever_z or alpha_to_coverage_vulkan(
+                                raster_original(obj, linhas=bool(linhas or pontos))[1]
+                                or escrever_z or alpha_to_coverage_vulkan(
                                     obj, cena.amostras, linhas=bool(linhas or pontos)
                                 )
                             ),
@@ -175,7 +176,8 @@ def load(app):
                 if not chaves:
                     raise RuntimeError("Pipeline real não foi registrado no cache")
                 blend_esperado = not (esperado or sem_blend)
-                z_esperado = bool(esperado or escrever_z)
+                z_esperado = bool(raster_original(corpo, linhas=False)[1]
+                                   or esperado or escrever_z)
                 if any(v["blend_habilitado_previsto"] != blend_esperado
                        or v["escrita_z_prevista"] != z_esperado
                        for v in observado):
