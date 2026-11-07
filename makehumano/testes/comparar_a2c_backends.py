@@ -1,7 +1,7 @@
 """Audita controle A2C RGB em GL original e Vulkan, sem homologar paridade.
 
-Não converte a diferença RGB OFF/ON em prova da cobertura isolada: ambos os
-renderers também desativam o blending quando ativam alpha-to-coverage.
+O baseline OFF/ON muda três estados: cobertura, blending e escrita Z. Os
+controles extras isolam essas três TRANSIÇÕES, sem igualar cores GL/Vulkan.
 """
 import argparse
 import json
@@ -9,6 +9,18 @@ from pathlib import Path
 
 
 CASOS = ("1x_sem_a2c", "4x_sem_a2c", "4x_com_a2c", "4x_inelegivel")
+CONTROLES_EXTRAS = (
+    "4x_sem_a2c_sem_blend_sem_z",
+    "4x_sem_a2c_sem_blend_com_z",
+)
+FATORES = {
+    # Cada par altera SOMENTE o estado indicado, sob MSAA 4x.
+    "somente_blend_4x": ("4x_sem_a2c", "4x_sem_a2c_sem_blend_sem_z"),
+    "somente_depth_write_4x": (
+        "4x_sem_a2c_sem_blend_sem_z", "4x_sem_a2c_sem_blend_com_z",
+    ),
+    "somente_a2c_4x": ("4x_sem_a2c_sem_blend_com_z", "4x_com_a2c"),
+}
 
 
 def _assert(condicao, mensagem):
@@ -50,8 +62,9 @@ def comparar_manifestos(gl, vk):
         "dimensoes": [1024, 768],
         "observado": {},
         "limites": (
-            "RGB 4x OFF/ON mistura alpha-to-coverage e blend desativado. "
-            "Não é prova isolada de cobertura por amostra ou paridade visual."
+            "RGB 4x baseline OFF/ON mistura cobertura, blend e escrita Z. "
+            "Os três contrastes controlados isolam mudanças de estado, "
+            "mas não homologam a paridade de amostragem ou cor."
         ),
     }
     if not vk["suporte_msaa"].get("disponivel"):
@@ -103,6 +116,62 @@ def comparar_manifestos(gl, vk):
             "primitivas_gl": a["nTransparentPrimitives"],
             "primitivas_vk": b["nTransparentPrimitives"],
         }
+    estados_esperados = {
+        "4x_sem_a2c": (True, False, False),
+        "4x_sem_a2c_sem_blend_sem_z": (False, False, False),
+        "4x_sem_a2c_sem_blend_com_z": (False, True, False),
+        "4x_com_a2c": (False, True, True),
+    }
+    for nome, (blend, escrever_z, a2c_ativo) in estados_esperados.items():
+        for backend, manifesto in (("OpenGL", gl), ("Vulkan", vk)):
+            registro = manifesto["controles"].get(nome)
+            _assert(registro is not None,
+                    f"Falta controle de isolamento {nome} em {backend}")
+            _assert(registro["amostras"] == 4
+                    and registro["nTransparentPrimitives"] > 0
+                    and registro["captura_rgb"] is True,
+                    f"Controle MSAA 4x inválido: {backend} {nome}")
+            _assert(registro["blend_habilitado_observado"] is blend,
+                    f"Blending observado incorreto: {backend} {nome}")
+            _assert(registro["escrita_z_observada"] is escrever_z,
+                    f"Escrita Z observada incorreta: {backend} {nome}")
+            _assert(registro["pipeline_a2c_observado"] is a2c_ativo,
+                    f"A2C observado incorreto: {backend} {nome}")
+            if backend == "OpenGL":
+                _assert(registro["amostras_fbo_observadas"] == 4
+                        and registro["rastros_gl"]["draw_states"],
+                        f"FBO/draw GL ausente: {nome}")
+                _assert(all(
+                    d == {"blend": blend, "escrita_z": escrever_z,
+                          "a2c": a2c_ativo}
+                    for d in registro["rastros_gl"]["draw_states"]
+                ), f"Estado GL efetivo diferente: {nome}")
+            else:
+                _assert(registro["pipeline_chave_cache_confirmada"] is True
+                        and registro["rastros_pipeline_corpo"],
+                        f"Pipeline Vulkan ausente: {nome}")
+                _assert(all(
+                    d["blend_habilitado_previsto"] is blend
+                    and d["escrita_z_prevista"] is escrever_z
+                    and d["a2c_calculado"] is a2c_ativo
+                    for d in registro["rastros_pipeline_corpo"]
+                ), f"Estado Vulkan previsto diferente: {nome}")
+    relatorio["isolamento_estados"] = {
+        "estado": "CONTROLES_INTERMEDIARIOS_VALIDOS",
+        "fatores": {
+            nome: {
+                "de": de, "para": para,
+                "opengl": gl["comparacao"][nome],
+                "vulkan": vk["comparacao"][nome],
+            }
+            for nome, (de, para) in FATORES.items()
+        },
+        "ressalva": (
+            "O isolamento mantém fixos blend e escrita Z no ensaio de "
+            "cobertura A2C. Ainda há diferenças de implementação de "
+            "amostras e shader entre OpenGL e Vulkan."
+        ),
+    }
     relatorio["estado"] = "CONTROLES_RGB_4X_EM_AMBOS_BACKENDS"
     relatorio["mudanca_4x_off_on_rgb"] = {
         "opengl": gl["comparacao"]["a2c_4x_off_vs_on"],
