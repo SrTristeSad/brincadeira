@@ -4,10 +4,12 @@ import hashlib
 import json
 from pathlib import Path
 import numpy as np
-from PIL import Image
 
 
 def ler_png_mascara(path, manifesto):
+    # Pillow só é exigido ao abrir PNGs; a suíte CPU importa metricas_alfa
+    # sem precisar desta dependência de análise de artefatos.
+    from PIL import Image
     path = Path(path)
     with Image.open(path) as imagem:
         if imagem.format != "PNG" or imagem.mode != "RGBA":
@@ -90,6 +92,7 @@ def avaliar(ref_png, vk_png, ref_meta, vk_meta, resultado_json, diff_png=None):
     destino.parent.mkdir(parents=True, exist_ok=True)
     destino.write_text(json.dumps(registro, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     if diff_png is not None:
+        from PIL import Image
         diferenca = np.abs(
             alpha_ref.astype(np.int16) - alpha_vk.astype(np.int16)
         ).astype(np.uint8)
