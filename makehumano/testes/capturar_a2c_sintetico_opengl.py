@@ -145,6 +145,7 @@ def capturar_sintetico_opengl(destino_json):
                 **registrar_rgb(rgb),
                 "alfa_u8": alfa,
                 "geometria": geometria_do_caso(nome),
+                "vertices_ndc": [list(pt) for pt in vertices_do_caso(nome)],
                 "amostras": amostras,
                 "amostras_fbo_observadas": amostras_observadas,
                 "a2c_ativo": a2c,
