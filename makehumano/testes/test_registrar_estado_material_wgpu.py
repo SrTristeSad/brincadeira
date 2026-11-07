@@ -57,6 +57,31 @@ class TestarEstadoMaterial(unittest.TestCase):
         self.assertFalse(estado["mapas"]["diffuseTexture"]["existe"])
         self.assertNotIn("sha256", estado["mapas"]["diffuseTexture"])
 
+    def test_luz_legada_nao_recursa_em_campo_ausente(self):
+        class LuzLegada:
+            def __init__(self):
+                self._attributes = ["position", "color", "focus"]
+                self._position = (1.0, 2.0, 3.0)
+                self._focus = (0.0, 0.0, 0.0)
+                self._color = (0.2, 0.3, 0.4)
+
+            def __getattr__(self, attr):
+                if attr in object.__getattribute__(self, "_attributes"):
+                    return object.__getattribute__(self, "_" + attr)
+                if hasattr(self, attr):  # defeito real do upstream
+                    return object.__getattribute__(self, attr)
+                raise AttributeError(attr)
+
+        from registrar_estado_material import descrever_iluminacao
+        scene = SimpleNamespace(
+            environment=SimpleNamespace(ambience=(0.1, 0.1, 0.1)),
+            lights=[LuzLegada()],
+        )
+        estado = descrever_iluminacao(scene)
+        self.assertEqual(estado["luzes"][0]["position"], [1., 2., 3.])
+        self.assertEqual(estado["luzes"][0]["color"], [0.2, 0.3, 0.4])
+        self.assertIsNone(estado["luzes"][0]["diffuse"])
+
     def test_salvar_nao_modifica_objeto_e_registra_luz(self):
         material = self._material()
         cena = SimpleNamespace(

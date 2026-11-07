@@ -102,15 +102,34 @@ def descrever_material(material):
     return resultado
 
 
+def _ler_campo_scene(obj, nome):
+    """Evita recursão do __getattr__ antigo em campos inexistentes.
+
+    SceneObject original implementa __getattr__ usando hasattr(self, attr),
+    que chama __getattr__ novamente quando um atributo não foi declarado.
+    Seus campos válidos estão em _attributes e _{nome}.
+    """
+    try:
+        conhecidos = object.__getattribute__(obj, "_attributes")
+    except AttributeError:
+        return getattr(obj, nome, None)
+    if nome in conhecidos:
+        return object.__getattribute__(obj, "_" + nome)
+    try:
+        return object.__getattribute__(obj, nome)
+    except AttributeError:
+        return None
+
+
 def descrever_iluminacao(cena):
     """Captura as entradas da cena; não executa iluminação."""
     if cena is None:
         return None
-    ambiente = getattr(getattr(cena, "environment", None), "ambience", None)
+    ambiente = _ler_campo_scene(getattr(cena, "environment", None), "ambience") if getattr(cena, "environment", None) is not None else None
     luzes = []
     for luz in getattr(cena, "lights", ()) or ():
-        luzes.append({campo: _serializar(getattr(luz, campo, None))
-                      for campo in ("position", "focus", "diffuse", "specular",
+        luzes.append({campo: _serializar(_ler_campo_scene(luz, campo))
+                      for campo in ("position", "focus", "color", "diffuse", "specular",
                                     "fov", "attenuation", "areaLights",
                                     "areaLightSize")})
     return {"ambiente": _serializar(ambiente), "luzes": luzes}

@@ -296,3 +296,24 @@ Foi acrescentado `testes/diagnosticar_pareamento_phong.py`, que, SOMENTE se amba
 **Condição de validade:** o JSON distingue `PAR_COMPARAVEL_PARA_DIAGNOSTICO` de `ENTRADAS_NAO_COMPROVADAS_EQUIVALENTES`, com base em números da câmera, shader, defines, difusa e iluminação. Os outros assets e parâmetros, além da qualidade da projeção offscreen, ainda precisam de conferência; qualquer `limites_propostos_todos_satisfeitos` é meramente estatístico e não homologação. Como PNGs são RGB, a IoU alfa 1,0 é trivial e não confirma máscara/transparentes. A decisão sobre como interpretar a troca histórica R/B deve ser discutida com o criador antes de propor correção da produção.
 
 **Status:** ferramenta preparada; resultados da CI dependerão de a referência OpenGL upstream executar com sucesso no checkout isolado.
+
+## 13. Primeiro PNG de referência OpenGL recuperado; manifesto falhou no coletor
+
+Execução [GitHub Actions 42327430376](https://github.com/SrTristeSad/brincadeira/actions/runs/42327430376), upstream em commit exato `a8bc2d54ff0ac92e78ff71431b1023eda42bf482`, NumPy 1.26.4, OpenGL llvmpipe. **A GUI abriu, renderizou Phong e salvou `phong-referencia-opengl-ci.png` de 1024×768.** O job foi marcado falho **depois do PNG**, ao montar o manifesto de iluminação: o `SceneObject.__getattr__` legado usa `hasattr(self, attr)` para um atributo inexistente, entrando em `RecursionError`. A captura existe, mas o manifesto dessa execução é `ERRO` e não permite homologação.
+
+O helper de diagnóstico `registrar_estado_material.py` foi corrigido para consultar `_attributes` dos objetos de cena legados sem chamar `__getattr__` em campos ausentes; incluiu-se o campo real `color` das luzes, além de `diffuse` opcional. Há teste de regressão que simula o comportamento recursivo do upstream. Não se alterou `scene.py` nem qualquer arquivo de produção.
+
+### Exploração das imagens recuperadas antes de validar os manifestos
+
+Os artefatos dos mesmos jobs permitem examinar o PNG OpenGL e o PNG Vulkan com câmera fixada e shader Phong, mesmo antes do manifesto corrigido. Esta comparação exploratória foi reproduzida fora da CI, usando PNGs exatos baixados do run acima e Pillow+NumPy; **ainda não serve como homologação**, pois o primeiro manifesto OpenGL falhou:
+
+| Tratamento analítico (sem alterar PNG original) | Fração de pixels fora da tolerância 8 | Erro médio RGB |
+| --- | ---: | ---: |
+| Ambos brutos | **99,8633%** | **59,5175** |
+| Apenas inverter R/B da referência OpenGL | 99,8533% | 59,5025 |
+| Apenas decodificar sRGB do PNG Vulkan | **5,3987%** | **1,7432** |
+| Inverter R/B OpenGL + decodificar sRGB Vulkan | **4,1879%** | **0,7998** |
+
+O conteúdo de silhueta após os dois tratamentos teve interseção sobre união aproximada **0,9992** ao comparar máscaras RGB contra o fundo 128 com limiar 8. Essas máscaras de silhueta diagnósticas **não são a máscara alfa do produto** e o IoU não deve ser interpretado como validação alfa. **Mesmo as métricas combinadas não atingem o limite provisório de 2% de pixels divergentes.** Portanto há divergências restantes na iluminação/cor do personagem ou bordas, que requerem investigação após validar as entradas.
+
+Este achado separa dois efeitos: o sRGB explica quase toda a diferença global de fundo e a troca de canais do GL explica parte da aparência azul. Nada disso autoriza automaticamente correção do framebuffer de produção ou mudança de contrato de cores; os resultados são diagnósticos, com artefatos de origem preservados.
