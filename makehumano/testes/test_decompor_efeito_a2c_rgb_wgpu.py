@@ -57,6 +57,19 @@ class TesteDecomposicaoA2C(unittest.TestCase):
         self.assertEqual(delta["fracao_deltas_rgb_direcao_oposta_cos_lt_menos_0_5"], 1.0)
         self.assertEqual(delta["fracao_deltas_rgb_mesma_direcao_cos_gt_0_5"], 0.0)
 
+    def test_varredura_mostra_dependencia_do_limiar(self):
+        off = np.full((7, 7, 3), 100, dtype=np.uint8)
+        on_gl, on_vk = off.copy(), off.copy()
+        on_gl[3, 3, 0] = 109
+        on_vk[3, 3, 0] = 110
+        r = decompor_efeito_a2c(off, on_gl, off, on_vk)
+        v = {item["limiar_rgb"]: item for item in r["varredura_tolerancias_rgb"]}
+        self.assertEqual(v[8]["pixels_gl"], 1)
+        self.assertEqual(v[8]["pixels_vk"], 1)
+        self.assertEqual(v[8]["iou"], 1.0)
+        self.assertEqual(v[12]["pixels_gl"], 0)
+        self.assertEqual(v[12]["pixels_vk"], 0)
+
     def test_erosao_e_deslocamento_sem_wrap(self):
         mascara = np.ones((5, 5), dtype=bool)
         self.assertEqual(int(erodir_mascara(mascara, pixels=1).sum()), 9)
