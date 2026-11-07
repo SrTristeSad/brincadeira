@@ -133,6 +133,9 @@ jobs:
         run: |
           python -m unittest discover -s makehumano/testes \
             -p test_diagnosticar_a2c_msaa_wgpu.py -v
+          python -m unittest discover -s makehumano/testes \
+            -p test_auditar_alpha_textura_gpu_wgpu.py -v
+          python -m py_compile makehumano/testes/auditar_alpha_textura_gpu.py
           python -m py_compile makehumano/testes/harness_plugin_a2c_vulkan_gui.py
           xvfb-run -a -s "-screen 0 1280x800x24" \
             python -u makehumano/testes/executar_harness_formato_gui.py \
