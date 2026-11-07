@@ -40,6 +40,22 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r makehumano/codigo/requirements.txt
           python -c "import importlib.util; assert importlib.util.find_spec('OpenGL') is None"
+      - name: Diagnosticar clear sRGB e formato Qt sem alterar renderização
+        env:
+          WGPU_BACKEND_TYPE: Vulkan
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          QT_X11_NO_MITSHM: "1"
+        run: |
+          xvfb-run -a -s "-screen 0 1280x800x24" \
+            python -u makehumano/testes/diagnosticar_srgb_offscreen.py \
+            --json "${RUNNER_TEMP}/diagnostico-srgb.json"
+      - name: Publicar evidência de codificação sRGB
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnostico-srgb-offscreen
+          path: ${{ runner.temp }}/diagnostico-srgb.json
+          if-no-files-found: warn
       - name: Abrir MakeHuman ORIGINAL e desenhar G.world via Vulkan
         env:
           WGPU_BACKEND_TYPE: Vulkan

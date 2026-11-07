@@ -1,10 +1,10 @@
 # Protocolo de paridade visual — MakeHuman OpenGL × MakeHumano Vulkan
 
-**Estado (2026-11-06):** roteiro proposto, **sem pares de referência capturados e sem resultados medidos**. As tolerâncias abaixo são critérios **provisórios**: exigem aprovação do criador e podem precisar de ajuste por análise de imagens reais. Este documento não homologa a migração.
+**Estado (2026-11-06):** roteiro proposto com **um par Phong OpenGL × Vulkan produzido fora do repositório e reprovado**; medições e locais dos artefatos foram **informados pelo responsável**, sem acesso direto aos PNGs neste ambiente. As tolerâncias abaixo são critérios **provisórios**, ainda não aprovados. Este documento não homologa a migração.
 
 ## 1. O que precisa ficar congelado
 
-- **Dois executáveis em ambientes separados:** MakeHuman original com OpenGL (revisão SHA completa a identificar e registrar antes de capturar) e MakeHumano Vulkan (SHA completo da revisão comparada; ponto inicial sugerido: 586c98c6031dbdff4226d94604b1758b34e648c1). O OpenGL só é usado como referência externa, **não** como fallback da aplicação final.
+- **Dois executáveis em ambientes separados:** primeiro par informado: MakeHuman OpenGL upstream em `a8bc2d54` (SHA completo ainda a registrar), MakeHumano Vulkan `e5c4431` (SHA completo `e5c443154d883cafd4aa28595791afe27fbdc74c`). O OpenGL só é usado como referência externa, **não** como fallback da aplicação final.
 - **Mesmo estado da aplicação:** modelo .mhm, modificadores, geometria, pose, rig, acessórios, arquivos .mhmat, mapas, .mhscene e cores/luzes. Guardar SHA-256 e origem/licença de cada asset; não copiar conteúdos sem permissão.
 - **Mesmas câmera e projeção:** guardar modo (perspectiva/ortográfica), posição, alvo, rotação, FOV, near/far, matrizes de câmera, orientação, tamanho e enquadramento do objeto. Capturar com os mesmos valores numéricos; registrar qualquer impossibilidade de reproduzi-los como bloqueio.
 - **Mesma captura:** render offscreen na interface original, 1024×768, PNG RGBA 8-bit sem redimensionar, recortar, corrigir gama ou aplicar pós-processamento. Registrar fundo RGBA, espaço de cor, exposição e opções de multisampling; inicialmente 1× em ambos. Não misturar screenshot do desktop com framebuffer offscreen. Para máscara alfa, preservar a saída de mh.renderAlphaMask e representar o valor no canal A de um PNG RGBA, documentando a conversão, idêntica nos dois lados.
@@ -20,7 +20,7 @@ Cada par usa o mesmo material e os mesmos arquivos, no mesmo enquadramento e ilu
 | --- | --- | --- |
 | xray.png | Preset xray original / WGSL | Sem par |
 | litsphere.png | Preset litsphere, textura idêntica | Sem par |
-| phong.png | Preset phong, AO e material idênticos | Sem par |
+| phong.png | Preset phong, AO e material idênticos | 1 par local **REPROVADO**, diferenças de cor e textura ainda em investigação |
 | toon.png | Preset toon, parâmetros idênticos | Sem par |
 | normalmap.png | Preset normalmap, mapa/tangentes controlados | Sem par |
 | skin.png | Preset skin, AO e gradiente idênticos | Sem par |
@@ -73,6 +73,45 @@ O script atual decide seu exit code **somente** por <code>fracao_divergente</cod
 }
 ~~~
 
-**Resultado registrado nesta data:** 0 pares OpenGL × Vulkan disponíveis; 0 comparações contra o original executadas; nenhum caso homologado. As 61 capturas idênticas da CI são **Vulkan-fonte × Vulkan-portátil** e não substituem esta campanha.
+**Resultado registrado nesta data:** um par `phong.png` informado, comparado fora deste ambiente e **reprovado**; sem PNGs ou manifestos incorporados ao repositório; nenhum caso homologado. As 61 capturas idênticas da CI são **Vulkan-fonte × Vulkan-portátil** e não substituem esta campanha.
 
 **Validações externas em separado:** GPU física NVIDIA/AMD/Intel, exportações consumidas em aplicativos externos e campanha manual de plugins/entrada. Sem resultados atribuídos a elas.
+
+## 6. Primeiro par Phong: observações e triagem (informadas em 2026-11-06)
+
+**Origem das informações:** execução isolada comunicada pelo responsável. Os arquivos permanecem no ambiente externo em `/home/claude/srtristesad/` e **não estavam acessíveis para reexecução nesta revisão**. Não classificar as métricas abaixo como medidas novamente por este PR.
+
+- **Referência OpenGL:** upstream `a8bc2d54`, Mesa **llvmpipe** (GPU por software), NumPy **1.26.4**; NumPy 2 quebrou `np.fromstring` no original.
+- **Candidato Vulkan:** `e5c4431`, Mesa **Lavapipe** (GPU por software), `VK_ICD_FILENAMES=/opt/lavapipe/lvp_icd.json`, NumPy **2.5.4**.
+- **Mesmo harness isolado em ambos:** `/home/claude/srtristesad/mh-ref/plugins/99_captura_referencia.py` e `/home/claude/srtristesad/mh-cand/plugins/99_captura_referencia.py`. O harness não é parte do repositório.
+- **Entradas:** cena padrão, preset `phong`, saída **RGB** a **1024 × 768**, máscara alfa **não testada neste par**.
+- **Câmera orbital:** `fov=90`, `center=(0, 0.11924934, 0)`, `radius=12.25118277`. `OrbitalCamera` deriva a matriz de visão de seus parâmetros orbitais e não utiliza os valores de `setEye` da classe base como controle efetivo. O harness deve fixar também orientação, zoom/translação e projeção e registrar as **matrizes de visão/projeção** resultantes. Ver `codigo/makehuman/lib/camera.py`, especialmente `OrbitalCamera.getMatrices` e `updateCamera`: este último pode recalcular centro e raio se `noAutoScale` não estiver ativo.
+- **Arquivos externos:** `capturas/referencia-opengl/phong.png`, `capturas/candidato-vulkan/phong.png`, `resultados/phong.json`, `resultados/phong-diff.png` e manifestos JSON nos respectivos diretórios.
+- **Métricas informadas:** tolerância por canal **8**, fração máxima **0,02**; fração divergente **0,9986**, erro médio RGB **59,5**, IoU cobertura alfa **1,0**, pixels alfa diferentes **0**; **REPROVADO**. Como o par é RGB, não usar as estatísticas de canal alfa implicitamente opaco como demonstração de equivalência de máscara/transparência.
+- **Observações visuais:** fundo OpenGL RGB ~128; fundo Vulkan RGB ~188; pele azul lisa no original versus bege/texturizada no candidato. A causa do segundo achado permanece desconhecida e exige comparação dos estados do material no mesmo instante de captura.
+
+### Hipótese da conversão sRGB — sem alteração de produção
+
+`codigo/makehuman/lib/vulkan_scene.py` configura `self.formato = self.contexto.get_preferred_format(self.adapter)`. Em `framebuffer_offscreen`, o formato padrão é `self.formato`; `capturar_framebuffer` usa esse padrão. Se o contexto retornar `bgra8unorm-srgb` ou `rgba8unorm-srgb`, a escrita do alvo converte linear para sRGB. A função de leitura `ler_framebuffer_rgba` converte a ordem BGRA/RGBA, mas não decodifica sRGB.
+
+A codificação sRGB de linear 0,5 é aproximadamente 0,735356983, ou **188/255** após quantização, versus **128/255** em `rgba8unorm`. Isso é consistente com o fundo observado, mas **não confirma sozinho** que todo o erro de Phong resulte do formato offscreen ou que a saída OpenGL e a matemática do shader tenham mesmo espaço de cor.
+
+**Experimento isolado:** executar `makehumano/testes/diagnosticar_srgb_offscreen.py` em Xvfb/Lavapipe com o mesmo Qt/rendercanvas/wgpu, criando alvos independentes `rgba8unorm`, `rgba8unorm-srgb` e no formato preferido do contexto. Limpar com o valor linear `(0.5,0.5,0.5,1.0)`, ler os bytes e registrar um JSON. O script **não carrega a cena, não altera pipelines nem troca o formato do renderizador**.
+
+~~~bash
+cd /home/claude/srtristesad/mh-cand
+VK_ICD_FILENAMES=/opt/lavapipe/lvp_icd.json WGPU_BACKEND_TYPE=Vulkan \
+xvfb-run -a -s "-screen 0 1280x800x24" \
+python makehumano/testes/diagnosticar_srgb_offscreen.py \
+  --json /home/claude/srtristesad/resultados/diagnostico-srgb.json
+~~~
+
+Se este checkout tiver outra raiz, ajustar apenas o `cd` (o caminho do script é relativo à raiz que contém `makehumano/`). **Critério de conclusão do experimento:** observar 128±1 no alvo UNORM e 188±1 no sRGB, identificar o formato preferido do contexto com Qt e confrontar o resultado com o fundo de `phong.png`. Repetir a leitura efetiva de `cena.formato` no harness, se possível; isso diferencia inferência por contexto de medida dentro da cena real.
+
+**Decisão necessária antes de corrigir a produção:** revisar evidência do experimento, escolher se o contrato de captura deve usar linear UNORM ou normalização explícita (preservando o comportamento do original), avaliar as consequências sobre os outros passes e testes de shader que atualmente dependem do formato sRGB. Não alterar `vulkan_scene.py` antes dessa decisão.
+
+### Investigação separada da cor da pele no Phong
+
+A seguir, coletar dos **dois** processos antes da captura os campos `material.shader`, `shaderConfig`, `diffuseColor`, `diffuseTexture`, `shaderParameters`, `ambientColor`, `specularColor`, UVs, identidade/checksum da textura e estado das luzes. Confirmar se o material realmente é o mesmo; comparar pixels do objeto fora da região de fundo **após** controlar o espaço de cor. Não assumir que o shader original ignora textura sem inspecionar o GLSL e demonstrar o efeito.
+
+**Critério de paridade:** gerar novamente o par `phong.png` após cada mudança autorizada, registrar todas as métricas do protocolo e revisar visualmente o diff. `exit code 0` do comparador verifica apenas a fração divergente; **não é aceite integral**.
