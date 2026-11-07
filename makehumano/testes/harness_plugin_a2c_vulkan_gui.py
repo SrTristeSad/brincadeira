@@ -17,6 +17,7 @@ from core import G
 def load(app):
     destino = Path(os.environ["MAKEHUMANO_HARNESS_FORMATO_JSON"])
     png = Path(os.environ["MAKEHUMANO_HARNESS_FORMATO_PNG"])
+    provisorio = destino.with_name(destino.stem + "-observacao.json")
     pasta = os.environ["MAKEHUMANO_HARNESS_TESTES_DIR"]
     if pasta not in sys.path:
         sys.path.insert(0, pasta)
@@ -158,7 +159,7 @@ def load(app):
                 }
                 imagens[nome] = rgb
 
-            with observar_captura_offscreen(cena, destino):
+            with observar_captura_offscreen(cena, provisorio):
                 capturar("1x_sem_a2c", amostras=1, transparencia=True, a2c=False)
 
                 # Prova de suporte: testar AMBOS os attachments usados pelo renderer.
@@ -182,7 +183,7 @@ def load(app):
                     capturar("4x_com_a2c", amostras=4, transparencia=True, a2c=True)
                     capturar("4x_inelegivel", amostras=4, transparencia=False, a2c=True)
 
-            documento = json.loads(destino.read_text(encoding="utf-8"))
+            documento = json.loads(provisorio.read_text(encoding="utf-8"))
             documento.update({
                 "backend": "Vulkan",
                 "dimensoes_imagem": [1024, 768],
