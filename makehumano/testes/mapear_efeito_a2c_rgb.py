@@ -147,8 +147,27 @@ def decompor_efeito_a2c(off_gl, on_gl, off_vk, on_vk, *,
             "fracao_deltas_rgb_direcao_oposta_cos_lt_menos_0_5": None,
             "cosseno_mediano_dos_deltas_rgb": None,
         }
+    varredura = []
+    for limite in (2, 4, 8, 12, 16, 24):
+        g = mascara_efeito(off_gl, on_gl, tolerancia=limite)
+        v = mascara_efeito(off_vk, on_vk, tolerancia=limite)
+        inter_limite = int(np.count_nonzero(g & v))
+        uniao_limite = int(np.count_nonzero(g | v))
+        varredura.append({
+            "limiar_rgb": limite,
+            "pixels_gl": int(np.count_nonzero(g)),
+            "pixels_vk": int(np.count_nonzero(v)),
+            "intersecao": inter_limite,
+            "uniao": uniao_limite,
+            "iou": float(inter_limite / uniao_limite) if uniao_limite else 1.0,
+        })
     metade = mg.shape[1] // 2
     return {
+        "varredura_tolerancias_rgb": varredura,
+        "nota_varredura": (
+            "Limiar RGB aplicado em cada backend separadamente, sem linearizar sRGB. "
+            "Variação de IoU não prova nem exclui erro de cobertura por amostra."
+        ),
         "metodo": "limiar intrabackend ON-OFF; fundo inferido do canto; borda estimada, não geometria",
         "fundo_rgb_off_opengl": [int(x) for x in fundo_gl],
         "fundo_rgb_off_vulkan": [int(x) for x in fundo_vk],
