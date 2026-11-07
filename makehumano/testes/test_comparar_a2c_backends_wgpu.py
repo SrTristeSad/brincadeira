@@ -87,6 +87,32 @@ def modelos():
         for chave in ("somente_blend_4x", "somente_depth_write_4x",
                       "somente_a2c_4x"):
             m["comparacao"][chave] = {"pixels_divergentes": 4}
+    for m in (gl, vk):
+        m["texturas_varredura"] = {
+            "64": {"alfa_textura": 64, "sha256_png": "e" * 64,
+                   "sha256_rgba": "1" * 64},
+            "128": {"alfa_textura": 128, "sha256_png": "a" * 64,
+                    "sha256_rgba": "b" * 64},
+            "192": {"alfa_textura": 192, "sha256_png": "f" * 64,
+                    "sha256_rgba": "2" * 64},
+        }
+        for name, reg in m["controles"].items():
+            reg["alfa_textura"] = 128
+            reg["sha256_textura_png"] = "a" * 64
+        for alfa in (64, 192):
+            for ligado in (False, True):
+                nome = (
+                    f"4x_a{alfa:03d}_com_a2c" if ligado else
+                    f"4x_a{alfa:03d}_sem_a2c_sem_blend_com_z"
+                )
+                template = "4x_com_a2c" if ligado else "4x_sem_a2c_sem_blend_com_z"
+                reg = copy.deepcopy(m["controles"][template])
+                reg["alfa_textura"] = alfa
+                reg["sha256_textura_png"] = m["texturas_varredura"][str(alfa)]["sha256_png"]
+                m["controles"][nome] = reg
+            m["comparacao"][f"somente_a2c_4x_alfa{alfa}"] = {
+                "pixels_divergentes": 7,
+            }
     return gl, vk
 
 
@@ -100,6 +126,10 @@ class TesteContratoA2C(unittest.TestCase):
         self.assertEqual(doc["isolamento_estados"]["estado"],
                          "CONTROLES_INTERMEDIARIOS_VALIDOS")
         self.assertIn("somente_a2c_4x", doc["isolamento_estados"]["fatores"])
+        self.assertEqual(doc["varredura_alfa_4x"]["estado"],
+                         "CAPTURADA_COM_ESTADOS_FIXOS")
+        self.assertEqual(set(doc["varredura_alfa_4x"]["niveis"]),
+                         {"64", "128", "192"})
 
     def test_rejeita_blend_incorreto_no_controle_intermediario(self):
         gl, vk = modelos()
@@ -123,6 +153,18 @@ class TesteContratoA2C(unittest.TestCase):
         gl, vk = modelos()
         vk["controles"]["4x_sem_a2c_sem_blend_sem_z"]["rastros_pipeline_corpo"][0]["a2c_calculado"] = True
         with self.assertRaisesRegex(ValueError, "Vulkan previsto"):
+            comparar_manifestos(gl, vk)
+
+    def test_rejeita_hash_alpha_diferente(self):
+        gl, vk = modelos()
+        vk["texturas_varredura"]["192"]["sha256_png"] = "0" * 64
+        with self.assertRaisesRegex(ValueError, "Textura alpha"):
+            comparar_manifestos(gl, vk)
+
+    def test_rejeita_alpha_64_com_a2c_incorreto(self):
+        gl, vk = modelos()
+        vk["controles"]["4x_a064_com_a2c"]["pipeline_a2c_observado"] = False
+        with self.assertRaisesRegex(ValueError, "Estados alpha"):
             comparar_manifestos(gl, vk)
 
     def test_nao_testavel_sem_driver_gl_4x(self):
