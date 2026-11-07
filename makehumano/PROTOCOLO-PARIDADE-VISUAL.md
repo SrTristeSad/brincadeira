@@ -118,3 +118,35 @@ O script é executado a partir da raiz de um clone isolado; instalar as dependê
 A seguir, coletar dos **dois** processos antes da captura os campos `material.shader`, `shaderConfig`, `diffuseColor`, `diffuseTexture`, `shaderParameters`, `ambientColor`, `specularColor`, UVs, identidade/checksum da textura e estado das luzes. Confirmar se o material realmente é o mesmo; comparar pixels do objeto fora da região de fundo **após** controlar o espaço de cor. Não assumir que o shader original ignora textura sem inspecionar o GLSL e demonstrar o efeito.
 
 **Critério de paridade:** gerar novamente o par `phong.png` após cada mudança autorizada, registrar todas as métricas do protocolo e revisar visualmente o diff. `exit code 0` do comparador verifica apenas a fração divergente; **não é aceite integral**.
+
+## 7. Medir o formato real durante a captura Phong
+
+**Estado:** o harness externo 99_captura_referencia.py não está disponível neste ambiente; a instrumentação foi preparada, mas o formato efetivo da cena real ainda não foi medido.
+
+O helper de testes/observar_formato_cena_vulkan.py é exclusivo de diagnóstico. Importá-lo SOMENTE na cópia isolada do harness Vulkan, após a CenaVulkan existir. Envolver a CHAMADA REAL que já produz phong.png, sem recriar cena nem alterar o renderizador:
+
+    import sys
+    from core import G
+    sys.path.insert(0, '/tmp/brincadeira-srgb/makehumano/testes')
+    from observar_formato_cena_vulkan import observar_captura_offscreen
+    cena = getattr(G.canvas, '_cena', None)
+    with observar_captura_offscreen(
+        cena, '/home/claude/srtristesad/resultados/formato-real-phong.json'
+    ):
+        # INSERIR AQUI a chamada de captura Phong que já existe no harness
+        # Não substituir a captura real por um clear sintético
+        ...
+
+O bloco acima é uma indicação de inserção, NÃO um harness executável completo: substituir a linha de reticências pela chamada real existente, sem alterar seus argumentos. Manter o harness externo fora da árvore versionada.
+
+Executar os testes CPU do helper, sem Vulkan:
+
+    python -m unittest discover -s makehumano/testes -p 'test_observar_formato_cena_wgpu.py' -v
+
+Depois da captura no ambiente isolado, ler o resultado:
+
+    cat /home/claude/srtristesad/resultados/formato-real-phong.json
+
+**Critério de medição:** captura_concluida_sem_excecao e observou_captura_offscreen devem ser true; pelo menos uma textura efetiva deve ter largura=1024, altura=768. Comparar formato_real_da_textura, formato_cena_no_instante e formato_preferido_superficie, além dos pixels 128/188 do par real. Se não ocorrer chamada offscreen, o helper informa observou_captura_offscreen=false. Um teste unitário do helper não é comprovação do formato da CenaVulkan real, nem da paridade contra o OpenGL.
+
+**Limite:** nenhuma alteração do framebuffer ou de shaders de produção está autorizada até a revisão da evidência e decisão do criador.
