@@ -419,8 +419,22 @@ namespace dragonBones {
 
             const headerBytes = new Uint8Array(rawData, 8 + 4, headerLength);
             const headerString = this._decodeUTF8(headerBytes);
-            const header = JSON.parse(headerString);
-            //
+            let header: any;
+            try {
+                header = JSON.parse(headerString);
+            }
+            catch (_error) {
+                console.assert(false, "Invalid binary header JSON.");
+                return null;
+            }
+
+            // JSON primitives and arrays cannot describe a DragonBones skeleton.
+            if (header === null || typeof header !== "object" || Array.isArray(header)) {
+                console.assert(false, "Invalid binary header object.");
+                return null;
+            }
+
+            // Do not mutate parser state until the header has been validated.
             this._binaryOffset = 8 + 4 + headerLength;
             this._binary = rawData;
 

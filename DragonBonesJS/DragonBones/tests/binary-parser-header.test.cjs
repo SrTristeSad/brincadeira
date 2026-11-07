@@ -58,3 +58,46 @@ test("binary parser accepts a complete header after a truncated attempt", () => 
         data.returnToPool();
     }
 });
+
+test("binary parser rejects malformed JSON headers without throwing", () => {
+    const parser = new BinaryDataParser();
+    for (const text of ["{", "{\"version\":", "not-json"]) {
+        const bytes = Buffer.from(text, "utf8");
+        assert.equal(parser.parseDragonBonesData(makeBinary(bytes)), null);
+    }
+});
+
+test("binary parser rejects JSON primitives and arrays as headers", () => {
+    const parser = new BinaryDataParser();
+    for (const text of ["null", "false", "42", "\"text\"", "[]"]) {
+        const bytes = Buffer.from(text, "utf8");
+        assert.equal(parser.parseDragonBonesData(makeBinary(bytes)), null);
+    }
+});
+
+test("invalid JSON preserves parser state from a previous valid binary", () => {
+    const parser = new BinaryDataParser();
+    const validBytes = Buffer.from(JSON.stringify({
+        version: "5.6", name: "previous"
+    }), "utf8");
+    const data = parser.parseDragonBonesData(makeBinary(validBytes));
+    assert.ok(data);
+    data.returnToPool();
+
+    const previousBinary = parser._binary;
+    const previousOffset = parser._binaryOffset;
+    assert.equal(parser.parseDragonBonesData(makeBinary(Buffer.from("{"))), null);
+    assert.strictEqual(parser._binary, previousBinary);
+    assert.equal(parser._binaryOffset, previousOffset);
+
+    const next = parser.parseDragonBonesData(makeBinary(Buffer.from(JSON.stringify({
+        version: "5.6", name: "next"
+    }), "utf8")));
+    assert.ok(next);
+    try {
+        assert.equal(next.name, "next");
+    }
+    finally {
+        next.returnToPool();
+    }
+});
