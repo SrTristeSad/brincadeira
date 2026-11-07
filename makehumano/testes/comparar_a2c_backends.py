@@ -245,6 +245,68 @@ def comparar_manifestos(gl, vk):
             "especialmente sob sobreposição de triângulos."
         ),
     }
+    repetir = "4x_a128_repeticao_sem_a2c_sem_blend_com_z"
+    for backend, manifesto in (("OpenGL", gl), ("Vulkan", vk)):
+        c = manifesto["controles"].get(repetir)
+        _assert(c is not None, "Falta repetição de alfa 128 no " + backend)
+        _assert(
+            c["amostras"] == 4
+            and c["captura_rgb"] is True
+            and c["alfa_textura"] == 128
+            and c["sha256_textura_png"] == controle_gl["sha256_png"]
+            and c["nTransparentPrimitives"] > 0
+            and c["blend_habilitado_observado"] is False
+            and c["escrita_z_observada"] is True
+            and c["pipeline_a2c_observado"] is False,
+            "Repetição alfa 128 com estados incorretos: " + backend,
+        )
+        if backend == "OpenGL":
+            _assert(
+                c["amostras_fbo_observadas"] == 4
+                and c["rastros_gl"]["draw_states"]
+                and all(
+                    d == {"blend": False, "escrita_z": True, "a2c": False}
+                    for d in c["rastros_gl"]["draw_states"]
+                ),
+                "Repetição OpenGL sem estado comprovado",
+            )
+        else:
+            _assert(
+                c["pipeline_chave_cache_confirmada"] is True
+                and c["rastros_pipeline_corpo"]
+                and all(
+                    d["blend_habilitado_previsto"] is False
+                    and d["escrita_z_prevista"] is True
+                    and d["a2c_calculado"] is False
+                    for d in c["rastros_pipeline_corpo"]
+                ),
+                "Repetição Vulkan sem pipeline comprovado",
+            )
+    relatorio["controle_negativo_alpha_sem_a2c"] = {
+        "estado": "REPETICAO_128_E_COMPARACOES_MEDIDAS",
+        "nota": (
+            "Baseline alfa 128 repetido no final da sequência, com A2C OFF, "
+            "blend OFF e escrita Z ON, para detectar deriva de estado ou cache. "
+            "OFF 64 vs 128 e OFF 192 vs 128 também são controles negativos; "
+            "diferenças não são consideradas zero por suposição."
+        ),
+        "opengl": {
+            chave: gl["comparacao"][chave]
+            for chave in (
+                "repeticao_a128_off", "alfa64_vs128_off",
+                "alfa192_vs128_off", "alfa64_vs128_on",
+                "alfa192_vs128_on",
+            )
+        },
+        "vulkan": {
+            chave: vk["comparacao"][chave]
+            for chave in (
+                "repeticao_a128_off", "alfa64_vs128_off",
+                "alfa192_vs128_off", "alfa64_vs128_on",
+                "alfa192_vs128_on",
+            )
+        },
+    }
     relatorio["estado"] = "CONTROLES_RGB_4X_EM_AMBOS_BACKENDS"
     relatorio["mudanca_4x_off_on_rgb"] = {
         "opengl": gl["comparacao"]["a2c_4x_off_vs_on"],
