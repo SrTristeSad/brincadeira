@@ -235,7 +235,9 @@ namespace dragonBones {
         public _getCacheFrameCount(frameRate: number): number {
             // Validate without allocating so ArmatureData can check every clip
             // before committing the armature's cache frame rate.
-            if (!(frameRate > 0.0) || !isFinite(frameRate) || !isFinite(this.scale) ||
+            // An animation without its armature cannot build the bone/slot
+            // cache tables. Reject it before committing any cache state.
+            if (this.parent === null || !(frameRate > 0.0) || !isFinite(frameRate) || !isFinite(this.scale) ||
                 !(this.duration >= 0.0) || !isFinite(this.duration)) {
                 return 0;
             }

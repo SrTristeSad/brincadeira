@@ -275,3 +275,39 @@ test("scaled clips preserve their intentional per-animation cache rates", () => 
         armature.returnToPool();
     }
 });
+
+test("unattached animation cache leaves the clip retryable", () => {
+    const animation = BaseObject.borrowObject(AnimationData);
+    animation.duration = 1;
+    try {
+        assert.equal(animation.parent, null);
+        assert.equal(animation._getCacheFrameCount(24), 0);
+        assert.doesNotThrow(() => animation.cacheFrames(24));
+        assert.equal(animation.cacheFrameRate, 0);
+        assert.deepEqual(animation.cachedFrames, []);
+        assert.deepEqual(Object.keys(animation.boneCachedFrameIndices), []);
+        assert.deepEqual(Object.keys(animation.slotCachedFrameIndices), []);
+    }
+    finally {
+        animation.returnToPool();
+    }
+});
+
+test("unattached animation caches normally after assignment to an armature", () => {
+    const { ArmatureData } = require("../out/dragonBones.js");
+    const armature = BaseObject.borrowObject(ArmatureData);
+    const animation = BaseObject.borrowObject(AnimationData);
+    animation.name = "walk";
+    animation.duration = 1;
+    try {
+        animation.cacheFrames(24);
+        armature.addAnimation(animation);
+        armature.cacheFrames(24);
+        assert.equal(armature.cacheFrameRate, 24);
+        assert.equal(animation.cacheFrameRate, 24);
+        assert.deepEqual(animation.cachedFrames, Array(25).fill(false));
+    }
+    finally {
+        armature.returnToPool();
+    }
+});
