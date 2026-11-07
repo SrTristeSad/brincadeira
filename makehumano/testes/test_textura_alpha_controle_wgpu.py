@@ -51,6 +51,23 @@ class TestControleTexturaAlfa(unittest.TestCase):
             self.assertEqual(hashlib.sha256(Path(path).read_bytes()).hexdigest(), meta["sha256_png"])
             self.assertNotEqual(Path(path).read_bytes(), bytes_png_textura_alfa_parcial())
 
+    def test_varredura_a064_e_a192_preserva_rgb_xadrez(self):
+        base = dados_textura_alfa_parcial(alfa=128)
+        hashes = set()
+        for alfa in (64, 128, 192, 255):
+            rgba = dados_textura_alfa_parcial(alfa=alfa)
+            self.assertTrue(np.array_equal(rgba[:, :, :3], base[:, :, :3]))
+            self.assertTrue(np.all(rgba[:, :, 3] == alfa))
+            raw = bytes_png_textura_alfa_parcial(alfa=alfa)
+            hashes.add(hashlib.sha256(raw).hexdigest())
+            with tempfile.TemporaryDirectory() as pasta:
+                path, meta = salvar_textura_alfa_parcial(
+                    Path(pasta) / f"a{alfa}.png", alfa=alfa
+                )
+                self.assertEqual(Path(path).read_bytes(), raw)
+                self.assertEqual(meta["alfa_textura"], alfa)
+        self.assertEqual(len(hashes), 4)
+
     def test_parametros_devem_ser_pareados(self):
         with self.assertRaises(ValueError):
             dados_textura_alfa_parcial(alfa=127)
