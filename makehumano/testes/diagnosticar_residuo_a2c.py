@@ -66,6 +66,11 @@ def caracterizar_residuo(mascara_gl, mascara_vk, *, raios=RAIOS):
     raio_max = raios[-1]
     longe_gl = so_gl & ~dilatar_quadrado(vk, raio_max)
     longe_vk = so_vk & ~dilatar_quadrado(gl, raio_max)
+    # Teste EXATAMENTE em (largura - 1 - x, y); não é prova de falha
+    # geométrica, apenas coincidência em coordenadas de tela espelhadas.
+    pares_espelhados = int(np.count_nonzero(
+        longe_gl & np.fliplr(longe_vk)
+    ))
     dados = {
         "raios_chebyshev_px": list(raios),
         "pixels_intersecao": int(inter.sum()),
@@ -73,6 +78,16 @@ def caracterizar_residuo(mascara_gl, mascara_vk, *, raios=RAIOS):
         "pixels_exclusivos_vk": total_vk,
         "pixels_exclusivos_total": total_gl + total_vk,
         "vizinhança": comparacoes,
+        "espelho_horizontal_dos_distantes": {
+            "definicao": "pixel (x,y) pareado a (largura-1-x,y)",
+            "pares_gl_vk": pares_espelhados,
+            "gl_sem_par_espelhado": int(longe_gl.sum()) - pares_espelhados,
+            "vk_sem_par_espelhado": int(longe_vk.sum()) - pares_espelhados,
+            "ressalva": (
+                "Par em espelho não demonstra causa: anatomia e projeção "
+                "aproximadamente simétricas podem produzir padrão semelhante."
+            ),
+        },
         "aglomerados_distantes": {
             "limiar_distancia_maior_que_px": raio_max,
             "gl": componentes_8_conexos(longe_gl)[:20],
