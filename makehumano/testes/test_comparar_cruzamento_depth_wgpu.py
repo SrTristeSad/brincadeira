@@ -87,10 +87,10 @@ class TesteCruzamentoDepth(unittest.TestCase):
         self.assertTrue(rel["nao_homologado"])
         self.assertEqual(rel["gl_vs_vulkan"][
             "on_z_on_vermelho_primeiro"]["pixels_rgb_diferentes"], 0)
-        self.assertGreater(rel["efeitos_intrabackend"]["gl"][
+        self.assertGreater(rel["efeitos_intrabackend"]["OpenGL"][
             "on"]["pixels_alterados_z_on_vs_off"], 0)
         self.assertTrue(masks[("OpenGL", "on")][32, 32])
-        self.assertEqual(rel["efeitos_intrabackend"]["vk"][
+        self.assertEqual(rel["efeitos_intrabackend"]["Vulkan"][
             "on"]["pixels_ordenacao_interior_fora_faixa"], 0)
 
     def test_rejeita_spy_de_escrita_z_incorreto(self):
