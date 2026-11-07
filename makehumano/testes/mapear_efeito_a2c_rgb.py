@@ -286,6 +286,33 @@ def main():
         Image.fromarray(criar_mapa(mg, mv), mode="RGB").save(args.png)
         doc["arquivo_mapa_png"] = str(args.png)
         doc["sha256_mapa_png"] = hashlib.sha256(args.png.read_bytes()).hexdigest()
+        if pareado.get("isolamento_estados", {}).get("estado") != (
+            "CONTROLES_INTERMEDIARIOS_VALIDOS"
+        ):
+            raise ValueError("Estados controlados de blend/Z/A2C não validados")
+        # Mesmo blend OFF e escrita Z ON em ambos os lados: a única
+        # mudança INTENCIONAL é habilitar sample alpha-to-coverage.
+        entradas_isoladas = [
+            ler_captura(m["controles"][nome])
+            for m in (gl, vk)
+            for nome in ("4x_sem_a2c_sem_blend_com_z", "4x_com_a2c")
+        ]
+        metrica_isolada, mascara_gl, mascara_vk = analisar_efeitos(
+            *entradas_isoladas
+        )
+        isolado_png = args.png.with_name(args.png.stem + "-isolado.png")
+        Image.fromarray(criar_mapa(mascara_gl, mascara_vk), mode="RGB").save(
+            isolado_png
+        )
+        doc["isolamento_a2c_4x"] = {
+            **metrica_isolada,
+            "tipo": "COBERTURA_A2C_COM_BLEND_DESLIGADO_E_Z_LIGADO",
+            "contraste": "4x_sem_a2c_sem_blend_com_z vs 4x_com_a2c",
+            "decomposicao": decompor_efeito_a2c(*entradas_isoladas),
+            "arquivo_mapa_png": str(isolado_png),
+            "sha256_mapa_png": hashlib.sha256(isolado_png.read_bytes()).hexdigest(),
+            "nao_homologado": True,
+        }
     args.json.parent.mkdir(parents=True, exist_ok=True)
     args.json.write_text(json.dumps(doc, ensure_ascii=False, indent=2) + "\n",
                          encoding="utf-8")
