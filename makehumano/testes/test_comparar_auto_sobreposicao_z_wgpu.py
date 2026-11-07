@@ -1,4 +1,5 @@
 """Testes CPU de integridade do mapa real Z × projeção da malha."""
+import hashlib
 import sys
 import tempfile
 from pathlib import Path
@@ -12,7 +13,7 @@ from auditar_auto_sobreposicao_malha import auditar_corpo, SEM_Z, COM_Z
 from comparar_auto_sobreposicao_z import (
     auditar_registro, comparar_analises, gerar_mapa,
 )
-from auditar_cobertura_a2c_sintetica import salvar_png_rgb
+from PIL import Image
 
 
 class Camera:
@@ -57,7 +58,10 @@ class TesteIntegridadeAutoSobreposicao(unittest.TestCase):
             caminho = Path(self.temp.name) / (
                 backend + "-" + nome + ".png"
             )
-            sha = salvar_png_rgb(dados, caminho)
+            # O helper sintético anterior exige 64x64. A GUI do corpo
+            # produz PNG RGB8 de 1024x768; gravar o tamanho real aqui.
+            Image.fromarray(dados, mode="RGB").save(caminho)
+            sha = hashlib.sha256(caminho.read_bytes()).hexdigest()
             doc["controles"][nome] = {
                 "arquivo_rgb": str(caminho),
                 "sha256_png": sha,
