@@ -24,6 +24,15 @@ for (const filename of outputs) {
         assert.equal(typeof registration.factory().DragonBones, "function");
     });
 
+    test(filename + " attaches to the explicit global fallback", () => {
+        const hostGlobal = {};
+        // The fallback is used by embedded contexts without CommonJS or AMD.
+        vm.runInNewContext(script, { global: hostGlobal, console, Date }, { filename });
+        for (const member of ["DragonBones", "WorldClock", "Animation", "Matrix"]) {
+            assert.equal(typeof hostGlobal.dragonBones[member], "function", member + " not on global fallback");
+        }
+    });
+
     test(filename + " populates the provided exports-only object", () => {
         // Wrap exports in a function parameter to model a consumer-owned object.
         // Reassigning the local exports variable must not count as exporting.

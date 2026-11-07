@@ -25,6 +25,8 @@
 declare var exports: any;
 declare var module: any;
 declare var define: any;
+// Node's global object is not declared by the ES5 + DOM TypeScript libs.
+declare var global: any;
 if (typeof exports === "object" && typeof module === "object") {
     module.exports = dragonBones;
 }
