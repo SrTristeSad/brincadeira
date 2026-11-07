@@ -314,6 +314,7 @@ def load(app):
                     corpo, G.cameras[corpo.cameraMode],
                     imagens["4x_sem_a2c_sem_blend_sem_z"],
                     imagens["4x_sem_a2c_sem_blend_com_z"],
+                    tamanho_origem=(int(G.windowWidth), int(G.windowHeight)),
                 )
 
             # Prova independente do corpo/Phong: mesmo loader, sampler e
