@@ -245,3 +245,15 @@ O relatório registra `formato_cena_inicial`, duas texturas 1024×768, `shaderCo
 **Fonte de referência:** `Object3D.isTextured` devolve `self.object.shaderConfig['diffuse']` no código do candidato. O WGSL usa esse valor em `dados.flags.y`; o GLSL original só lê `diffuseTexture` com `#ifdef DIFFUSE`. Assim, a hipótese de que Vulkan sempre ignora `shaderConfig.diffuse` não é sustentada por leitura estática — exige observação dos dados reais e do par externo.
 
 Este trabalho continua exclusivo de diagnóstico. Não altera Python de produção, materiais de usuários, interface, drivers, fallback ou escopo (apenas Windows/Linux).
+
+### Resultado do controle real sem textura difusa (CI `e122df2`)
+
+Executado na [CI 42326489708](https://github.com/SrTristeSad/brincadeira/actions/runs/42326489708), com artefato `phong-diffuse-on-off-ci`. A GUI Vulkan usou o material `DefaultSkin`, shader `phong`, textura difusa **ausente (`null`)**, `shaderDefines=[]` em ambos os estados, apesar de `shaderConfig.diffuse` mudar de `true` para `false`. O controle `Object3D.isTextured` acompanhou as duas opções; a câmera permaneceu igual.
+
+As duas imagens Phong 1024×768 foram **pixel a pixel idênticas**: fração divergente na tolerância 8 = **0**, erro médio RGB **0**, erro máximo RGB **0**, hashes de PNG iguais. A textura de cor tinha formato `rgba8unorm-srgb` e o fundo RGB 188. Este resultado **não** prova que há regressão; é compatível com um material sem textura difusa e com ausência da macro `DIFFUSE` no shader original.
+
+### Próximo controle positivo (textura sintética exclusivamente em memória)
+
+O harness foi estendido para criar uma imagem RGBA xadrez 16×16 no próprio processo CI, atribuí-la temporariamente a `material.diffuseTexture`, registrar `shaderDefines` e capturar duas imagens Phong adicionais (com difusa ligada/desligada), sem modificar arquivo de material nem adicionar asset ao produto. Registra métricas próprias de diferença dos dois estados, hashes e tipo de `corpo.texture`. Estes resultados **ainda não foram executados** nesta revisão documental.
+
+Se as imagens sintéticas diferirem, teremos evidência de que a rota Vulkan responde ao vínculo da textura e ao flag DIFFUSE na mesma cena. Se não diferirem, precisamos olhar a fonte `corpo.texture` e a amostragem do WGSL antes de concluir regressão. Em nenhum caso o experimento equivale à comparação com a referência OpenGL `a8bc2d54`.
