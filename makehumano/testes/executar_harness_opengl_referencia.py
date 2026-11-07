@@ -19,7 +19,9 @@ SOURCE = Path(__file__).resolve().with_name("harness_plugin_opengl_referencia.py
 
 def executar(raiz, python, saida_json, saida_png, logfile, limite):
     raiz = Path(raiz).resolve()
-    python = Path(python).resolve()
+    # Não usar resolve(): bin/python costuma ser symlink para Python global.
+    # O caminho dentro do venv precisa ser passado ao subprocesso intacto.
+    python = Path(python).absolute()
     saida_json, saida_png, logfile = (
         Path(p).resolve() for p in (saida_json, saida_png, logfile)
     )
