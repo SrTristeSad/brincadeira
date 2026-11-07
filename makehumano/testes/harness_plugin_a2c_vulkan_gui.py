@@ -282,6 +282,16 @@ def load(app):
                     capturar("4x_a128_repeticao_sem_a2c_sem_blend_com_z",
                              amostras=4, transparencia=True, a2c=False,
                              sem_blend=True, escrever_z=True, alfa_textura=128)
+                    # Controle pareado com OpenGL: repetir os dois estados
+                    # naturais de A2C com recebimento de sombras desligado.
+                    # Mantém BLEND/Z nativos em cada variante, sem alterar
+                    # a aplicação de produção nem o shader.
+                    capturar("4x_sem_a2c_sem_sombras",
+                             amostras=4, transparencia=True, a2c=False,
+                             sem_sombras=True)
+                    capturar("4x_com_a2c_sem_sombras",
+                             amostras=4, transparencia=True, a2c=True,
+                             sem_sombras=True)
                     # Prova causal: a configuração de receiveShadows é
                     # desligada SÓ DURANTE o draw, sem alterar o shader.
                     for alfa in (64, 128, 192):
@@ -385,6 +395,18 @@ def load(app):
                     "alfa128_sombras_on_vs_off": comparar_rgb(
                         imagens["4x_sem_a2c_sem_blend_com_z"],
                         imagens["4x_a128_sem_a2c_sem_blend_com_z_sem_sombras"]
+                    ),
+                    "a2c_4x_off_vs_on_sem_sombras": comparar_rgb(
+                        imagens["4x_sem_a2c_sem_sombras"],
+                        imagens["4x_com_a2c_sem_sombras"]
+                    ),
+                    "efeito_sombras_no_a2c_off_4x": comparar_rgb(
+                        imagens["4x_sem_a2c"],
+                        imagens["4x_sem_a2c_sem_sombras"]
+                    ),
+                    "efeito_sombras_no_a2c_on_4x": comparar_rgb(
+                        imagens["4x_com_a2c"],
+                        imagens["4x_com_a2c_sem_sombras"]
                     ),
                 }
                 mudou = documento["comparacao"]["a2c_4x_off_vs_on"]["pixels_divergentes"] > 0
