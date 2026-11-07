@@ -1,5 +1,13 @@
-"""Textura RGBA determinística de diagnóstico; só usada nos harnesses descartáveis."""
+"""PNG RGBA temporário determinístico para harnesses OpenGL/Vulkan.
+
+O original pode liberar imediatamente um Texture de Image sem sourcePath:
+um arquivo permite que ambos os backends carreguem e cacheiem o mesmo PNG.
+"""
 import hashlib
+from pathlib import Path
+import struct
+import zlib
+
 import numpy as np
 
 
@@ -16,16 +24,35 @@ def dados_textura_alfa_parcial(lado=32, alfa=128):
     return np.ascontiguousarray(pixels)
 
 
-def construir_textura_alfa_parcial():
-    """Image instanciada no runtime original; nenhuma dependência no módulo."""
-    from image import Image
+def _chunk_png(tipo, dados):
+    crc = zlib.crc32(tipo + dados) & 0xFFFFFFFF
+    return struct.pack(">I", len(dados)) + tipo + dados + struct.pack(">I", crc)
+
+
+def bytes_png_textura_alfa_parcial():
     dados = dados_textura_alfa_parcial()
-    meta = {
-        "origem": "rgba_em_memoria",
+    h, w, _ = dados.shape
+    ihdr = struct.pack(">IIBBBBB", w, h, 8, 6, 0, 0, 0)
+    scans = b"".join(b"\x00" + dados[y].tobytes() for y in range(h))
+    return (b"\x89PNG\r\n\x1a\n" + _chunk_png(b"IHDR", ihdr)
+            + _chunk_png(b"IDAT", zlib.compress(scans, 9))
+            + _chunk_png(b"IEND", b""))
+
+
+def salvar_textura_alfa_parcial(caminho):
+    """Persistência fora do repo e apenas no processo efêmero de CI."""
+    dados = dados_textura_alfa_parcial()
+    data = bytes_png_textura_alfa_parcial()
+    destino = Path(caminho)
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    destino.write_bytes(data)
+    return str(destino), {
+        "origem": "png_temporario_de_harness",
         "padrao": "xadrez_8x8",
         "formato": "RGBA8",
         "shape": list(dados.shape),
         "alfa_textura": 128,
         "sha256_rgba": hashlib.sha256(dados.tobytes()).hexdigest(),
+        "sha256_png": hashlib.sha256(data).hexdigest(),
+        "bytes_png": len(data),
     }
-    return Image(data=dados), meta

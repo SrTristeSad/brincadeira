@@ -28,7 +28,7 @@ def load(app):
     from configurar_camera_paridade import fixar_camera, manifesto_camera
     from registrar_geometria_paridade import descrever_geometria
     from registrar_mascara_paridade import registrar_mascara
-    from textura_alpha_controle import construir_textura_alfa_parcial
+    from textura_alpha_controle import salvar_textura_alfa_parcial
 
     iniciado = False
 
@@ -117,7 +117,8 @@ def load(app):
             transparencia_original = bool(material.transparent)
             a2c_original = bool(material.alphaToCoverage)
             config_difusa_original = bool(material.shaderConfig.get("diffuse", False))
-            textura_parcial, metadados_textura = construir_textura_alfa_parcial()
+            caminho_textura = destino.with_name(destino.stem + "-textura-parcial.png")
+            textura_parcial, metadados_textura = salvar_textura_alfa_parcial(caminho_textura)
             try:
                 material.diffuseTexture = textura_parcial
                 material.configureShading(diffuse=True)

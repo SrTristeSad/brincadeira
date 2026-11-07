@@ -89,7 +89,8 @@ def avaliar(ref_png, vk_png, ref_meta, vk_meta, resultado_json, diff_png=None,
         tex_r, tex_v = controle_ref.get("textura"), controle_vk.get("textura")
         if (not isinstance(tex_r, dict) or tex_r != tex_v
                 or tex_r.get("alfa_textura") != 128
-                or tex_r.get("shape") != [32, 32, 4]):
+                or tex_r.get("shape") != [32, 32, 4]
+                or tex_r.get("origem") != "png_temporario_de_harness"):
             raise ValueError("Textura de teste não é idêntica nos dois backends")
         for controle in (controle_ref, controle_vk):
             m = controle.get("material", {})
@@ -97,8 +98,10 @@ def avaliar(ref_png, vk_png, ref_meta, vk_meta, resultado_json, diff_png=None,
                     or m.get("transparent") is not True
                     or m.get("alphaToCoverage") is not False
                     or m.get("define_diffuse_ativo") is not True
-                    or m.get("mapas", {}).get("diffuseTexture", {}).get("sha256_pixels")
-                       != tex_r.get("sha256_rgba")):
+                    or m.get("mapas", {}).get("diffuseTexture", {}).get("origem")
+                       != "arquivo"
+                    or m.get("mapas", {}).get("diffuseTexture", {}).get("sha256")
+                       != tex_r.get("sha256_png")):
                 raise ValueError("Material do controle parcial não preserva parâmetros pareados")
         a = ler_png_mascara(ref_parcial, r, campo="mascara_alfa_parcial")
         b = ler_png_mascara(vk_parcial, v, campo="mascara_alfa_parcial")

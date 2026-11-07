@@ -31,7 +31,7 @@ def load(app):
     from registrar_geometria_paridade import descrever_geometria
     from compensar_luz_eye_legacy import posicao_mundo_para_luz_eye_legacy
     from registrar_mascara_paridade import registrar_mascara
-    from textura_alpha_controle import construir_textura_alfa_parcial
+    from textura_alpha_controle import salvar_textura_alfa_parcial
 
     destino = Path(destino_str)
     png_on = Path(os.environ["MAKEHUMANO_HARNESS_FORMATO_PNG"])
@@ -195,7 +195,8 @@ def load(app):
 
                 # Mesmo RGBA alpha=128 do upstream. O opacity do material
                 # permanece 1 para isolar a transparência da textura difusa.
-                textura_parcial, metadados_textura = construir_textura_alfa_parcial()
+                caminho_textura = destino.with_name(destino.stem + "-textura-parcial.png")
+                textura_parcial, metadados_textura = salvar_textura_alfa_parcial(caminho_textura)
                 opacidade_original = float(material.opacity)
                 transparencia_original = bool(material.transparent)
                 a2c_original = bool(material.alphaToCoverage)
