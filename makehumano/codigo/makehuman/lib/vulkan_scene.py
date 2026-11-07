@@ -1,9 +1,13 @@
-"""Primeira ponte Vulkan com a CENA ORIGINAL do MakeHuman (G.world).
+"""Renderização Vulkan da CENA ORIGINAL do MakeHuman (G.world).
 
-Não carrega um segundo personagem, não aplica alvos morfológicos próprios.
-Converte o Object3D de renderização que o MakeHuman já atualiza em dados
-para GPU. O piloto é incompleto: picking, transparência, render offscreen
-e shaders customizados ainda precisam ser migrados antes de remover OpenGL.
+Não carrega um segundo personagem nem aplica alvos morfológicos próprios.
+Converte para a GPU os Object3D já atualizados pelo MakeHuman. Picking,
+transparência básica, capturas offscreen e seis presets nativos WGSL têm
+rotas implementadas e testes na CI (Vulkan por software).
+
+A paridade visual com OpenGL original não foi demonstrada por pares de
+capturas. GLSL personalizado e chamadas legadas Object3D.draw/pick
+permanecem incompatíveis; transparência complexa exige validação real.
 """
 
 import os

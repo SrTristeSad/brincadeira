@@ -6,7 +6,7 @@
 
 - A aplicação ainda **não deve ser considerada pronta para uso**.
 - É permitido quebrar temporariamente recursos OpenGL durante a migração.
-- O branch `main` não é alterado até que os testes e a revisão sejam concluídos.
+- Próximas alterações devem ocorrer em branches rastreáveis; não integrar automaticamente à `main` antes da revisão e dos critérios de aceite.
 - Não declarar a migração completa enquanto qualquer caminho de renderização ainda exigir OpenGL.
 
 ## Serviços já ligados ao Vulkan
@@ -22,10 +22,10 @@
 | `mh.renderSkin` | `vulkan_skin.render_skin`: linhas, triângulos e quads UV | Smoke UV mínimo |
 | `mh.Texture` | `vulkan_texture.Texture` em memória CPU | Implementação provisória |
 | Material `.mhmat` | Difusa, opacidade, brilho especular, emissão, back/front cull, depthless | Pipeline WGSL; equivalência visual pendente |
-| Malhas com `transparentPrimitives` | Desativa escrita de profundidade e descarta fragmentos de alfa zero (`glAlphaFunc(GL_GREATER, 0)` original) | Smoke GPU de camadas sobrepostas; alpha-to-coverage/MSAA pendentes |
+| Malhas com `transparentPrimitives` | Desativa escrita de profundidade e descarta fragmentos de alfa zero (`glAlphaFunc(GL_GREATER, 0)` original) | Smoke GPU de camadas sobrepostas; MSAA 4x e alpha-to-coverage implementados e testados; paridade visual complexa pendente |
 | Camadas translúcidas | Composição de opacos antes de transparências, ordenação back-to-front pelo centro da malha dentro de cada bloco de `priority`/`cameraMode`; overlays `depthless` por último | Smoke GPU com duas camadas alpha em ordens de entrada invertidas; ordenação adicional de triângulos alpha dentro da malha em espaço de câmera, sem modificar os índices originais; interseções cíclicas continuam pendentes |
 | Normal maps `.mhmat` | Textura e intensidade originais; base tangente derivada de UVs no fragmento | Pipeline validada na CI; comparação visual pendente |
-| Iluminação `.mhscene` | Até oito luzes pontuais, ambiente e reflexo Blinn-Phong | Cores difusa e especular independentes preservadas; falta atenuação/foco e luzes de área |
+| Iluminação `.mhscene` | Até oito luzes pontuais, ambiente e reflexo Blinn-Phong | Cores difusa e especular independentes, atenuação/foco e amostragem de luzes de área implementados; paridade visual pendente |
 | Shader xray original (.mhmat) | WGSL nativo com `edgefalloff`, `intensity`, cor ambiente e alfa de contorno | Execução GPU validada; comparar imagem |
 | Shader LitSphere (pele padrão) | WGSL usa normal em espaço de câmera, textura de LitSphere original e `AdditiveShading`; `autoBlendSkin` usa `EthnicSkinBlender` original | Captura GPU e testes de parâmetros; equivalência visual pendente |
 | Shader Phong original | WGSL usa o primeiro ponto de luz da cena, ambiente, difusa, especular e emissão do material original | AO implementado; comparação visual completa pendente |
@@ -58,7 +58,7 @@ Os workflows `.github/workflows/testar-makehumano.yml` e `.github/workflows/test
 1. Testes de CPU, sem precisar criar GPU.
 2. Testes de execução Vulkan do aplicativo original (não há editor isolado).
 3. Smoke da GUI original com Vulkan, incluindo render fora da tela e `renderSkin`.
-4. Smoke da GUI original **sem PyOpenGL instalado**; este job é um detector de imports legados, e poderá falhar enquanto houver dependências remanescentes.
+4. Smoke da GUI original **sem PyOpenGL instalado**; este job detecta imports legados; a execução documentada em 2026-11-06 passou sem PyOpenGL.
 
 Para testar localmente, com Qt, Vulkan e bibliotecas do MakeHuman instaladas:
 
@@ -76,7 +76,7 @@ python -m unittest discover -s makehumano/testes -p 'test_*wgpu.py' -v
 
 O empacotamento e o teste do binário congelado estão documentados em
 [PORTATIL.md](PORTATIL.md). O smoke agora exercita também um modificador,
-salvamento/recarregamento MHM e exportações OBJ, FBX binário, Collada e STL binário pelas ferramentas originais. Capturas dos presets, transparência, normais, especular e wireframe ficam no artefato de diagnóstico. No Windows, a CI compara 14 capturas dos fontes e do executável pixel a pixel, somente após a cena terminar de carregar.
+salvamento/recarregamento MHM e exportações OBJ, FBX binário, Collada e STL binário pelas ferramentas originais. Capturas dos presets, transparência, normais, especular e wireframe ficam no artefato de diagnóstico. No Windows, a CI da revisão `586c98c` comparou 61 capturas **Vulkan fontes × Vulkan executável** idênticas. Isso não equivale a comparar OpenGL original × Vulkan.
 A validação Windows utiliza Vulkan por software na CI; compatibilidade com
 GPUs e drivers reais continua necessária antes de um lançamento.
 
@@ -85,15 +85,17 @@ de compatibilidade e os limites dos testes.
 
 ## Pendências que impedem o lançamento
 
+**Estado da referência visual:** não há pares OpenGL original × Vulkan publicados. Ver o [protocolo de captura e medição](PROTOCOLO-PARIDADE-VISUAL.md). Os limites numéricos ali são uma **proposta para aprovação**, não prova de paridade.
+
 - Alcançar equivalência **visual** dos seis presets oficiais WGSL. Normalmap deriva tangentes no fragmento, Skin usa gradiente de uma linha em textura 2D, e Phong incorporou AO; diferenças com o GLSL original ainda precisam ser quantificadas. GLSL arbitrário continua sem compilação.
-- Aperfeiçoar a transparência de cabelos e roupas entrelaçadas: já existe ordenação back-to-front pelo centro da malha e smoke para duas camadas; há ordenação por triângulo dentro da malha, com comparação GPU para ordem invertida; faltam interseções cíclicas, `alphaToCoverage`/MSAA e equivalência visual no modelo completo.
-- Reproduzir atenuação/foco e luzes de área da cena, outros comportamentos avançados de materiais. A cor especular independente de `Light.specular` já chega aos shaders WGSL e é exercitada por comparação GPU. A transformação de normais já usa inversa-transposta do modelo.
-- Criar testes comparativos de imagens, incluindo reflexos, alfa, normal maps e culling, porque o smoke só verifica inicialização e integridade básica.
-- Completar paridade de `renderSkin` para formatos de imagem, texturas dinâmicas e render pass acumulativo.
-- O motor `lib/glmodule.py` foi removido da branch experimental; a API imediata histórica `Object3D.draw/pick` falha explicitamente em vez de importar PyOpenGL. A CI verifica que nenhum módulo da aplicação original importa `glmodule` ou `OpenGL`; plugins externos com esses imports requerem migração.
+- Aperfeiçoar a transparência de cabelos e roupas entrelaçadas: já existe ordenação back-to-front pelo centro da malha e smoke para duas camadas; há ordenação por triângulo dentro da malha, com comparação GPU para ordem invertida; faltam validação de interseções cíclicas com ativos reais e equivalência visual no modelo completo; MSAA e alpha-to-coverage já foram implementados e testados.
+- Medir a equivalência visual de atenuação, foco, luzes de área e materiais avançados; as respectivas rotas Vulkan e smokes já existem. Refração e transmissão colorida completas não estão demonstradas. A cor especular independente de `Light.specular` já chega aos shaders WGSL e é exercitada por comparação GPU. A transformação de normais já usa inversa-transposta do modelo.
+- Obter capturas equivalentes **OpenGL original × Vulkan** para reflexos, alfa, normal maps e culling. O comparador RGBA e seus testes sintéticos já existem, mas não há pares de referência reais.
+- Confirmar paridade visual de `renderSkin` com o original: formatos de imagem, texturas dinâmicas e passes acumulativos têm implementação e smokes, mas não capturas OpenGL pareadas.
+- O motor `lib/glmodule.py` foi removido da árvore ativa; a API imediata histórica `Object3D.draw/pick` falha explicitamente em vez de importar PyOpenGL. A CI da `main` verifica execução sem PyOpenGL; plugins externos com chamadas legadas ainda requerem migração.
 - Validar interações, rendering de produção, plugins, arquivos e exportações em cenários reais.
 - O backend Vulkan já é o padrão sem chave de piloto; `glmodule.py` foi retirado. Ainda falta paridade completa com shaders personalizados, materiais, plugins e drivers de GPU.
-- Validar imagens comparativamente (CPU/smoke não verificam aparência pixel a pixel).
+- Registrar resultados de pares OpenGL × Vulkan com métricas, imagens e condições reprodutíveis conforme [PROTOCOLO-PARIDADE-VISUAL.md](PROTOCOLO-PARIDADE-VISUAL.md).
 
 **Nenhum destes itens deve ser mascarado por um retorno fictício ou fallback silencioso.**
 
