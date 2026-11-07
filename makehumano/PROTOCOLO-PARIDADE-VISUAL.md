@@ -534,3 +534,30 @@ SHA-256 alfa OpenGL `9bdb92051bc6ddd683186daf2af842bb3e3b5df191af292b6a2548a45b4
 **A2C não foi exercitado nesta execução:** OpenGL no runner reportou `glmodule.have_multisample=false` e `nTransparentPrimitives=0`, portanto a ramificação `GL_SAMPLE_ALPHA_TO_COVERAGE` não seria acionada; Vulkan reportou `cena.amostras=1` e `nTransparentPrimitives=0`. Além disso, a API OpenGL `renderAlphaMask` desativa o multisampling deliberadamente. A2C precisa ser avaliado com um objeto elegível, multisampling efetivo nos dois ambientes e capturas RGB, nunca inferido deste teste. Não alterar malhas ou pipelines de produção apenas para satisfazer o teste no runner.
 
 **Decisão de produto permanece reservada ao criador:** portar a peculiaridade GLSL de ignorar `material.opacity` no Phong versus manter a semântica atual Vulkan. As decisões anteriores de luz eye-space, offscreen sRGB e canais R/B continuam independentes. Nenhum shader, framebuffer, pipeline, UI ou asset de produção foi alterado e o PR permanece DRAFT.
+
+## 25. A2C real em RGB Vulkan: MSAA 1×/4×, controles e reprodutibilidade
+
+**Objetivo separado:** testar alpha-to-coverage no candidato Vulkan sem usar `mh.renderAlphaMask`, que desativa multisampling no original. Este diagnóstico **não** é comparação A2C OpenGL × Vulkan e **não** autoriza alteração do comportamento de produção.
+
+**Instrumentação restrita à CI:** `testes/harness_plugin_a2c_vulkan_gui.py` é copiado temporariamente pelo executor `executar_harness_formato_gui.py` para o processo da GUI. Configura apenas durante a execução `CenaVulkan.configurar_multisampling(False/True)`, usa `CenaVulkan.capturar_framebuffer(..., incluir_alfa=False)` para RGB 1024×768 e restaura estado. O material Phong DIFFUSE usa arquivo RGBA determinístico de 32×32 com alfa 128 (SHA-256 PNG `45afa8594bfa97bdb45361a20385084a4ca32a28608d6ef4036ffe70f3e198e3`), `opacity=1`, sem interferir no shader de produção. O observador confirma texturas `rgba8unorm-srgb` offscreen e registra as chamadas de pipeline do corpo e a chave A2C do cache. O teste inclui prova positiva de suporte a attachments de cor e profundidade com quatro amostras; se indisponível, informa `NAO_TESTAVEL_MSAA_4X`.
+
+**Execução auditada:** [GitHub Actions 42338173323](https://github.com/SrTristeSad/brincadeira/actions/runs/42338173323), commit `cfa759361e7f1e5f57185db49c3041a769a61ae7`, jobs `vulkan-gui-original` e `vulkan-gui-sem-opengl` **success**. A nova etapa A2C e seus cinco testes unitários também passaram. Artefato `phong-a2c-vulkan-ci`: manifesto JSON, log e quatro PNGs RGB, todos auditados por leitura direta, com SHA-256 de pixels e de arquivo confirmados. O pipeline A2C foi observado ativo com quatro amostras na opção elegível, e inativo nas demais.
+
+| Controle | Amostras | Material A2C | Primitivas transparentes do corpo | A2C observado no pipeline |
+| --- | ---: | --- | ---: | --- |
+| `1x_sem_a2c` | 1 | OFF | 18.486 | OFF |
+| `4x_sem_a2c` | 4 | OFF | 18.486 | OFF |
+| `4x_com_a2c` | 4 | ON | 18.486 | **ON** |
+| `4x_inelegivel` | 4 | ON | 0 | OFF |
+
+Os controles com material marcado `transparent=True` reclassificam as primitivas no cenário de teste. O controle inelegível usa `transparent=False`, `opacity=1` e nenhuma primitiva transparente. Não extrapolar as contagens para a captura sem A2C do controle de opacidade anterior.
+
+| Comparação de PNGs RGB 1024×768 | Pixels com qualquer canal >8 | Fração da imagem | Erro médio RGB |
+| --- | ---: | ---: | ---: |
+| MSAA 1× versus 4×, A2C OFF | 2.355 | 0,299454% | 0,060188 |
+| MSAA 4×, A2C OFF versus ON | **2.456** | **0,312297%** | **0,082635** |
+| 4× A2C ON versus objeto inelegível | 2.166 | 0,275421% | 0,065200 |
+
+**Repetibilidade:** execução preliminar [42337960429](https://github.com/SrTristeSad/brincadeira/actions/runs/42337960429) capturou todos os quatro RGB e passaram os cinco testes, mas o executor considerou a etapa falha apenas por falta do campo agregado `dimensoes_imagem` no JSON. Corrigido no commit `cfa7593`, sem alteração do rendering. Comparados os PNGs baixados das duas execuções, os hashes são consistentes dentro de cada execução; entre execuções o maior delta por canal foi 1 e **0 pixels** ultrapassaram a tolerância 8 em cada par correspondente. Portanto há variação de bytes, mas resultados estáveis dentro da tolerância.
+
+**Limites de interpretação:** o pipeline Vulkan muda também `blend` para `None` quando A2C está habilitado; assim, a diferença RGB 4× OFF/ON comprova o comportamento combinado do caminho de A2C, **não** uma contribuição isolada da cobertura por amostras. Este ensaio usa Lavapipe e não valida hardware NVIDIA/AMD/Intel. O OpenGL da CI anterior reportou `glmodule.have_multisample=false`, impedindo comparar A2C entre os backends nesse ambiente. As métricas não representam aprovação de paridade, tampouco substituem a decisão do criador sobre semântica histórica de `material.opacity`, luz eye-space, canais ou sRGB. Sem modificação em shaders, pipelines, API OpenGL legada, materiais de produção, `main` ou merge.
