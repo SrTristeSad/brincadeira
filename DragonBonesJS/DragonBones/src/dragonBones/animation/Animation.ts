@@ -185,6 +185,12 @@ namespace dragonBones {
                 passedTime *= this._inheritTimeScale;
             }
 
+            // Time scales are mutable; reject non-finite values and overflow
+            // before updating blend states, timelines or animation states.
+            if (!isFinite(this._inheritTimeScale) || !isFinite(passedTime)) {
+                return;
+            }
+
             for (let k in this._blendStates) {
                 const blendStates = this._blendStates[k];
                 for (let kB in blendStates) {
