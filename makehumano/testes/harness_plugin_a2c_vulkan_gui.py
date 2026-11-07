@@ -185,6 +185,7 @@ def load(app):
             documento = json.loads(destino.read_text(encoding="utf-8"))
             documento.update({
                 "backend": "Vulkan",
+                "dimensoes_imagem": [1024, 768],
                 "tipo_experimento": "A2C_MSAA_RGB_SEM_HOMOLOGACAO",
                 "api_captura": "CenaVulkan.capturar_framebuffer (RGB, nao renderAlphaMask)",
                 "camera": parametros_camera,
