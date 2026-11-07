@@ -173,3 +173,15 @@ cat /home/claude/srtristesad/resultados/formato-real-phong.json
 **Depois da leitura:** se o alvo real estiver em `*-srgb`, o fato de a cor linear 0,5 produzir cerca de 188 corrobora a hipótese de conversão do fundo. Caso esteja em `*unorm`, a causa exata do fundo 188 permanece em aberto. Em ambos os casos, isso não explica sozinho as diferenças de pele/textura nem comprova paridade OpenGL × Vulkan.
 
 **Limitações:** testes unitários com objetos simulados não substituem execução da GUI original; a execução não foi feita aqui porque o harness externo não está montado. Nenhuma mudança de renderização de produção está autorizada. Plataformas-alvo: **Windows e Linux**; macOS fora do escopo por decisão do criador.
+
+## 8. Captura real da GUI na CI (harness efêmero e independente do par Phong)
+
+O script `testes/executar_harness_formato_gui.py` copia **temporariamente** `testes/harness_plugin_formato_gui.py` para a árvore de plugins da cópia de trabalho do runner Linux. Ele inicia o **MakeHuman original modernizado** numa pasta HOME isolada, espera o fim da inicialização e chama `mh.renderToBuffer(1024, 768)` dentro do mesmo observador de formato da seção 7. Registra JSON, PNG e log, e remove o plugin transitório em `finally`.
+
+Essa injeção só ocorre durante o teste e não faz parte do código distribuído. Não adiciona interface, controles, backend ou funcionalidade ao produto. O teste não altera formatos da GPU nem shaders. O artefato GitHub Actions chama-se `formato-real-gui-ci`.
+
+O runner observa o formato efetivo da textura de cor, `CenaVulkan.formato`, o formato preferido do contexto, a forma [largura, altura] dos pixels RGB e seu hash SHA-256. Registra também o pixel superior esquerdo, não presumindo que seja sempre fundo. Reprova se a cena não produzir uma textura de **1024×768**, se o registro estiver incompleto ou se a execução falhar.
+
+**Limite metodológico:** esta é uma **nova captura Vulkan do estado padrão da GUI na CI**, não reproduz necessariamente o material/câmera do harness externo e **não** produz imagem de referência OpenGL. Portanto ela poderá comprovar a escolha de formato numa execução real da CenaVulkan sob Linux/Lavapipe, mas não comprova paridade Phong nem o formato exato da execução externa anterior. Esse par continua exigindo o procedimento da seção 7 e os arquivos externos reais.
+
+**Windows e Linux** são as plataformas-alvo do projeto; o harness novo exercita somente o runner Linux e não homologa GPUs físicas. A política de alteração do framebuffer de produção continua dependente de decisão explícita do criador.
