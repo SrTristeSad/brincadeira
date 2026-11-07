@@ -338,6 +338,13 @@ def load(app):
                 else {"estado": "NAO_TESTAVEL_MSAA_4X"}
             )
 
+            from capturar_cruzamento_depth_vulkan import capturar_cruzamento_depth_vulkan
+            auditoria_cruzamento = (
+                capturar_cruzamento_depth_vulkan(cena, destino)
+                if suporte["disponivel"]
+                else {"estado": "NAO_TESTAVEL_MSAA_4X"}
+            )
+
             documento = json.loads(provisorio.read_text(encoding="utf-8"))
             documento.update({
                 "backend": "Vulkan",
@@ -354,6 +361,7 @@ def load(app):
                 "auditoria_sintetica_a2c": auditoria_sintetica,
                 "auditoria_sintetica_sobreposicao": auditoria_depth,
                 "auditoria_sintetica_coplanares": auditoria_coplanares,
+                "auditoria_sintetica_cruzamento": auditoria_cruzamento,
                 "amostras_iniciais": amostras_originais,
                 "suporte_msaa": suporte,
                 "controles": registros,
