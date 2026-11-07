@@ -242,6 +242,19 @@ jobs:
             --png-com-sombras "${RUNNER_TEMP}/phong-a2c-sombras-com-ci.png" \
             --png-sem-sombras "${RUNNER_TEMP}/phong-a2c-sombras-sem-ci.png"
 
+      - name: Diagnosticar proximidade do resíduo espacial A2C GL/Vulkan
+        run: |
+          python -m py_compile makehumano/testes/diagnosticar_residuo_a2c.py
+          python -m unittest discover -s makehumano/testes \
+            -p test_diagnosticar_residuo_a2c_wgpu.py -v
+          python -u makehumano/testes/diagnosticar_residuo_a2c.py \
+            --opengl "${RUNNER_TEMP}/phong-a2c-opengl-ci.json" \
+            --vulkan "${RUNNER_TEMP}/phong-a2c-vulkan-ci.json" \
+            --pareamento "${RUNNER_TEMP}/phong-a2c-backends-ci.json" \
+            --json "${RUNNER_TEMP}/phong-a2c-residuo-ci.json" \
+            --png-sem-sombras "${RUNNER_TEMP}/phong-a2c-residuo-sem-ci.png" \
+            --png-com-sombras "${RUNNER_TEMP}/phong-a2c-residuo-com-ci.png"
+
       - name: Mapear diferenças isoladas da escrita Z, OpenGL e Vulkan
         run: |
           python -m unittest discover -s makehumano/testes \
@@ -272,6 +285,9 @@ jobs:
             ${{ runner.temp }}/phong-a2c-sombras-pareadas-ci.json
             ${{ runner.temp }}/phong-a2c-sombras-com-ci.png
             ${{ runner.temp }}/phong-a2c-sombras-sem-ci.png
+            ${{ runner.temp }}/phong-a2c-residuo-ci.json
+            ${{ runner.temp }}/phong-a2c-residuo-sem-ci.png
+            ${{ runner.temp }}/phong-a2c-residuo-com-ci.png
             ${{ runner.temp }}/phong-a2c-mapa-ci-alfa064.png
             ${{ runner.temp }}/phong-a2c-mapa-ci-alfa128.png
             ${{ runner.temp }}/phong-a2c-mapa-ci-alfa192.png
