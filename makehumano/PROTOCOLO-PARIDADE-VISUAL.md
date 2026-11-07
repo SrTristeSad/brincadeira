@@ -794,3 +794,27 @@ Ao normalizar sombras, os exclusivos mais afastados de cinco pixels caíram **60
 A normalização de sombras **não melhora a IoU para todos os limiares**. A medida pode inclusive se inverter conforme a intensidade da mudança. Isso não valida/desvalida o algoritmo de sombras; mostra que **suporte de mudança RGB sob limiar** é uma métrica insuficiente para definir paridade visual e de cobertura. A etapa mais útil a seguir é construir um controle sintético de fragmentos, iluminação fixa e dados de amostras por pixel (se possível no backend), para separar resultados de rasterização, composição e codificação sRGB, sem modificar a política de sombras de produção.
 
 **Estado do projeto:** foram adicionados somente `testes/diagnosticar_residuo_a2c.py`, `testes/test_diagnosticar_residuo_a2c_wgpu.py`, o passo correspondente no workflow e esta seção documental. Nenhum arquivo em `makehumano/codigo/` foi alterado. PR #11 em **DRAFT**, sem merge, e `main` preservada.
+
+## 33. A2C sintético real GL/Vulkan: framebuffer linear 4×, sem geometria sobreposta
+
+**Questão investigada:** após normalizar sombras, a comparação do corpo (seção 32) conservava divergência de pixels em torno das mesmas regiões do personagem. Era preciso verificar se os backends diferiam **mesmo sob geometria trivially idêntica** e com um contrato explícito de cor, antes de alterar o renderizador ou atribuir a diferença a sample locations, ordenação, blending ou sRGB.
+
+**Teste independente do personagem:** `testes/capturar_a2c_sintetico_opengl.py` e `testes/capturar_a2c_sintetico_vulkan.py` renderizam **um único triângulo em tela cheia** sobre preto, saída `rgba8unorm` linear **64×64**, RGB branco constante, alfa uniforme 0/64/128/192/255, **sem textura, normal, Phong, sombras, depth ou blending**. No OpenGL upstream pinado, usa GLSL 120, FBO real com `glRenderbufferStorageMultisample`, confirma `GL_SAMPLES=4`, habilita `GL_SAMPLE_ALPHA_TO_COVERAGE` somente no controle ON, resolve com `glBlitFramebuffer`, restaura os estados GL e destrói FBOs/programa/shaders temporários. No Vulkan, cria pipelines WGPU temporários `sample_count=4`, `alpha_to_coverage_enabled=True/False`, attachment MSAA, resolve `rgba8unorm` e captura via `CenaVulkan.ler_framebuffer_rgba`. Os dois executam também baseline 1× e 4× sem A2C. Os PNGs são criados por `auditar_cobertura_a2c_sintetica.py` com stdlib (sem dependência nova no app).
+
+**Validação cruzada:** `testes/comparar_a2c_sintetico_gpu.py` exige os sete casos correspondentes, confirma `GL_SAMPLES=4` no FBO OpenGL, amostras e estados, confere os hashes de **arquivos PNG** e **bytes RGB** e recalcula seus histogramas a partir dos PNGs RGB8. `testes/test_comparar_a2c_sintetico_gpu_wgpu.py` valida formato, hashes, histogramas, controles extremos e falhas de contrato usando fixtures de CPU. Para não assumir equivalência de sample positions, o comparador **registra a diferença**, sem exigir saída idêntica entre GL/VK nos níveis intermediários; os controles alfa zero e total têm expectativas matemáticas definidas. Qualquer diferença real permanece visível, não é corrigida.
+
+**CI validada:** [GitHub Actions 42384110775](https://github.com/SrTristeSad/brincadeira/actions/runs/42384110775), **dois jobs `success`**. Os artefatos `phong-a2c-opengl-pareado-ci` (ID 13578633691) e `phong-a2c-vulkan-ci` (ID 13579230769) contêm as capturas; o comparador publicou `phong-a2c-sintetico-gpu-ci.json`. A primeira execução do ensaio ([42383758923](https://github.com/SrTristeSad/brincadeira/actions/runs/42383758923)) falhou **somente no harness OpenGL legado** por incompatibilidade de `numpy.unique(..., return_counts=True)`; corrigida em `auditar_cobertura_a2c_sintetica.py` para `numpy.bincount`, sem mudar o shader, FBO ou resultado de produto, antes do run aprovado.
+
+| Condição sintética | Média RGB GL (0–255) | Média RGB Vulkan | Pixels RGB GL ≠ VK, de 4.096 |
+| --- | ---: | ---: | ---: |
+| 1×, A2C OFF, alfa128 | 255 | 255 | **0** |
+| 4×, A2C OFF, alfa128 | 255 | 255 | **0** |
+| 4×, A2C ON, alfa0 | 0 | 0 | **0** |
+| 4×, A2C ON, alfa64 | 64 | 64 | **0** |
+| 4×, A2C ON, alfa128 | 128 | 128 | **0** |
+| 4×, A2C ON, alfa192 | 191 | 191 | **0** |
+| 4×, A2C ON, alfa255 | 255 | 255 | **0** |
+
+**O histograma é uniforme em todos os casos:** cada intensidade listada aparece nos **4.096 pixels** da imagem; não há diferença sequer de 1 nível RGB entre GL/VK. Os valores 64/128/191 correspondem aproximadamente a 1/4, 2/4 e 3/4 das quatro amostras cobertas, após quantização de 8 bits. **Essa correspondência se refere à cobertura efetiva resolvida neste cenário simples**, não às posições das amostras subpixel ou à ordem de cobertura em geometrias diferentes.
+
+**Conclusão técnica limitada:** o A2C e o resolve MSAA4× dos dois backends **produzem a mesma imagem RGB resolvida para um único triângulo de tela cheia com cor uniforme**, neste ambiente llvmpipe/Vulkan de CI. Isso enfraquece a hipótese de defeito geral de alpha-to-coverage ou codificação RGB no **caso sintético**, mas NÃO homologa o renderer do corpo: não testa profundidade, sobreposição de faces, edges, shading, sample locations, transparência combinada com blending, sRGB da cena, nem GPU física. A próxima experiência deve acrescentar **uma única aresta subpixel e/ou duas faces sobrepostas sob profundidade controlada**, de modo a investigar precisamente o que foi removido aqui. Qualquer modificação visual do produto continua condicionada à identificação causal, com o PR em **DRAFT, sem merge**, e `main` preservada.
