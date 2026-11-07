@@ -285,6 +285,14 @@ namespace dragonBones {
                 return;
             }
 
+            // Do not initialize any clip until all animations can be cached.
+            // Invalid metadata must leave the whole armature retryable.
+            for (let k in this.animations) {
+                if (this.animations[k]._getCacheFrameCount(frameRate) === 0) {
+                    return;
+                }
+            }
+
             this.cacheFrameRate = frameRate;
             for (let k in this.animations) {
                 this.animations[k].cacheFrames(this.cacheFrameRate);

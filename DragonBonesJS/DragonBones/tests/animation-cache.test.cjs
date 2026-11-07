@@ -175,3 +175,103 @@ test("valid cache rates still initialize bone and slot frame tables", () => {
         animation.returnToPool();
     }
 });
+
+test("an invalid clip prevents partial armature cache initialization and allows retry", () => {
+    const { ArmatureData } = require("../out/dragonBones.js");
+    const armature = BaseObject.borrowObject(ArmatureData);
+    const walk = BaseObject.borrowObject(AnimationData);
+    const jump = BaseObject.borrowObject(AnimationData);
+    walk.name = "walk";
+    jump.name = "jump";
+    walk.duration = 1;
+    jump.duration = NaN;
+    armature.addAnimation(walk);
+    armature.addAnimation(jump);
+    try {
+        armature.cacheFrames(24);
+        assert.equal(armature.cacheFrameRate, 0);
+        assert.equal(walk.cacheFrameRate, 0);
+        assert.equal(jump.cacheFrameRate, 0);
+        assert.deepEqual(walk.cachedFrames, []);
+
+        jump.duration = 1;
+        armature.cacheFrames(24);
+        assert.equal(armature.cacheFrameRate, 24);
+        assert.equal(walk.cacheFrameRate, 24);
+        assert.equal(jump.cacheFrameRate, 24);
+        assert.deepEqual(walk.cachedFrames, Array(25).fill(false));
+        assert.deepEqual(jump.cachedFrames, Array(25).fill(false));
+    }
+    finally {
+        armature.returnToPool();
+    }
+});
+
+test("invalid clip scale or impossible frame count cannot latch armature cache", () => {
+    const { ArmatureData } = require("../out/dragonBones.js");
+    for (const invalid of [
+        { duration: 1, scale: Infinity },
+        { duration: Infinity, scale: 1 },
+        { duration: 3000000000, scale: 1 }
+    ]) {
+        const armature = BaseObject.borrowObject(ArmatureData);
+        const clip = BaseObject.borrowObject(AnimationData);
+        clip.name = "walk";
+        clip.duration = invalid.duration;
+        clip.scale = invalid.scale;
+        armature.addAnimation(clip);
+        try {
+            armature.cacheFrames(2);
+            assert.equal(armature.cacheFrameRate, 0);
+            assert.equal(clip.cacheFrameRate, 0);
+            clip.duration = 1;
+            clip.scale = 1;
+            armature.cacheFrames(2);
+            assert.equal(armature.cacheFrameRate, 2);
+            assert.deepEqual(clip.cachedFrames, [false, false, false]);
+        }
+        finally {
+            armature.returnToPool();
+        }
+    }
+});
+
+test("armature rejects a previously cached clip at a conflicting rate", () => {
+    const { ArmatureData } = require("../out/dragonBones.js");
+    const armature = BaseObject.borrowObject(ArmatureData);
+    const clip = BaseObject.borrowObject(AnimationData);
+    clip.name = "walk";
+    clip.duration = 1;
+    armature.addAnimation(clip);
+    try {
+        clip.cacheFrames(12);
+        armature.cacheFrames(24);
+        assert.equal(armature.cacheFrameRate, 0);
+        assert.equal(clip.cacheFrameRate, 12);
+        armature.cacheFrames(12);
+        assert.equal(armature.cacheFrameRate, 12);
+        assert.deepEqual(clip.cachedFrames, Array(13).fill(false));
+    }
+    finally {
+        armature.returnToPool();
+    }
+});
+
+test("scaled clips preserve their intentional per-animation cache rates", () => {
+    const { ArmatureData } = require("../out/dragonBones.js");
+    const armature = BaseObject.borrowObject(ArmatureData);
+    const clip = BaseObject.borrowObject(AnimationData);
+    clip.name = "walk";
+    clip.duration = 1;
+    clip.scale = 0.5;
+    armature.addAnimation(clip);
+    try {
+        armature.cacheFrames(24);
+        assert.equal(armature.cacheFrameRate, 24);
+        assert.equal(clip.cacheFrameRate, 12);
+        assert.deepEqual(clip.cachedFrames, Array(13).fill(false));
+    }
+    finally {
+        armature.returnToPool();
+    }
+});
