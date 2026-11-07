@@ -284,6 +284,17 @@ def comparar_manifestos(gl, vk):
                     "Hash GPU ausente")
             _assert(0 <= m["pixels_rgb_diferentes_de_a128"] <= 4096,
                     "Contagem inválida no framebuffer 64×64")
+    for amostras in ("1", "4"):
+        _assert(
+            auditoria["gpu"][amostras]["rgb_igual_em_todos_os_alfas"] is True
+            and all(
+                auditoria["gpu"][amostras]["controles"][str(alfa)][
+                    "pixels_rgb_diferentes_de_a128"
+                ] == 0
+                for alfa in (64, 128, 192)
+            ),
+            "Upload ou sample GPU introduziu RGB dependente de alfa"
+        )
     relatorio["auditoria_rgba_gpu_sem_overdraw"] = auditoria
     repetir = "4x_a128_repeticao_sem_a2c_sem_blend_com_z"
     for backend, manifesto in (("OpenGL", gl), ("Vulkan", vk)):
@@ -378,6 +389,18 @@ def comparar_manifestos(gl, vk):
         sombreados[str(alfa)] = {
             "controle": nome, "sha256_rgb": c["sha256_rgb"]
         }
+    # O teste causal eliminou SOMENTE o recebimento de sombras. Em Phong
+    # com blending/A2C desativados, mudar alfa do arquivo não deve alterar
+    # a saída RGB com receiveShadows desativado, nem um nível de intensidade.
+    for chave in ("alfa64_vs128_off_sem_sombras",
+                  "alfa192_vs128_off_sem_sombras"):
+        resultado = vk["comparacao"][chave]
+        _assert(
+            resultado.get("arrays_identicos") is True
+            and resultado.get("pixels_divergentes") == 0
+            and resultado.get("erro_maximo_rgb") == 0,
+            "RGB ainda depende do alpha sem sombras: " + chave,
+        )
     relatorio["controle_alpha_sem_sombras"] = {
         "estado": "RECEIVE_SHADOWS_OFF_OBSERVADO_NO_DRAW",
         "controles": sombreados,
