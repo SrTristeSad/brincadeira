@@ -229,6 +229,19 @@ jobs:
             --json "${RUNNER_TEMP}/phong-a2c-mapa-ci.json" \
             --png "${RUNNER_TEMP}/phong-a2c-mapa-ci.png"
 
+      - name: Comparar A2C GL/Vulkan com e sem recebimento de sombras
+        run: |
+          python -m py_compile makehumano/testes/comparar_sombras_a2c_gl_vulkan.py
+          python -m unittest discover -s makehumano/testes \
+            -p test_comparar_sombras_a2c_gl_vulkan_wgpu.py -v
+          python -u makehumano/testes/comparar_sombras_a2c_gl_vulkan.py \
+            --opengl "${RUNNER_TEMP}/phong-a2c-opengl-ci.json" \
+            --vulkan "${RUNNER_TEMP}/phong-a2c-vulkan-ci.json" \
+            --pareamento "${RUNNER_TEMP}/phong-a2c-backends-ci.json" \
+            --json "${RUNNER_TEMP}/phong-a2c-sombras-pareadas-ci.json" \
+            --png-com-sombras "${RUNNER_TEMP}/phong-a2c-sombras-com-ci.png" \
+            --png-sem-sombras "${RUNNER_TEMP}/phong-a2c-sombras-sem-ci.png"
+
       - name: Mapear diferenças isoladas da escrita Z, OpenGL e Vulkan
         run: |
           python -m unittest discover -s makehumano/testes \
@@ -256,6 +269,9 @@ jobs:
             ${{ runner.temp }}/phong-a2c-depth-diferencas-ci.json
             ${{ runner.temp }}/phong-a2c-depth-gl-ci.png
             ${{ runner.temp }}/phong-a2c-depth-vk-ci.png
+            ${{ runner.temp }}/phong-a2c-sombras-pareadas-ci.json
+            ${{ runner.temp }}/phong-a2c-sombras-com-ci.png
+            ${{ runner.temp }}/phong-a2c-sombras-sem-ci.png
             ${{ runner.temp }}/phong-a2c-mapa-ci-alfa064.png
             ${{ runner.temp }}/phong-a2c-mapa-ci-alfa128.png
             ${{ runner.temp }}/phong-a2c-mapa-ci-alfa192.png
