@@ -284,3 +284,15 @@ Ambos os harnesses de diagnóstico, OpenGL e Vulkan, agora usam os mesmos númer
 **Primeiro objetivo restrito:** verificar que o upstream inicia e produz um PNG Phong com seu material e iluminação registrados, no Windows/Linux visados (runner desta fase: Linux). Não declarar equivalência até conferir que câmera, modelo, shaders, assets, iluminação e métodos de captura estão alinhados e então executar o comparador com todas as métricas. A CI de referência é teste externo; não é fallback no produto final.
 
 **Status inicial:** scripts preparados na branch, execução do original na CI e inspeção dos resultados ainda pendentes. Nenhuma alteração de produção autorizada ou executada.
+
+## 12. Matriz diagnóstica de canais Phong (aguardando execução do original)
+
+Foi acrescentado `testes/diagnosticar_pareamento_phong.py`, que, SOMENTE se ambas as capturas existirem, executa quatro comparações de imagens reais sem alterar os PNGs de origem: OpenGL bruto versus Vulkan bruto; OpenGL com R/B trocados; Vulkan com sRGB decodificado para linear; e as duas transformações combinadas. Gera quatro conjuntos separados de métricas e dois mapas de diferença, e registra as divergências de matrizes de câmera, shader, defines, textura difusa e iluminação. Os testes CPU de transformações de canal ficam em `test_diagnosticar_pareamento_phong_wgpu.py`.
+
+**Justificativa de canal:** o upstream `glmodule.renderToBuffer` lê `GL_RGBA` e depois aplica `surface[::-1, :, [2,1,0]]`. Em `image_qt.save`, a primeira componente é interpretada como R no RGB empacotado; assim não há cancelamento da troca no salvamento via `Image.save`. Esse tratamento pode explicar parte da pele azul no PNG de referência, mas o resultado precisa ser medido nas capturas reais.
+
+**Justificativa de gama:** a textura Vulkan offscreen foi medida como `rgba8unorm-srgb`, com cor linear 0,5 gravada como byte 188. Decodificar sRGB no PNG Vulkan é aqui só experimento analítico, NÃO proposta automaticamente aprovada para o contrato do produto.
+
+**Condição de validade:** o JSON distingue `PAR_COMPARAVEL_PARA_DIAGNOSTICO` de `ENTRADAS_NAO_COMPROVADAS_EQUIVALENTES`, com base em números da câmera, shader, defines, difusa e iluminação. Os outros assets e parâmetros, além da qualidade da projeção offscreen, ainda precisam de conferência; qualquer `limites_propostos_todos_satisfeitos` é meramente estatístico e não homologação. Como PNGs são RGB, a IoU alfa 1,0 é trivial e não confirma máscara/transparentes. A decisão sobre como interpretar a troca histórica R/B deve ser discutida com o criador antes de propor correção da produção.
+
+**Status:** ferramenta preparada; resultados da CI dependerão de a referência OpenGL upstream executar com sucesso no checkout isolado.

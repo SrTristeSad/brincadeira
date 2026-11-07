@@ -149,6 +149,26 @@ jobs:
               --png "${RUNNER_TEMP}/phong-referencia-opengl-ci.png" \
               --log "${RUNNER_TEMP}/phong-referencia-opengl-ci.log"
 
+      - name: Diagnosticar par Phong bruto e normalizações somente de teste
+        run: |
+          python -u makehumano/testes/diagnosticar_pareamento_phong.py \
+            --opengl "${RUNNER_TEMP}/phong-referencia-opengl-ci.png" \
+            --vulkan "${RUNNER_TEMP}/phong-diffuse-ci.png" \
+            --manifesto-opengl "${RUNNER_TEMP}/phong-referencia-opengl-ci.json" \
+            --manifesto-vulkan "${RUNNER_TEMP}/phong-diffuse-ci.json" \
+            --json "${RUNNER_TEMP}/phong-pareamento-ci.json" \
+            --diff-dir "${RUNNER_TEMP}/phong-pareamento-diffs"
+
+      - name: Publicar métricas pareadas (sem homologação)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phong-pareamento-ci
+          path: |
+            ${{ runner.temp }}/phong-pareamento-ci.json
+            ${{ runner.temp }}/phong-pareamento-diffs/
+          if-no-files-found: warn
+
       - name: Publicar referência OpenGL externa à aplicação final
         if: always()
         uses: actions/upload-artifact@v4
