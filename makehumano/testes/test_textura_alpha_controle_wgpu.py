@@ -42,9 +42,18 @@ class TestControleTexturaAlfa(unittest.TestCase):
             self.assertEqual(hashlib.sha256(raw).hexdigest(), meta["sha256_png"])
             self.assertEqual(meta["alfa_textura"], 128)
 
+    def test_controle_opacidade_textura_255(self):
+        pixels = dados_textura_alfa_parcial(alfa=255)
+        self.assertTrue(np.all(pixels[:, :, 3] == 255))
+        with tempfile.TemporaryDirectory() as pasta:
+            path, meta = salvar_textura_alfa_parcial(Path(pasta) / "opaco.png", alfa=255)
+            self.assertEqual(meta["alfa_textura"], 255)
+            self.assertEqual(hashlib.sha256(Path(path).read_bytes()).hexdigest(), meta["sha256_png"])
+            self.assertNotEqual(Path(path).read_bytes(), bytes_png_textura_alfa_parcial())
+
     def test_parametros_devem_ser_pareados(self):
         with self.assertRaises(ValueError):
-            dados_textura_alfa_parcial(alfa=255)
+            dados_textura_alfa_parcial(alfa=127)
         with self.assertRaises(ValueError):
             dados_textura_alfa_parcial(lado=64)
 

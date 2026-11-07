@@ -66,7 +66,8 @@ def metricas_alfa(a, b, *, tolerancia=8, limiar_iou=0.995, fracao_maxima=0.005):
 
 
 def avaliar(ref_png, vk_png, ref_meta, vk_meta, resultado_json, diff_png=None,
-            ref_parcial=None, vk_parcial=None, diff_parcial=None):
+            ref_parcial=None, vk_parcial=None, diff_parcial=None,
+            ref_opacidade=None, vk_opacidade=None, diff_opacidade=None):
     r = json.loads(Path(ref_meta).read_text(encoding="utf-8"))
     v = json.loads(Path(vk_meta).read_text(encoding="utf-8"))
     if r.get("estado") != "CAPTURADO" or v.get("estado") != "OBSERVADO":
@@ -132,6 +133,61 @@ def avaliar(ref_png, vk_png, ref_meta, vk_meta, resultado_json, diff_png=None,
             out_p = Path(diff_parcial)
             out_p.parent.mkdir(parents=True, exist_ok=True)
             Image.fromarray(diferenca_p).save(out_p)
+    # Segundo cenário independente: PNG A=255 e opacity de material=0.5.
+    # Não aprovar nem reprovar visualmente pela saída do processo/CI.
+    opacidade = None
+    if (ref_opacidade is None) != (vk_opacidade is None):
+        raise ValueError("Controles opacity=0.5 exigem OpenGL e Vulkan em par")
+    if ref_opacidade is not None:
+        if not (r.get("captura_opacidade_meia_api") is True
+                and v.get("captura_opacidade_meia_api") is True):
+            raise ValueError("Manifestos não confirmaram ambas as capturas de opacidade")
+        ref_estado = r.get("controle_opacidade_meia") or {}
+        vk_estado = v.get("controle_opacidade_meia") or {}
+        tex_ref, tex_vk = ref_estado.get("textura"), vk_estado.get("textura")
+        if (not isinstance(tex_ref, dict) or tex_ref != tex_vk
+                or tex_ref.get("origem") != "png_temporario_de_harness"
+                or tex_ref.get("alfa_textura") != 255
+                or tex_ref.get("shape") != [32, 32, 4]):
+            raise ValueError("Texturas opacas de controle não têm bytes pareados")
+        for item in (ref_estado, vk_estado):
+            m = item.get("material") or {}
+            mapa = (m.get("mapas") or {}).get("diffuseTexture") or {}
+            if (m.get("opacity") != 0.5
+                    or m.get("transparent") is not True
+                    or m.get("alphaToCoverage") is not False
+                    or m.get("define_diffuse_ativo") is not True
+                    or mapa.get("origem") != "arquivo"
+                    or mapa.get("sha256") != tex_ref.get("sha256_png")):
+                raise ValueError("Controle de opacity=0.5 não preservou as mesmas entradas")
+        a = ler_png_mascara(ref_opacidade, r, campo="mascara_alfa_opacidade_meia")
+        b = ler_png_mascara(vk_opacidade, v, campo="mascara_alfa_opacidade_meia")
+        met = metricas_alfa(a, b)
+        inter = (a > 0) & (b > 0)
+        met["alfa_medio_opengl_intersecao"] = float(a[inter].mean()) if np.any(inter) else None
+        met["alfa_medio_vulkan_intersecao"] = float(b[inter].mean()) if np.any(inter) else None
+        met["pixels_alterados_opengl_relativo_a_opaco_original"] = int(
+            np.count_nonzero(a != alpha_ref)
+        )
+        met["pixels_alterados_vulkan_relativo_a_opaco_original"] = int(
+            np.count_nonzero(b != alpha_vk)
+        )
+        opacidade = {
+            "estado": "PAREADO_MENSURADO_SEM_HOMOLOGACAO",
+            "configuracao": "Textura RGBA alpha=255, opacity=0.5, DIFFUSE, transparent=True, A2C=False",
+            "sha256_textura_png": tex_ref["sha256_png"],
+            "metricas_alfa": met,
+            "diagnostico_a2c_opengl": r.get("diagnostico_a2c"),
+            "diagnostico_a2c_vulkan": v.get("diagnostico_a2c"),
+            "teste_a2c_executado": False,
+            "nota": "A API de máscara original desativa multisampling; esta métrica NÃO valida A2C.",
+        }
+        if diff_opacidade is not None:
+            from PIL import Image
+            imagem_diff = np.abs(a.astype(np.int16) - b.astype(np.int16)).astype(np.uint8)
+            destino = Path(diff_opacidade)
+            destino.parent.mkdir(parents=True, exist_ok=True)
+            Image.fromarray(imagem_diff).save(destino)
     registro = {
         "tipo": "PARIDADE_MASCARA_ALFA_API_PHONG",
         "origem": "mh.renderAlphaMask nos dois processos, saída PNG RGBA",
@@ -140,6 +196,7 @@ def avaliar(ref_png, vk_png, ref_meta, vk_meta, resultado_json, diff_png=None,
         "paridade_visual_completa_homologada": False,
         "metricas_alfa": metricas,
         "controle_textura_alfa_parcial": parcial,
+        "controle_material_opacidade_meia": opacidade,
         "nota": (
             "Mede saída da API renderAlphaMask. Não prova blending nem "
             "alfa de todos os shaders, materiais ou passes."
@@ -171,10 +228,14 @@ def main():
     parser.add_argument("--opengl-parcial", type=Path)
     parser.add_argument("--vulkan-parcial", type=Path)
     parser.add_argument("--diff-parcial", type=Path)
+    parser.add_argument("--opengl-opacidade", type=Path)
+    parser.add_argument("--vulkan-opacidade", type=Path)
+    parser.add_argument("--diff-opacidade", type=Path)
     args = parser.parse_args()
     avaliar(args.opengl, args.vulkan, args.manifesto_opengl,
             args.manifesto_vulkan, args.json, args.diff,
-            args.opengl_parcial, args.vulkan_parcial, args.diff_parcial)
+            args.opengl_parcial, args.vulkan_parcial, args.diff_parcial,
+            args.opengl_opacidade, args.vulkan_opacidade, args.diff_opacidade)
 
 
 if __name__ == "__main__":

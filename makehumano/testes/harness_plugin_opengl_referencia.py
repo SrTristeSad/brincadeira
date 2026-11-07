@@ -21,6 +21,8 @@ def load(app):
     png_mascara = png.with_name(png.stem + "-alpha-api.png")
     png_parcial_rgb = png.with_name(png.stem + "-alpha-parcial-rgb.png")
     png_parcial_mascara = png.with_name(png.stem + "-alpha-parcial-api.png")
+    png_opacidade_rgb = png.with_name(png.stem + "-opacity-half-rgb.png")
+    png_opacidade_mascara = png.with_name(png.stem + "-opacity-half-alpha-api.png")
     pasta_testes = os.environ["MAKEHUMANO_HARNESS_TESTES_DIR"]
     if pasta_testes not in sys.path:
         sys.path.insert(0, pasta_testes)
@@ -137,6 +139,47 @@ def load(app):
                 material.transparent = transparencia_original
                 material.alphaToCoverage = a2c_original
 
+            # Segundo controle independente: textura opaca A=255 com
+            # opacity=0.5, transparência ativa e A2C desligado.
+            caminho_opaco = destino.with_name(destino.stem + "-textura-opacity-half.png")
+            textura_opaca, metadados_opacidade = salvar_textura_alfa_parcial(
+                caminho_opaco, alfa=255
+            )
+            try:
+                material.diffuseTexture = textura_opaca
+                material.configureShading(diffuse=True)
+                material.opacity = 0.5
+                material.transparent = True
+                material.alphaToCoverage = False
+                estado_opacidade = descrever_material(material)
+                if estado_opacidade.get("define_diffuse_ativo") is not True:
+                    raise RuntimeError("OpenGL sem DIFFUSE no controle opacity=0.5")
+                imagem_opacidade_rgb = mh.renderToBuffer(1024, 768)
+                imagem_opacidade_mascara = mh.renderAlphaMask(1024, 768)
+            finally:
+                material.diffuseTexture = textura_original
+                material.configureShading(diffuse=config_difusa_original)
+                material.opacity = opacidade_original
+                material.transparent = transparencia_original
+                material.alphaToCoverage = a2c_original
+
+            # Condições necessárias para A2C: o GL só habilita em
+            # nTransparentPrimitives > 0 e com extensão multisample.
+            import glmodule
+            objetos_corpo = [
+                obj for obj in G.world if getattr(obj, "material", None) is material
+                and getattr(obj, "visibility", True) and getattr(obj, "solid", True)
+            ]
+            corpo_a2c = max(objetos_corpo, key=lambda obj: len(obj.primitives))
+            estado_a2c = {
+                "via_api_renderAlphaMask_testavel": False,
+                "motivo": "renderAlphaMask desliga have_multisample durante o passe",
+                "extensao_multisample_disponivel": bool(glmodule.have_multisample),
+                "primitivas_transparentes": int(corpo_a2c.nTransparentPrimitives),
+                "a2c_caminho_exige_primitivas_transparentes": True,
+                "a2c_atual_nesta_captura": False,
+            }
+
             pixels = np.asarray(imagem.data)
             pixels_sem_especular = np.asarray(imagem_sem_especular.data)
             pixels_sem_sombras = np.asarray(imagem_sem_sombras.data)
@@ -161,6 +204,10 @@ def load(app):
             info_mascara_parcial = registrar_mascara(
                 imagem_parcial_mascara, png_parcial_mascara
             )
+            imagem_opacidade_rgb.save(str(png_opacidade_rgb))
+            info_mascara_opacidade = registrar_mascara(
+                imagem_opacidade_mascara, png_opacidade_mascara
+            )
             resultado = {
                 "estado": "CAPTURADO",
                 "origem": "MakeHuman upstream OpenGL isolado",
@@ -182,6 +229,15 @@ def load(app):
                     "sha256_png_rgb": hashlib.sha256(png_parcial_rgb.read_bytes()).hexdigest(),
                     "arquivo_png_rgb": str(png_parcial_rgb),
                 },
+                "captura_opacidade_meia_api": True,
+                "mascara_alfa_opacidade_meia": info_mascara_opacidade,
+                "controle_opacidade_meia": {
+                    "textura": metadados_opacidade,
+                    "material": estado_opacidade,
+                    "sha256_png_rgb": hashlib.sha256(png_opacidade_rgb.read_bytes()).hexdigest(),
+                    "arquivo_png_rgb": str(png_opacidade_rgb),
+                },
+                "diagnostico_a2c": estado_a2c,
                 "geometria": geometria,
                 "estado_gl_luz": estado_gl_luz,
                 "iluminacao": descrever_iluminacao(app.scene),

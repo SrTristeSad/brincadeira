@@ -94,6 +94,8 @@ def executar(raiz, python, saida_json, saida_png, logfile, limite):
     png_mascara = saida_png.with_name(saida_png.stem + "-alpha-api.png")
     png_parcial_rgb = saida_png.with_name(saida_png.stem + "-alpha-parcial-rgb.png")
     png_parcial_mascara = saida_png.with_name(saida_png.stem + "-alpha-parcial-api.png")
+    png_opacidade_rgb = saida_png.with_name(saida_png.stem + "-opacity-half-rgb.png")
+    png_opacidade_mascara = saida_png.with_name(saida_png.stem + "-opacity-half-alpha-api.png")
     if (registro.get("estado") != "CAPTURADO"
             or registro.get("dimensoes_imagem") != [1024, 768]
             or registro.get("captura_especular_desligado") is not True
@@ -101,13 +103,16 @@ def executar(raiz, python, saida_json, saida_png, logfile, limite):
             or registro.get("captura_so_difusa") is not True
             or registro.get("captura_mascara_api") is not True
             or registro.get("captura_mascara_parcial_api") is not True
+            or registro.get("captura_opacidade_meia_api") is not True
             or not saida_png.is_file()
             or not png_sem_especular.is_file()
             or not png_sem_sombras.is_file()
             or not png_so_difusa.is_file()
             or not png_mascara.is_file()
             or not png_parcial_rgb.is_file()
-            or not png_parcial_mascara.is_file()):
+            or not png_parcial_mascara.is_file()
+            or not png_opacidade_rgb.is_file()
+            or not png_opacidade_mascara.is_file()):
         raise RuntimeError(
             "Captura de referência OpenGL não válida: "
             + json.dumps(registro, ensure_ascii=False)[:2000]

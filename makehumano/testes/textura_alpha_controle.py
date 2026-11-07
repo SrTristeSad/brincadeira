@@ -12,8 +12,8 @@ import numpy as np
 
 
 def dados_textura_alfa_parcial(lado=32, alfa=128):
-    if lado != 32 or alfa != 128:
-        raise ValueError("O controle deve ser sempre 32×32 RGBA com alfa 128")
+    if lado != 32 or alfa not in (128, 255):
+        raise ValueError("Controle exige 32×32 RGBA com alfa 128 ou 255")
     y, x = np.indices((lado, lado))
     checker = ((x // 8 + y // 8) % 2) == 0
     pixels = np.zeros((lado, lado, 4), dtype=np.uint8)
@@ -29,8 +29,8 @@ def _chunk_png(tipo, dados):
     return struct.pack(">I", len(dados)) + tipo + dados + struct.pack(">I", crc)
 
 
-def bytes_png_textura_alfa_parcial():
-    dados = dados_textura_alfa_parcial()
+def bytes_png_textura_alfa_parcial(*, alfa=128):
+    dados = dados_textura_alfa_parcial(alfa=alfa)
     h, w, _ = dados.shape
     ihdr = struct.pack(">IIBBBBB", w, h, 8, 6, 0, 0, 0)
     scans = b"".join(b"\x00" + dados[y].tobytes() for y in range(h))
@@ -39,10 +39,10 @@ def bytes_png_textura_alfa_parcial():
             + _chunk_png(b"IEND", b""))
 
 
-def salvar_textura_alfa_parcial(caminho):
-    """Persistência fora do repo e apenas no processo efêmero de CI."""
-    dados = dados_textura_alfa_parcial()
-    data = bytes_png_textura_alfa_parcial()
+def salvar_textura_alfa_parcial(caminho, *, alfa=128):
+    """Persistência fora do repo, para controles A=128 ou A=255."""
+    dados = dados_textura_alfa_parcial(alfa=alfa)
+    data = bytes_png_textura_alfa_parcial(alfa=alfa)
     destino = Path(caminho)
     destino.parent.mkdir(parents=True, exist_ok=True)
     destino.write_bytes(data)
@@ -51,7 +51,7 @@ def salvar_textura_alfa_parcial(caminho):
         "padrao": "xadrez_8x8",
         "formato": "RGBA8",
         "shape": list(dados.shape),
-        "alfa_textura": 128,
+        "alfa_textura": int(alfa),
         "sha256_rgba": hashlib.sha256(dados.tobytes()).hexdigest(),
         "sha256_png": hashlib.sha256(data).hexdigest(),
         "bytes_png": len(data),

@@ -190,11 +190,14 @@ jobs:
             --vulkan "${RUNNER_TEMP}/phong-diffuse-ci-alpha-api.png" \
             --opengl-parcial "${RUNNER_TEMP}/phong-referencia-opengl-ci-alpha-parcial-api.png" \
             --vulkan-parcial "${RUNNER_TEMP}/phong-diffuse-ci-alpha-parcial-api.png" \
+            --opengl-opacidade "${RUNNER_TEMP}/phong-referencia-opengl-ci-opacity-half-alpha-api.png" \
+            --vulkan-opacidade "${RUNNER_TEMP}/phong-diffuse-ci-opacity-half-alpha-api.png" \
             --manifesto-opengl "${RUNNER_TEMP}/phong-referencia-opengl-ci.json" \
             --manifesto-vulkan "${RUNNER_TEMP}/phong-diffuse-ci.json" \
             --json "${RUNNER_TEMP}/phong-alfa-api-ci.json" \
             --diff "${RUNNER_TEMP}/phong-alfa-api-diff-ci.png" \
-            --diff-parcial "${RUNNER_TEMP}/phong-alfa-parcial-diff-ci.png"
+            --diff-parcial "${RUNNER_TEMP}/phong-alfa-parcial-diff-ci.png" \
+            --diff-opacidade "${RUNNER_TEMP}/phong-opacidade-meia-diff-ci.png"
 
       - name: Publicar métricas pareadas (sem homologação)
         if: always()
@@ -206,6 +209,7 @@ jobs:
             ${{ runner.temp }}/phong-alfa-api-ci.json
             ${{ runner.temp }}/phong-alfa-api-diff-ci.png
             ${{ runner.temp }}/phong-alfa-parcial-diff-ci.png
+            ${{ runner.temp }}/phong-opacidade-meia-diff-ci.png
             ${{ runner.temp }}/phong-pareamento-diffs/
           if-no-files-found: warn
 
