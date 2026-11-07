@@ -95,6 +95,11 @@ jobs:
           python -m unittest discover -s makehumano/testes \
             -p test_registrar_geometria_paridade_wgpu.py -v
 
+      - name: Testes CPU de transformação de luz GL eye→world
+        run: |
+          python -m unittest discover -s makehumano/testes \
+            -p test_compensar_luz_eye_legacy_wgpu.py -v
+
       - name: Comparar Phong com difusa ligada/desligada na GUI isolada
         env:
           WGPU_BACKEND_TYPE: Vulkan
@@ -165,6 +170,8 @@ jobs:
             --vulkan-sem-especular "${RUNNER_TEMP}/phong-diffuse-ci-specular-off.png" \
             --vulkan-sem-sombras "${RUNNER_TEMP}/phong-diffuse-ci-shadows-off.png" \
             --vulkan-so-difusa "${RUNNER_TEMP}/phong-diffuse-ci-diffuse-only.png" \
+            --vulkan-luz-eye-legada "${RUNNER_TEMP}/phong-diffuse-ci-legacy-gl-eye-light.png" \
+            --vulkan-luz-eye-legada-so-difusa "${RUNNER_TEMP}/phong-diffuse-ci-legacy-gl-eye-light-diffuse-only.png" \
             --manifesto-opengl "${RUNNER_TEMP}/phong-referencia-opengl-ci.json" \
             --manifesto-vulkan "${RUNNER_TEMP}/phong-diffuse-ci.json" \
             --json "${RUNNER_TEMP}/phong-pareamento-ci.json" \

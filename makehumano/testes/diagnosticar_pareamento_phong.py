@@ -57,7 +57,8 @@ def _camera_igual(a, b, eps=1e-5):
 def avaliar(ref_png, vulkan_png, ref_meta, vulkan_meta, saida, diretorio_diff=None,
            ref_sem_especular=None, vk_sem_especular=None,
            ref_sem_sombras=None, vk_sem_sombras=None,
-           ref_so_difusa=None, vk_so_difusa=None):
+           ref_so_difusa=None, vk_so_difusa=None,
+           vk_luz_eye_legada=None, vk_luz_eye_legada_so_difusa=None):
     registro_ref = json.loads(Path(ref_meta).read_text(encoding="utf-8"))
     registro_vk = json.loads(Path(vulkan_meta).read_text(encoding="utf-8"))
     if registro_ref.get("estado") != "CAPTURADO":
@@ -152,6 +153,40 @@ def avaliar(ref_png, vulkan_png, ref_meta, vulkan_meta, saida, diretorio_diff=No
                 trocar_vermelho_azul(so_ref), decodificar_srgb_rgb(so_vk)
             ),
         })
+    if ((vk_luz_eye_legada is None)
+            != (vk_luz_eye_legada_so_difusa is None)):
+        raise ValueError("Controle de luz eye precisa de dois PNGs Vulkan")
+    if vk_luz_eye_legada is not None:
+        if registro_vk.get("captura_luz_eye_legada") is not True:
+            raise ValueError("Captura de luz eye não confirmada no manifesto Vulkan")
+        gl_estado = registro_ref.get("estado_gl_luz", {})
+        vk_luz = registro_vk.get("luz_eye_legada", {})
+        if gl_estado.get("observado") is not True:
+            raise ValueError("GL real não registrou a luz GL_LIGHT0 em espaço de câmera")
+        eye = np.asarray(gl_estado["posicao_luz_eye_gl"], np.float64)
+        pos_reproduzida = np.asarray(vk_luz.get("posicao_eye_reproduzida", []), np.float64)
+        if eye.shape != (4,) or pos_reproduzida.shape != (3,) or not np.allclose(
+                eye[:3], pos_reproduzida, atol=1e-5, rtol=0):
+            raise ValueError("Controle Vulkan não reproduziu a luz GL realmente observada")
+        world = np.asarray(vk_luz["posicao_world_compensada"], np.float64)
+        view = np.asarray(registro_vk["camera"]["view"], np.float64)
+        if world.shape != (3,) or not np.allclose(
+                view @ [*world,1.], eye, atol=1e-5, rtol=0):
+            raise ValueError("Luz compensada não está na posição eye do OpenGL")
+        g = pixels(Path(vk_luz_eye_legada))
+        d = pixels(Path(vk_luz_eye_legada_so_difusa))
+        if g.shape != ref.shape or d.shape != ref.shape:
+            raise ValueError("PNG Vulkan com luz compensada tem resolução errada")
+        variantes["vk_luz_eye_legacy_bruto"] = (ref, g)
+        variantes["vk_luz_eye_legacy_normalizado"] = (
+            trocar_vermelho_azul(ref), decodificar_srgb_rgb(g)
+        )
+        if ref_so_difusa is None:
+            raise ValueError("O controle só difuso OpenGL é necessário")
+        ref_d = pixels(Path(ref_so_difusa))
+        variantes["vk_luz_eye_legacy_so_difusa_normalizado"] = (
+            trocar_vermelho_azul(ref_d), decodificar_srgb_rgb(d)
+        )
     metricas = {}
     for nome, (a,b) in variantes.items():
         m = comparar_pixels(a, b, tolerancia=8, fracao_maxima=0.02)
@@ -165,7 +200,9 @@ def avaliar(ref_png, vulkan_png, ref_meta, vulkan_meta, saida, diretorio_diff=No
         )
         m["alerta_alfa"] = "Ambos os PNGs são RGB; alfa preenchido artificialmente em 255"
         if nome in ("gl_troca_rb_e_vk_srgb_para_linear",
-                     "so_difusa_gl_rb_e_vk_linear"):
+                     "so_difusa_gl_rb_e_vk_linear",
+                     "vk_luz_eye_legacy_normalizado",
+                     "vk_luz_eye_legacy_so_difusa_normalizado"):
             # Máscara luminância heurística. NÃO é cobertura alfa.
             cor_a, cor_b = a[:, :, :3].astype(np.int16), b[:, :, :3].astype(np.int16)
             regiao = np.any(np.abs(cor_a - 128) > 8, axis=-1) | np.any(
@@ -203,6 +240,13 @@ def avaliar(ref_png, vulkan_png, ref_meta, vulkan_meta, saida, diretorio_diff=No
             salvar_mapa_diferencas(
                 a, b, diretorio_diff / "phong-so-difusa-normalizacoes-diff.png"
             )
+        for nome, arquivo in (
+            ("vk_luz_eye_legacy_normalizado", "phong-luz-eye-legacy-diff.png"),
+            ("vk_luz_eye_legacy_so_difusa_normalizado", "phong-luz-eye-legacy-so-difusa-diff.png"),
+        ):
+            if nome in variantes:
+                a, b = variantes[nome]
+                salvar_mapa_diferencas(a, b, diretorio_diff / arquivo)
     geo_ref = registro_ref.get("geometria")
     geo_vk = registro_vk.get("geometria")
     geo_ok = isinstance(geo_ref, dict) and isinstance(geo_vk, dict)
@@ -247,6 +291,7 @@ def avaliar(ref_png, vulkan_png, ref_meta, vulkan_meta, saida, diretorio_diff=No
         "controle_sem_especular_presente": ref_sem_especular is not None,
         "controle_sem_sombras_presente": ref_sem_sombras is not None,
         "controle_so_difusa_presente": ref_so_difusa is not None,
+        "controle_luz_eye_legada_presente": vk_luz_eye_legada is not None,
         "motivo_normalizacoes": [
             "O upstream usa glReadPixels GL_RGBA mas inverte R/B no array retornado.",
             "O framebuffer Vulkan offscreen foi observado em rgba8unorm-srgb.",
@@ -277,12 +322,15 @@ def main():
     p.add_argument("--vulkan-sem-sombras", type=Path)
     p.add_argument("--opengl-so-difusa", type=Path)
     p.add_argument("--vulkan-so-difusa", type=Path)
+    p.add_argument("--vulkan-luz-eye-legada", type=Path)
+    p.add_argument("--vulkan-luz-eye-legada-so-difusa", type=Path)
     args = p.parse_args()
     avaliar(args.opengl, args.vulkan, args.manifesto_opengl,
             args.manifesto_vulkan, args.json, args.diff_dir,
             args.opengl_sem_especular, args.vulkan_sem_especular,
             args.opengl_sem_sombras, args.vulkan_sem_sombras,
-            args.opengl_so_difusa, args.vulkan_so_difusa)
+            args.opengl_so_difusa, args.vulkan_so_difusa,
+            args.vulkan_luz_eye_legada, args.vulkan_luz_eye_legada_so_difusa)
 
 
 if __name__ == "__main__":
