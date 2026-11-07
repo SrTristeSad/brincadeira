@@ -1,0 +1,244 @@
+"""Controle RGB 1x/4x/A2C no processo Vulkan descartável da CI.
+
+Só é copiado para plugins durante o teste; não modifica produção.
+A máscara renderAlphaMask NÃO participa, pois desliga MSAA no legado.
+"""
+import hashlib
+import json
+import os
+from pathlib import Path
+import sys
+import traceback
+
+from PyQt5 import QtCore
+from core import G
+
+
+def load(app):
+    destino = Path(os.environ["MAKEHUMANO_HARNESS_FORMATO_JSON"])
+    png = Path(os.environ["MAKEHUMANO_HARNESS_FORMATO_PNG"])
+    pasta = os.environ["MAKEHUMANO_HARNESS_TESTES_DIR"]
+    if pasta not in sys.path:
+        sys.path.insert(0, pasta)
+
+    from observar_formato_cena_vulkan import observar_captura_offscreen
+    from configurar_camera_paridade import fixar_camera, manifesto_camera
+    from diagnosticar_a2c_msaa import (
+        CONTROLES, comparar_rgb, metadados_rgb, validar_controles,
+    )
+    from textura_alpha_controle import salvar_textura_alfa_parcial
+
+    iniciado = False
+
+    def medir():
+        nonlocal iniciado
+        if iniciado:
+            return
+        if not getattr(app, "_startup_complete", False):
+            QtCore.QTimer.singleShot(200, medir)
+            return
+        iniciado = True
+        cena = None
+        material = None
+        originais = {}
+        amostras_originais = None
+        try:
+            import numpy as np
+            from image import Image
+            from getpath import getSysDataPath
+            from vulkan_scene import alpha_to_coverage_vulkan, objeto_translucido_vulkan
+
+            cena = G.canvas._garantir_cena()
+            material = app.selectedHuman.material
+            originais = {
+                "shader": material.shader,
+                "textura": material.diffuseTexture,
+                "diffuse": bool(material.shaderConfig.get("diffuse", False)),
+                "opacity": float(material.opacity),
+                "transparent": bool(material.transparent),
+                "a2c": bool(material.alphaToCoverage),
+            }
+            amostras_originais = int(cena.amostras)
+            camera = fixar_camera(app)
+            parametros_camera = manifesto_camera(camera)
+            corpo_candidatos = [
+                obj for obj in G.world
+                if getattr(obj, "material", None) is material
+                and getattr(obj, "visibility", True)
+                and getattr(obj, "solid", True)
+            ]
+            if not corpo_candidatos:
+                raise RuntimeError("Corpo original não encontrado")
+            corpo = max(corpo_candidatos, key=lambda obj: len(obj.primitives))
+            if int(corpo.nTransparentPrimitives) != 0:
+                raise RuntimeError("Controle requer corpo com zero primitivas transparentes")
+
+            textura_path, textura_meta = salvar_textura_alfa_parcial(
+                destino.with_name(destino.stem + "-a2c-textura.png"), alfa=128
+            )
+            material.shader = getSysDataPath("shaders/glsl/phong")
+            material.diffuseTexture = textura_path
+            material.configureShading(diffuse=True)
+            material.opacity = 1.0
+            material.transparent = True
+            material.alphaToCoverage = False
+            if not bool(corpo.isTextured):
+                raise RuntimeError("Material Phong não ativou a textura DIFFUSE")
+
+            registros = {}
+            imagens = {}
+
+            def capturar(nome, *, amostras, transparencia, a2c):
+                material.transparent = transparencia
+                material.alphaToCoverage = a2c
+                cena.configurar_multisampling(amostras == 4)
+                esperado = bool(alpha_to_coverage_vulkan(corpo, cena.amostras))
+                observado = []
+                # Instrumentação local: registra a chamada REAL do corpo ao pipeline.
+                original = cena._pipeline_objeto
+                anterior = cena.__dict__.get("_pipeline_objeto", None)
+                existia = "_pipeline_objeto" in cena.__dict__
+
+                def espionar(obj, linhas, *, pontos=False):
+                    if obj is corpo:
+                        observado.append({
+                            "a2c_calculado": bool(alpha_to_coverage_vulkan(
+                                obj, cena.amostras, linhas=bool(linhas or pontos)
+                            )),
+                            "amostras": int(cena.amostras),
+                            "linhas": bool(linhas),
+                            "pontos": bool(pontos),
+                        })
+                    return original(obj, linhas, pontos=pontos)
+
+                cena._pipeline_objeto = espionar
+                try:
+                    rgb = cena.capturar_framebuffer(
+                        [corpo], G.cameras, 1024, 768,
+                        incluir_alfa=False, cor_fundo=(0.5, 0.5, 0.5, 1.0),
+                    )
+                finally:
+                    if existia:
+                        cena._pipeline_objeto = anterior
+                    else:
+                        del cena._pipeline_objeto
+
+                if not observado:
+                    raise RuntimeError("A malha do corpo não atravessou o pipeline")
+                if any(v["a2c_calculado"] != esperado for v in observado):
+                    raise RuntimeError("Caminho de A2C inconsistente na malha")
+                chaves = [
+                    k for k in cena._pipelines_malhas
+                    if isinstance(k, tuple) and len(k) >= 4
+                    and k[:4] == (amostras, esperado, False, False)
+                ]
+                if not chaves:
+                    raise RuntimeError("Pipeline real não foi registrado no cache")
+                rgb = np.ascontiguousarray(rgb)
+                meta = metadados_rgb(rgb)
+                saida = png if nome == "1x_sem_a2c" else png.with_name(
+                    png.stem + "-" + nome + ".png"
+                )
+                Image(data=rgb).save(str(saida))
+                registros[nome] = {
+                    **meta,
+                    "captura_rgb": True,
+                    "amostras": int(cena.amostras),
+                    "a2c_flag_material": bool(a2c),
+                    "material_transparent": bool(transparencia),
+                    "opacity": float(material.opacity),
+                    "nTransparentPrimitives": int(corpo.nTransparentPrimitives),
+                    "classificado_translucido": bool(objeto_translucido_vulkan(corpo)),
+                    "a2c_elegivel": esperado,
+                    "pipeline_a2c_observado": bool(observado[-1]["a2c_calculado"]),
+                    "pipeline_chave_cache_confirmada": True,
+                    "rastros_pipeline_corpo": observado,
+                    "arquivo_rgb": str(saida),
+                    "sha256_png": hashlib.sha256(saida.read_bytes()).hexdigest(),
+                }
+                imagens[nome] = rgb
+
+            with observar_captura_offscreen(cena, destino):
+                capturar("1x_sem_a2c", amostras=1, transparencia=True, a2c=False)
+
+                # Prova de suporte: testar AMBOS os attachments usados pelo renderer.
+                suporte = {"amostras_requeridas": 4, "disponivel": False}
+                try:
+                    uso = cena.wgpu.TextureUsage.RENDER_ATTACHMENT
+                    textura_cor = cena.device.create_texture(
+                        size=(8, 8, 1), format=cena.formato,
+                        sample_count=4, usage=uso,
+                    )
+                    textura_depth = cena.device.create_texture(
+                        size=(8, 8, 1), format="depth24plus",
+                        sample_count=4, usage=uso,
+                    )
+                    suporte["disponivel"] = bool(textura_cor and textura_depth)
+                except Exception as exc:
+                    suporte["erro_probe"] = f"{type(exc).__name__}: {exc}"
+
+                if suporte["disponivel"]:
+                    capturar("4x_sem_a2c", amostras=4, transparencia=True, a2c=False)
+                    capturar("4x_com_a2c", amostras=4, transparencia=True, a2c=True)
+                    capturar("4x_inelegivel", amostras=4, transparencia=False, a2c=True)
+
+            documento = json.loads(destino.read_text(encoding="utf-8"))
+            documento.update({
+                "backend": "Vulkan",
+                "tipo_experimento": "A2C_MSAA_RGB_SEM_HOMOLOGACAO",
+                "api_captura": "CenaVulkan.capturar_framebuffer (RGB, nao renderAlphaMask)",
+                "camera": parametros_camera,
+                "textura_controle": textura_meta,
+                "amostras_iniciais": amostras_originais,
+                "suporte_msaa": suporte,
+                "controles": registros,
+                "a2c_altera_blend_pipeline": True,
+                "nota": "Comparacao 4x off/on mede A2C junto da mudanca de blend=None.",
+                "comparacao": {},
+            })
+            if suporte["disponivel"]:
+                validar_controles(registros)
+                documento["comparacao"] = {
+                    "msaa_1x_vs_4x": comparar_rgb(
+                        imagens["1x_sem_a2c"], imagens["4x_sem_a2c"]
+                    ),
+                    "a2c_4x_off_vs_on": comparar_rgb(
+                        imagens["4x_sem_a2c"], imagens["4x_com_a2c"]
+                    ),
+                    "a2c_4x_on_vs_inelegivel": comparar_rgb(
+                        imagens["4x_com_a2c"], imagens["4x_inelegivel"]
+                    ),
+                }
+                mudou = documento["comparacao"]["a2c_4x_off_vs_on"]["pixels_divergentes"] > 0
+                documento["resultado_a2c"] = (
+                    "EXECUTADO_DIFERENCA_RGB" if mudou else "EXECUTADO_SEM_DIFERENCA_RGB"
+                )
+            else:
+                documento["resultado_a2c"] = "NAO_TESTAVEL_MSAA_4X"
+            destino.write_text(json.dumps(documento, ensure_ascii=False, indent=2) + "\n",
+                               encoding="utf-8")
+            print("A2C_VULKAN: " + documento["resultado_a2c"], flush=True)
+        except BaseException as exc:
+            traceback.print_exc()
+            destino.parent.mkdir(parents=True, exist_ok=True)
+            destino.write_text(json.dumps({
+                "estado": "ERRO", "backend": "Vulkan",
+                "tipo_experimento": "A2C_MSAA_RGB_SEM_HOMOLOGACAO",
+                "erro": f"{type(exc).__name__}: {exc}",
+            }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        finally:
+            if cena is not None and amostras_originais is not None:
+                cena.configurar_multisampling(amostras_originais > 1)
+            if material is not None and originais:
+                material.shader = originais["shader"]
+                material.diffuseTexture = originais["textura"]
+                material.configureShading(diffuse=originais["diffuse"])
+                material.opacity = originais["opacity"]
+                material.transparent = originais["transparent"]
+                material.alphaToCoverage = originais["a2c"]
+
+    QtCore.QTimer.singleShot(250, medir)
+
+
+def unload(app):
+    pass
