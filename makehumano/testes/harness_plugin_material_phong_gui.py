@@ -185,6 +185,12 @@ def load(app):
                 "sha256_png_sint_off": hashlib.sha256(png_sint_off.read_bytes()).hexdigest(),
                 "teste_de_material_concluido": True,
             })
+            if estado_sint_on.get("define_diffuse_ativo") is not True:
+                raise RuntimeError("Controle positivo sem define DIFFUSE no material")
+            if estado_sint_off.get("define_diffuse_ativo") is not False:
+                raise RuntimeError("Controle negativo manteve define DIFFUSE")
+            if not np.any(pixels_sint):
+                raise RuntimeError("Textura sintética não afetou nenhum pixel Phong")
             if not camera_igual:
                 raise RuntimeError("Matrizes da camera mudaram durante o teste controlado")
             if evidencia["estado"] != "OBSERVADO":

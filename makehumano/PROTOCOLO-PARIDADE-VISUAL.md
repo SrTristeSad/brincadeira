@@ -252,8 +252,23 @@ Executado na [CI 42326489708](https://github.com/SrTristeSad/brincadeira/actions
 
 As duas imagens Phong 1024×768 foram **pixel a pixel idênticas**: fração divergente na tolerância 8 = **0**, erro médio RGB **0**, erro máximo RGB **0**, hashes de PNG iguais. A textura de cor tinha formato `rgba8unorm-srgb` e o fundo RGB 188. Este resultado **não** prova que há regressão; é compatível com um material sem textura difusa e com ausência da macro `DIFFUSE` no shader original.
 
-### Próximo controle positivo (textura sintética exclusivamente em memória)
+### Controle positivo executado (textura sintética exclusivamente em memória)
 
-O harness foi estendido para criar uma imagem RGBA xadrez 16×16 no próprio processo CI, atribuí-la temporariamente a `material.diffuseTexture`, registrar `shaderDefines` e capturar duas imagens Phong adicionais (com difusa ligada/desligada), sem modificar arquivo de material nem adicionar asset ao produto. Registra métricas próprias de diferença dos dois estados, hashes e tipo de `corpo.texture`. Estes resultados **ainda não foram executados** nesta revisão documental.
+O harness foi estendido para criar uma imagem RGBA xadrez 16×16 no próprio processo CI, atribuí-la temporariamente a `material.diffuseTexture`, registrar `shaderDefines` e capturar duas imagens Phong adicionais (com difusa ligada/desligada), sem modificar arquivo de material nem adicionar asset ao produto. Registra métricas próprias de diferença dos dois estados, hashes e tipo de `corpo.texture`. O controle foi executado em CI; os resultados medidos estão registrados abaixo.
 
 Se as imagens sintéticas diferirem, teremos evidência de que a rota Vulkan responde ao vínculo da textura e ao flag DIFFUSE na mesma cena. Se não diferirem, precisamos olhar a fonte `corpo.texture` e a amostragem do WGSL antes de concluir regressão. Em nenhum caso o experimento equivale à comparação com a referência OpenGL `a8bc2d54`.
+
+### Resultado do controle positivo xadrez no Phong Vulkan
+
+Execução: [GitHub Actions 42326878096](https://github.com/SrTristeSad/brincadeira/actions/runs/42326878096), commit `ccfbd0e0a16c3a4dee5577fc7a9b8bee9ee4130c`, artefato `phong-diffuse-on-off-ci` com quatro PNGs, JSON e log. Mesma câmera, shader Phong e alvo 1024×768 no processo temporário Linux/Lavapipe.
+
+| Controle | Define `DIFFUSE` | Pixels RGB diferentes acima de 8 níveis | Erro médio RGB | Erro máximo RGB |
+| --- | --- | ---: | ---: | ---: |
+| DefaultSkin sem textura, `diffuse=True` vs `False` | ausente/ausente | 0 / 786.432 | 0 | 0 |
+| Textura sintética RGBA 16×16, `diffuse=True` vs `False` | presente/ausente | **45.400 / 786.432** (**5,7729%**) | **2,4142** | **141** |
+
+Com a imagem sintética, `corpo.texture` expôs um objeto `Image`. O shader/pipeline Vulkan respondeu à mudança de textura difusa e ao estado `isTextured` nesse caso. As estatísticas de comparação interna são **medidas de sensibilidade**, não limiares de paridade OpenGL × Vulkan. Não classificar 5,77% como reprovação contra o original: as duas imagens têm entradas diferentes por desenho do teste.
+
+Foi acrescentada validação de regressão no harness: exigir define DIFFUSE ativo/inativo nos respectivos controles, ao menos um pixel Phong alterado pela textura sintética, matrizes idênticas e quatro texturas 1024×768 observadas. Resultado de CI da revisão com a nova asserção deve ser consultado separadamente.
+
+**Conclusão limitada:** a diferença de pele azul lisa (referência OpenGL) versus bege/texturizada (par externo) ainda não está explicada. Nesta CI a pele `DefaultSkin` não tinha `diffuseTexture`. A comparação pareada dos dois estados de material e do original segue necessária. Não houve autorização ou modificação do renderizador de produção.
