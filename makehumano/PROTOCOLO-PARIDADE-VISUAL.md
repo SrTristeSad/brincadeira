@@ -686,3 +686,43 @@ Os efeitos de A2C ficam menores quando o alfa aumenta nesse ensaio; este padrão
 Na [CI 42348156171](https://github.com/SrTristeSad/brincadeira/actions/runs/42348156171) a última linha foi **pixel a pixel idêntica nos dois backends**, com hashes validados. Isso enfraquece a hipótese de simples deriva por ordem/cache ao recapturar alpha128. O shader WGSL Phong inspecionado retorna `vec4(color_phong + emissiva, alfa * ...)`: a saída RGB não depende *explicitamente* do `tex.a` nesse caminho; seu `fs_main` descarta apenas alfa total não positivo. O carregamento Vulkan passa pela implementação `vulkan_texture.getTexture`, `image_qt.load` e `pixels_textura_rgba`, com formato de saída GPU `rgba8unorm`. A inspeção estática **não demonstrou** premultiplicação explícita de RGB, tampouco provou a identidade dos valores efetivos da textura **após** amostragem na GPU. A causa dos 1.384/1.489 pixels ainda está aberta.
 
 **Próxima decisão técnica:** instrumentar o upload e a leitura da textura em cada etapa, ou renderizar uma superfície sintética de uma camada sem sobreposição, para distinguir conversão de RGBA, shader e overdraw. É prematuro trocar o contrato de opacidade, alterar o pipeline ou declarar paridade visual. Estes experimentos não representam a saída em GPUs físicas. O PR permanece **DRAFT**, sem merge; todo o código de aplicação está preservado.
+
+## 30. Origem da dependência RGB do alfa: sombras do Vulkan, não upload ou A2C
+
+**Problema de partida:** no ensaio da seção 29, alterar apenas o alfa da textura difusa `64→128` ou `192→128`, com **A2C desligado, blending desligado e escrita Z ligada**, alterou **1.384/1.489 pixels RGB** no Vulkan (tolerância RGB 8), mas não um pixel no OpenGL original. O alfa 128 inicial/repetido permaneceu idêntico byte a byte nos dois backends, afastando deriva simples de ordem/cache. A causa não podia ser atribuída a blending e A2C sem um controle adicional.
+
+### 30.1 Prova CPU/GPU do carregamento sem sobreposição
+
+O novo `testes/auditar_alpha_textura_gpu.py` utiliza **a implementação real** `vulkan_texture.getTexture` da aplicação e a mesma `CenaVulkan._textura` que faz upload do recurso para a GPU. O teste confirma `RGBA uint8` **32×32**, compara cada texel com `textura_alpha_controle.dados_textura_alfa_parcial` e guarda hashes RGB e RGBA distintos. Um shader WGSL **temporário de teste** desenha um único triângulo em tela cheia com `textureSample` e retorna `vec4(tex.rgb, tex.a)`, com **BLEND OFF**, **A2C OFF**, saída `rgba8unorm`, em **1 amostra e MSAA 4×**; o framebuffer é lido por `CenaVulkan.ler_framebuffer_rgba`. O shader não tem iluminação Phong, sombras ou geometria sobreposta.
+
+Na [CI 42349181635](https://github.com/SrTristeSad/brincadeira/actions/runs/42349181635), ambos os jobs concluíram **success**. O relatório verificou:
+
+| Nível de alfa da textura | RGB CPU após loader | RGB GPU full-screen 1× | RGB GPU full-screen 4× |
+| ---: | --- | --- | --- |
+| 64, 128 e 192 | **Mesmo SHA-256 RGB** | **Mesmo SHA-256 RGB** | **Mesmo SHA-256 RGB** |
+| Pixels RGB diferentes de alfa128 | **0** | **0** | **0** |
+| Erro máximo RGB | **0** | **0** | **0** |
+
+Os três RGBA completos não são iguais: o alfa 64/128/192 é preservado na leitura GPU; os hashes RGBA são distintos e os canais RGB são exatamente iguais. Isso **afasta o upload, a conversão de textura, o sampler básico e o resolve MSAA** como causas suficientes da diferença anterior. O teste sintético não prova comportamento do shader Phong completo.
+
+### 30.2 Prova causal isolando somente recebimento de sombras
+
+A leitura do shader de produção revelou que `vulkan_scene.cor_fragmento` usa `fator_luz(...)`, que multiplica o termo de iluminação por `shadow_visibility`. O valor `dados.amostragem_luzes.y` é definido em `vulkan_scene.desenhar` conforme `material.receiveShadows` da malha. Em `vulkan_shadows.shadow_visibility`, cada interseção com um triângulo reduz `visibility` por `1 − shadow_alpha`; em `vulkan_shadow_alpha.shadow_alpha`, `diffuse` amostra o **alfa da textura**, multiplicado pela opacidade e alfa de vértice. Logo, neste caminho, **o alfa altera indiretamente a luz RGB por meio da transmissão das sombras**, mesmo quando o fragment shader separa RGB de alfa, e mesmo com A2C e blending desligados.
+
+O harness Vulkan recebeu três capturas extras (alfa64/128/192) com **somente `material.receiveShadows=False`** durante o draw, restaurado em `finally`. Os estados 4×, Phong DIFFUSE, cor, textura, escrita Z ON, blend OFF e A2C OFF permanecem constantes. O spy de `_pipeline_objeto` verificou o valor do material durante o desenho e os manifestos guardam essa evidência; o comparador valida os parâmetros de cada par.
+
+**[CI 42349394137](https://github.com/SrTristeSad/brincadeira/actions/runs/42349394137)**, ambos os jobs **success**, confirmou os contrastes:
+
+| Comparação RGB no personagem, só alfa difere | Com recebimento de sombras | Sem recebimento de sombras |
+| --- | ---: | ---: |
+| Alfa64 versus alfa128, A2C OFF, BLEND OFF, Z ON | **1.384 pixels >8** | **0 pixels, arrays idênticos** |
+| Alfa192 versus alfa128, A2C OFF, BLEND OFF, Z ON | **1.489 pixels >8** | **0 pixels, arrays idênticos** |
+| Alfa128 com vs. sem recebimento de sombras | **3.434 pixels >8** | — |
+
+O manifesto registra **`erro_medio_rgb=0` e `erro_maximo_rgb=0`** nos dois contrastes sem recebimento de sombras. Assim, na cena sob teste, **o caminho de sombra/transmissão baseado no alfa explica inteiramente a divergência RGB** anteriormente atribuída de forma incerta ao carregamento de textura. Este é um achado causal porque a única variável de ensaio adicional foi `receiveShadows`, não uma simples correlação de máscaras.
+
+### 30.3 Regressões e limite da conclusão
+
+`testes/test_auditar_alpha_textura_gpu_wgpu.py` cobre loader RGBA, rejeição de premultiplicação/modificação e contrato do shader sintético. `testes/test_comparar_a2c_backends_wgpu.py` rejeita capturas sem `receiveShadows=False`, estados incompatíveis, RGBA de loader divergente e RGB alterado no controle GPU ou no corpo com sombras desligadas. O teste novo converte a observação em um **invariante da CI deste experimento**: para um mesmo PNG RGB com alfa 64/128/192, sem sombras, blend e A2C, as capturas RGB devem coincidir byte a byte. Nenhuma mudança foi feita ao shader ou renderer de produção.
+
+**Decisão ainda pendente:** o OpenGL legado usado como referência não executa automaticamente o mesmo sistema de sombras de raios/atenuação do Vulkan. O efeito adicional em Vulkan pode ser desejável como melhoria visual, mas altera a semântica do teste de paridade. Não desativar as sombras do aplicativo nem mudar `receiveShadows` para esconder essa diferença: primeiro definir se o modo de compatibilidade deve reproduzir o resultado OpenGL, aceitar sombras novas por padrão ou permitir comparação com sombras explicitamente normalizadas. O ensaio ocorreu em ambiente de CI com renderizadores por software, sem comprovar equivalência em GPUs físicas. **PR #11 permanece DRAFT, sem merge, `main` preservada.**
