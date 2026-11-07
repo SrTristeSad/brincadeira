@@ -305,6 +305,15 @@ def load(app):
                            amostras=4, transparente=True, a2c=False,
                            sem_blend=True, escrever_z=True, alfa_textura=128)
 
+            auditoria_geometrica_z = {"estado": "NAO_TESTAVEL_MSAA_4X"}
+            if suporte["testavel"]:
+                from auditar_auto_sobreposicao_malha import auditar_corpo
+                auditoria_geometrica_z = auditar_corpo(
+                    corpo, G.cameras[corpo.cameraMode],
+                    imagens["4x_sem_a2c_sem_blend_sem_z"],
+                    imagens["4x_sem_a2c_sem_blend_com_z"],
+                )
+
             auditoria_sintetica = {"estado": "NAO_TESTAVEL_MSAA_4X"}
             if suporte["testavel"]:
                 from capturar_a2c_sintetico_opengl import capturar_sintetico_opengl
@@ -358,6 +367,7 @@ def load(app):
                 "auditoria_sintetica_sobreposicao": auditoria_depth,
                 "auditoria_sintetica_coplanares": auditoria_coplanares,
                 "auditoria_sintetica_cruzamento": auditoria_cruzamento,
+                "auditoria_auto_sobreposicao_z": auditoria_geometrica_z,
                 "texturas_varredura": {
                     str(alfa): meta for alfa, (_path, meta) in
                     sorted(texturas_varredura.items())
