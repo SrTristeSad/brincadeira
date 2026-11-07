@@ -37,6 +37,20 @@ class TesteResiduoA2C(unittest.TestCase):
         self.assertEqual(image[10, 10].tolist(), [255, 75, 75])
         self.assertEqual(image[1, 12].tolist(), [35, 235, 255])
 
+    def test_espelho_exato_com_pixel_extra_sem_par(self):
+        gl = np.zeros((12, 14), dtype=bool)
+        vk = np.zeros_like(gl)
+        gl[5, 2] = True
+        vk[5, 11] = True  # 14 - 1 - 2
+        vk[7, 12] = True  # VK sem par equivalente no GL
+        d, layers = caracterizar_residuo(gl, vk)
+        espelho = d["espelho_horizontal_dos_distantes"]
+        self.assertEqual(espelho["pares_gl_vk"], 1)
+        self.assertEqual(espelho["gl_sem_par_espelhado"], 0)
+        self.assertEqual(espelho["vk_sem_par_espelhado"], 1)
+        self.assertTrue(layers["gl_distante"][5, 2])
+        self.assertTrue(layers["vk_distante"][5, 11])
+
     def test_sem_wraparound_na_vizinhanca(self):
         m = np.zeros((8, 8), dtype=bool)
         m[0, 0] = True
