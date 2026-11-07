@@ -189,7 +189,7 @@ def load(app):
                     raise RuntimeError("Caminho de A2C inconsistente na malha")
                 if any(
                     v["recebe_sombras_material_observado"] is not (
-                        sem_sombras is True or not sombras_original
+                        sombras_original and not sem_sombras
                     ) for v in observado
                 ):
                     raise RuntimeError("Material receiveShadows inesperado na GPU")
