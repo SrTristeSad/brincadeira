@@ -142,11 +142,18 @@ namespace dragonBones {
 
             this._systemTime = currentTime;
 
+            // Invalid timing values must not poison this clock or its children.
+            // _systemTime is updated above, allowing the next valid tick to recover.
+            if (!isFinite(passedTime) || !isFinite(this.timeScale)) {
+                return;
+            }
+
             if (this.timeScale !== 1.0) {
                 passedTime *= this.timeScale;
             }
 
-            if (passedTime === 0.0) {
+            // Finite operands may still overflow during multiplication.
+            if (!isFinite(passedTime) || passedTime === 0.0) {
                 return;
             }
 

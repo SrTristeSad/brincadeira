@@ -520,3 +520,59 @@ test("WorldClock.add does not retain a member when its setter throws after assig
     clock.advanceTime(0.25);
     assert.equal(updates, 0);
 });
+
+test("WorldClock ignores infinite elapsed time and recovers on the next update", () => {
+    const clock = new WorldClock();
+    const child = animatable();
+    clock.add(child);
+    clock.advanceTime(Infinity);
+    assert.equal(clock.time, 0);
+    assert.deepEqual(child.updates, []);
+    clock.advanceTime(0.25);
+    assert.equal(clock.time, 0.25);
+    assert.deepEqual(child.updates, [0.25]);
+});
+
+test("WorldClock rejects non-finite timeScale without poisoning later updates", () => {
+    const clock = new WorldClock();
+    const child = animatable();
+    clock.add(child);
+    for (const scale of [NaN, Infinity, -Infinity]) {
+        clock.timeScale = scale;
+        clock.advanceTime(0.5);
+        assert.equal(clock.time, 0);
+        assert.deepEqual(child.updates, []);
+    }
+    clock.timeScale = 1;
+    clock.advanceTime(0.5);
+    assert.equal(clock.time, 0.5);
+    assert.deepEqual(child.updates, [0.5]);
+});
+
+test("WorldClock prevents overflow when finite time values are multiplied", () => {
+    const clock = new WorldClock();
+    const child = animatable();
+    clock.add(child);
+    clock.timeScale = Number.MAX_VALUE;
+    clock.advanceTime(Number.MAX_VALUE);
+    assert.equal(clock.time, 0);
+    assert.deepEqual(child.updates, []);
+    clock.timeScale = 1;
+    clock.advanceTime(1);
+    assert.equal(clock.time, 1);
+    assert.deepEqual(child.updates, [1]);
+});
+
+test("WorldClock still supports finite negative timeScale", () => {
+    const clock = new WorldClock();
+    const child = animatable();
+    clock.add(child);
+    clock.timeScale = -2;
+    clock.advanceTime(0.25);
+    assert.equal(clock.time, 0.5);
+    assert.deepEqual(child.updates, [-0.5]);
+    clock.timeScale = 1;
+    clock.advanceTime(0.25);
+    assert.equal(clock.time, 0.75);
+    assert.deepEqual(child.updates, [-0.5, 0.25]);
+});
