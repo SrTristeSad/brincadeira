@@ -227,7 +227,9 @@ jobs:
           python -u makehumano/testes/comparar_a2c_sintetico_gpu.py \
             --opengl "${RUNNER_TEMP}/phong-a2c-opengl-ci.json" \
             --vulkan "${RUNNER_TEMP}/phong-a2c-vulkan-ci.json" \
-            --json "${RUNNER_TEMP}/phong-a2c-sintetico-gpu-ci.json"
+            --json "${RUNNER_TEMP}/phong-a2c-sintetico-gpu-ci.json" \
+            --png-msaa "${RUNNER_TEMP}/phong-a2c-aresta-msaa-ci.png" \
+            --png-a2c-128 "${RUNNER_TEMP}/phong-a2c-aresta-a2c-ci.png"
 
       - name: Mapear interseção espacial A2C entre OpenGL e Vulkan
         run: |
@@ -292,6 +294,8 @@ jobs:
             ${{ runner.temp }}/phong-a2c-opengl-ci.log
             ${{ runner.temp }}/phong-a2c-backends-ci.json
             ${{ runner.temp }}/phong-a2c-sintetico-gpu-ci.json
+            ${{ runner.temp }}/phong-a2c-aresta-msaa-ci.png
+            ${{ runner.temp }}/phong-a2c-aresta-a2c-ci.png
             ${{ runner.temp }}/phong-a2c-mapa-ci.json
             ${{ runner.temp }}/phong-a2c-mapa-ci.png
             ${{ runner.temp }}/phong-a2c-mapa-ci-isolado.png
