@@ -194,20 +194,73 @@ def comparar_sintetico(gl, vk):
     }
 
 
+def mapa_diferenca_rgb(gl, vk):
+    """Cinza: igual/coberto; vermelho: GL mais claro; ciano: VK mais claro."""
+    if not all(
+        isinstance(a, np.ndarray) and a.dtype == np.uint8
+        and a.shape == (64, 64, 3) for a in (gl, vk)
+    ):
+        raise ValueError("Mapa sintético exige duas imagens RGB8 64×64")
+    valores_gl, valores_vk = gl[:, :, 0], vk[:, :, 0]
+    mapa = np.zeros((64, 64, 3), np.uint8)
+    iguais = valores_gl == valores_vk
+    mapa[iguais & (valores_gl > 0)] = (130, 130, 130)
+    mapa[valores_gl > valores_vk] = (255, 65, 65)
+    mapa[valores_vk > valores_gl] = (25, 220, 255)
+    return mapa
+
+
+def salvar_mapa_diferenca(gl, vk, caminho):
+    """PNG ampliado 8× por vizinho mais próximo; sem interpolar dados."""
+    from PIL import Image
+    caminho = Path(caminho)
+    caminho.parent.mkdir(parents=True, exist_ok=True)
+    imagem = Image.fromarray(mapa_diferenca_rgb(gl, vk), mode="RGB")
+    imagem.resize((512, 512), Image.Resampling.NEAREST).save(caminho)
+    return {
+        "arquivo": str(caminho),
+        "sha256_png": hashlib.sha256(caminho.read_bytes()).hexdigest(),
+        "dimensoes_exibicao": [512, 512],
+        "resolucao_medida": [64, 64],
+        "legenda": {
+            "cinza": "mesma intensidade RGB coberta em ambos",
+            "preto": "sem cobertura em ambos",
+            "vermelho": "OpenGL RGB mais claro",
+            "ciano": "Vulkan RGB mais claro",
+        },
+    }
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--opengl", type=Path, required=True)
     p.add_argument("--vulkan", type=Path, required=True)
     p.add_argument("--json", type=Path, required=True)
+    p.add_argument("--png-msaa", type=Path, required=True)
+    p.add_argument("--png-a2c-128", type=Path, required=True)
     args = p.parse_args()
     gl = json.loads(args.opengl.read_text(encoding="utf-8"))
     vk = json.loads(args.vulkan.read_text(encoding="utf-8"))
     if (gl.get("resultado_a2c") != "EXECUTADO_COM_MSAA_4X"
             or vk.get("suporte_msaa", {}).get("disponivel") is not True):
         raise ValueError("MSAA4x não foi confirmado nos harnesses do corpo")
-    resultado = comparar_sintetico(
+    fonte_gl, fonte_vk = (
         gl["auditoria_sintetica_a2c"], vk["auditoria_sintetica_a2c"]
     )
+    resultado = comparar_sintetico(fonte_gl, fonte_vk)
+    # Os hashes/manifests dos 14 controles foram checados em comparar_sintetico.
+    imagens_gl = verificar_manifesto(fonte_gl, "OpenGL")
+    imagens_vk = verificar_manifesto(fonte_vk, "Vulkan")
+    resultado["mapas_aresta"] = {
+        "msaa_puro": salvar_mapa_diferenca(
+            imagens_gl["aresta_4x_a255_a2c_off"],
+            imagens_vk["aresta_4x_a255_a2c_off"], args.png_msaa
+        ),
+        "a2c_alfa128": salvar_mapa_diferenca(
+            imagens_gl["aresta_4x_a128_a2c_on"],
+            imagens_vk["aresta_4x_a128_a2c_on"], args.png_a2c_128
+        ),
+    }
     args.json.parent.mkdir(parents=True, exist_ok=True)
     args.json.write_text(
         json.dumps(resultado, ensure_ascii=False, indent=2) + "\n",
