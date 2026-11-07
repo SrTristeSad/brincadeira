@@ -644,3 +644,45 @@ O mapa **`phong-a2c-mapa-ci-isolado.png`** acompanha as capturas de referência 
 **Interpretação técnica:** (1) desligar blending muda praticamente toda a malha nos dois backends; (2) ligar A2C com blending já desligado muda praticamente toda a malha novamente; (3) o caminho combinado OFF→ON muda apenas cerca de 2,4 mil pixels porque a composição por alpha blending e a cobertura por amostras podem gerar resultados médios semelhantes em boa parte do personagem. O controle isolado de escrita Z modificou **478 pixels no OpenGL e zero no Vulkan**, apesar de ambos terem registrado os estados solicitados. Esta diferença exige inspeção de overdraw, ordenação, culling e fragmentos com profundidade concorrente; **não há causa demonstrada** nem decisão de corrigir produção.
 
 **Próxima etapa proposta:** mapear os 478 pixels sensíveis à profundidade no OpenGL e comparar capturas com níveis adicionais de alfa sob 4× para examinar a quantização de cobertura e as diferenças de sobreposição, sem reescrever shaders ou fixar um contrato de comportamento antes da decisão do criador. Nenhuma alteração na `main`, merge ou mudança de semântica visual.
+
+## 29. Diagnóstico de escrita Z e varredura de alfa sob A2C isolado
+
+**CIs comprovadas:** [42347721168](https://github.com/SrTristeSad/brincadeira/actions/runs/42347721168) e [42348156171](https://github.com/SrTristeSad/brincadeira/actions/runs/42348156171): ambos os jobs **success** em cada execução. Os harnesses de referência upstream OpenGL e Vulkan produziram PNGs RGB 1024×768 com seus SHA-256 de arquivo e bytes de pixels verificados contra os manifestos. Os controles usam Phong DIFFUSE, MSAA 4× efetivo, a mesma câmera/malha, blending **OFF**, escrita de profundidade **ON** e `material.opacity=1`; a diferença entre os pares é a habilitação de A2C. Não houve mudança de código-fonte do renderer, API pública, GLSL/WGSL, recursos ou `main`.
+
+### 29.1 Diferença isolada da escrita de profundidade
+
+O novo `testes/mapear_diferenca_depth_a2c.py` audita os controles `4x_sem_a2c_sem_blend_sem_z` e `4x_sem_a2c_sem_blend_com_z`, checa estados observados em `glDrawElements`/pipeline Vulkan, lê os PNGs com verificação de hashes e produz `phong-a2c-depth-gl-ci.png`, `phong-a2c-depth-vk-ci.png` e `phong-a2c-depth-diferencas-ci.json`. Cinco testes CPU verificam componentes 8-conexos, bbox, erosão, imagens idênticas e limiar. O resultado em CI 42347721168 foi:
+
+| Diferença isolada em Z, tolerância RGB 8 | OpenGL | Vulkan |
+| --- | ---: | ---: |
+| Pixels com algum canal >8 | **478** | **0** |
+| Pixels com qualquer diferença não zero | 612 | 0 |
+| Componentes 8-conexos | **37** | 0 |
+| Quatro componentes maiores | **341 pixels (71,34%)** | 0 |
+| Delta máximo por canal RGB | **119** | 0 |
+
+No OpenGL, a caixa delimitadora dos pixels alterados vai de `(x=349, y=152)` a `(x=674, y=641)`; os agrupamentos maiores concentram-se no rosto, mãos e parte dos pés. Usando a silhueta **aproximada** obtida por diferença de RGB contra o pixel do fundo (limiar 10) e erosão de **1 pixel em oito vizinhos**, **469/478** pixels alterados ficam no interior estimado, **9/478** na faixa imediata de contorno/exterior. Uma erosão de quatro vizinhos, de definição distinta, produz outra contagem; este relatório fixa expressamente a morfologia 8-conexa, compatível com o harness. Os dados são compatíveis com conflitos em superfícies próximas/sobrepostas, mas não demonstram overdraw, ordenação de triângulos, depth-fighting ou qual backend é correto.
+
+### 29.2 Varredura de alfa da textura com estados fixos
+
+A textura de controle determinístico 32×32 RGBA foi estendida para **alfa 64, 128 e 192**, com o padrão RGB idêntico entre níveis (verificado em testes CPU) e hashes PNG distintos. Os novos controles RGB/OpenGL e RGB/Vulkan verificam que o mesmo PNG foi usado em cada nível, que o framebuffer tem MSAA 4×, e que BLEND está OFF e escrita Z ON. Para cada alfa, as imagens `A2C OFF` e `A2C ON` são pareadas. O mapa `mapear_efeito_a2c_rgb.py` salva `phong-a2c-mapa-ci-alfa064.png`, `-alfa128.png` e `-alfa192.png` e métricas de IoU; um hash independente para cada mapa consta no manifesto.
+
+| Alfa da textura | Mudança A2C isolada GL, pixels >8 | Vulkan, pixels >8 | IoU espacial GL/VK |
+| ---: | ---: | ---: | ---: |
+| 64 | **45.936** | **45.957** | **0,995895** |
+| 128 | **45.632** | **45.675** | **0,990300** |
+| 192 | **45.085** | **45.148** | **0,983317** |
+
+Os efeitos de A2C ficam menores quando o alfa aumenta nesse ensaio; este padrão não representa diretamente `1/4`, `2/4` ou `3/4` amostras individuais, pois os PNGs são resultados *resolvidos* de múltiplos fragmentos e iluminação. Tampouco IoU próxima de 1 demonstra igualdade de cor: quase toda a malha muda de RGB ao ativar A2C com BLEND OFF.
+
+**Controle negativo inesperado:** as capturas alfa64/alfa192 **com A2C OFF, BLEND OFF e Z ON** são **idênticas em bytes RGB** à alfa128 no OpenGL, mas **não** no Vulkan:
+
+| Mesmo estado A2C OFF, alterando só alfa de textura | Pixels >8 OpenGL | Pixels >8 Vulkan |
+| --- | ---: | ---: |
+| alfa64 versus alfa128 | **0** | **1.384** |
+| alfa192 versus alfa128 | **0** | **1.489** |
+| alfa128 inicial versus alfa128 repetida ao fim da varredura | **0** | **0** |
+
+Na [CI 42348156171](https://github.com/SrTristeSad/brincadeira/actions/runs/42348156171) a última linha foi **pixel a pixel idêntica nos dois backends**, com hashes validados. Isso enfraquece a hipótese de simples deriva por ordem/cache ao recapturar alpha128. O shader WGSL Phong inspecionado retorna `vec4(color_phong + emissiva, alfa * ...)`: a saída RGB não depende *explicitamente* do `tex.a` nesse caminho; seu `fs_main` descarta apenas alfa total não positivo. O carregamento Vulkan passa pela implementação `vulkan_texture.getTexture`, `image_qt.load` e `pixels_textura_rgba`, com formato de saída GPU `rgba8unorm`. A inspeção estática **não demonstrou** premultiplicação explícita de RGB, tampouco provou a identidade dos valores efetivos da textura **após** amostragem na GPU. A causa dos 1.384/1.489 pixels ainda está aberta.
+
+**Próxima decisão técnica:** instrumentar o upload e a leitura da textura em cada etapa, ou renderizar uma superfície sintética de uma camada sem sobreposição, para distinguir conversão de RGBA, shader e overdraw. É prematuro trocar o contrato de opacidade, alterar o pipeline ou declarar paridade visual. Estes experimentos não representam a saída em GPUs físicas. O PR permanece **DRAFT**, sem merge; todo o código de aplicação está preservado.
