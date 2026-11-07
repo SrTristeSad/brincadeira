@@ -456,3 +456,37 @@ SHA-256 alfa OpenGL `9bdb92051bc6ddd683186daf2af842bb3e3b5df191af292b6a2548a45b4
 **Contraprova preparada em harnesses apenas:** `testes/textura_alpha_controle.py` passou a serializar os mesmos pixels RGBA de 32×32 e alfa 128 em um **PNG determinístico escrito exclusivamente em `RUNNER_TEMP`**, usando apenas stdlib (`struct`, `zlib`), sem depender de Pillow ou do salvamento Qt. Atribui-se `material.diffuseTexture` ao **caminho absoluto do PNG** em ambos os processos, permitindo cache por caminho no OpenGL legado. Os arquivos `phong-referencia-opengl-ci-textura-parcial.png` e `phong-diffuse-ci-textura-parcial.png` acompanham os artifacts; o comparador exige **SHA-256 idêntico do arquivo**, `opacity=1`, `DIFFUSE` ligado, `transparent=True`, `alphaToCoverage=False`. Nenhum asset de produção foi criado ou alterado.
 
 **Status deste novo controle:** ainda não executado nesta revisão do documento. O primeiro resultado de 5,73% não deve ser apresentado como reprovação definitiva do *suporte à transparência parcial*: pode ser causado pelo teste em memória não cacheado. A execução com arquivo de textura será necessária para confirmar o grau de equivalência da API e separar o passe aditivo OpenGL do blend alfa Vulkan.
+
+## 22. Alfa parcial em PNG cacheável — contraprova real concluída
+
+**Execução integral:** [CI 42336022378](https://github.com/SrTristeSad/brincadeira/actions/runs/42336022378), commit `39aa47a8e0d656138f36bfde50dc62094795e40a`; os quatro workflows foram concluídos com sucesso, inclusive suites Python 3.12/3.13 e Vulkan GUI sem PyOpenGL. Referência exata `a8bc2d54ff0ac92e78ff71431b1023eda42bf482` via llvmpipe, candidato `e5c443154d883cafd4aa28595791afe27fbdc74c` via Lavapipe; os assets de teste só existem nos processos temporários.
+
+**Controle confirmado:** ambos os materiais Phong usaram `DIFFUSE=True`, `opacity=1`, `transparent=True`, `alphaToCoverage=False` e a mesma textura RGBA 32×32 com A=128. O arquivo PNG temporário foi byte a byte igual nos dois processos, SHA-256 `45afa8594bfa97bdb45361a20385084a4ca32a28608d6ef4036ffe70f3e198e3`; hash dos pixels RGBA `761d96e3bf2415bbb966f24d3e013491d7b1d49cf0c1d976fed0c8ed6c8cb3da`. Os manifestos registram o carregamento por caminho real e hashes correspondentes; o corpo RGB OpenGL deixou de ficar quase preto, corroborando o problema de vinculação/ciclo de vida da imagem sem `sourcePath` no controle anterior. Não se alterou o subsistema de texturas do produto.
+
+### Medição da API `mh.renderAlphaMask()` em PNG RGBA canônico
+
+| Métrica | OpenGL original | Vulkan candidato |
+| --- | ---: | ---: |
+| Pixels alfa=0 | 741.254 | 741.250 |
+| Pixels alfa=128 | 44.152 | 44.152 |
+| Pixels alfa=192 | 0 | 798 |
+| Pixels alfa=224 | 0 | 88 |
+| Pixels alfa=240 | 0 | 4 |
+| Pixels alfa=255 | 1.026 | 140 |
+| Pixels com `0<A<255` | **44.152** | **45.042** |
+
+| Métrica comparativa | Resultado |
+| --- | ---: |
+| Pixels alfa fora da tolerância 8 | **938 / 786.432** (**0,1192729%**) |
+| IoU de cobertura alfa `A>0` | **0,9992035046** |
+| Erro médio absoluto alfa global | **0,0752894** |
+| Erro máximo alfa | **128** |
+| Cobertura OpenGL / Vulkan | **45.178 / 45.182** |
+| Alfa médio na interseção OpenGL / Vulkan | **130,8852 / 129,7215** |
+| Limiares alfa propostos e ainda não aprovados | **Atendidos neste cenário** |
+
+**Decomposição auditada pixel a pixel dos 938 desvios:** 782 pixels `GL=255,VK=192`; 88 `GL=255,VK=224`; 4 `GL=255,VK=240` (**874 ao todo**, típicos de acumulação aditiva GL contra composição source-over Vulkan); 12 `GL=255,VK=128`; 16 `GL=128,VK=192`; 20 de cobertura somente Vulkan; 16 somente OpenGL. A entrada alpha=128 em ambas encontra 44.120 pixels coincidentes exatamente. A contagem e o mapa de diferenças são reproduzíveis a partir dos PNGs publicados.
+
+**Interpretação restrita:** o OpenGL original usa `glBlendFunc(GL_ONE,GL_ONE)` para a máscara e satura 128+128 em 255 ao sobrepor fragmentos; o Vulkan usa `src=one,dst=one-minus-src-alpha` e produz 192 para duas camadas de 128, 224 para três e assim por diante. As duas saídas têm alfa parcial real quando o recurso é válido e cacheável. A diferença residual vem principalmente da composição sobreposta, não de uma perda geral de alfa na pipeline Vulkan. Esse comportamento não deve ser mudado na produção sem o criador escolher a semântica de compatibilidade.
+
+**Status de paridade:** atendem-se exclusivamente os limites provisórios da **máscara da API Phong neste cenário**. O RGB bruto, o contrato de cor offscreen, os canais GL históricos, a posição de luz, transparência com outros materiais, overdraw, alpha-to-coverage e os demais shaders não estão homologados. Não houve correção no framebuffer, pipelines, shaders ou código da aplicação; branch de desenvolvimento e PR DRAFT apenas.
