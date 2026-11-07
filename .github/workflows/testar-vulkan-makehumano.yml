@@ -253,6 +253,9 @@ jobs:
             ${{ runner.temp }}/phong-a2c-depth-diferencas-ci.json
             ${{ runner.temp }}/phong-a2c-depth-gl-ci.png
             ${{ runner.temp }}/phong-a2c-depth-vk-ci.png
+            ${{ runner.temp }}/phong-a2c-mapa-ci-alfa064.png
+            ${{ runner.temp }}/phong-a2c-mapa-ci-alfa128.png
+            ${{ runner.temp }}/phong-a2c-mapa-ci-alfa192.png
           if-no-files-found: warn
 
       - name: Diagnosticar par Phong bruto e normalizações somente de teste
