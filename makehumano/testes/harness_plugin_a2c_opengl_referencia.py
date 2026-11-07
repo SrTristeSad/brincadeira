@@ -101,10 +101,28 @@ def load(app):
                     and int(corpo.nTransparentPrimitives) > 0
                     and bool(corpo.alphaToCoverage)
                 )
-                tracos = {"fbo": [], "ativacoes_a2c": 0, "desativacoes_a2c": 0}
+                tracos = {
+                    "fbo": [], "ativacoes_a2c": 0, "desativacoes_a2c": 0,
+                    "corpo_desenhado": 0, "outros_objetos": 0,
+                }
                 original_draw = glmodule.draw
+                original_draw_mesh = glmodule.drawMesh
                 original_enable = glmodule.glEnable
                 original_disable = glmodule.glDisable
+                corpo_em_desenho = False
+
+                def observar_malha(obj, *args, **kwargs):
+                    nonlocal corpo_em_desenho
+                    if obj is not corpo:
+                        tracos["outros_objetos"] += 1
+                    else:
+                        tracos["corpo_desenhado"] += 1
+                    anterior = corpo_em_desenho
+                    corpo_em_desenho = obj is corpo
+                    try:
+                        return original_draw_mesh(obj, *args, **kwargs)
+                    finally:
+                        corpo_em_desenho = anterior
 
                 def observar_draw(*args, **kwargs):
                     tracos["fbo"].append({
@@ -127,28 +145,37 @@ def load(app):
                     return resultado
 
                 def observar_enable(cap):
-                    if int(cap) == int(GL.GL_SAMPLE_ALPHA_TO_COVERAGE):
+                    if corpo_em_desenho and int(cap) == int(GL.GL_SAMPLE_ALPHA_TO_COVERAGE):
                         tracos["ativacoes_a2c"] += 1
                     return original_enable(cap)
 
                 def observar_disable(cap):
-                    if int(cap) == int(GL.GL_SAMPLE_ALPHA_TO_COVERAGE):
+                    if corpo_em_desenho and int(cap) == int(GL.GL_SAMPLE_ALPHA_TO_COVERAGE):
                         tracos["desativacoes_a2c"] += 1
                     return original_disable(cap)
 
+                # O Vulkan renderiza [corpo]; fazer o mesmo neste ensaio GL.
+                # Nenhum outro objeto da GUI deve contaminar o traço A2C.
+                mundo_original = G.world
+                G.world = [corpo]
                 glmodule.draw = observar_draw
+                glmodule.drawMesh = observar_malha
                 glmodule.glEnable = observar_enable
                 glmodule.glDisable = observar_disable
                 try:
                     imagem = mh.renderToBuffer(1024, 768)
                 finally:
+                    G.world = mundo_original
                     glmodule.draw = original_draw
+                    glmodule.drawMesh = original_draw_mesh
                     glmodule.glEnable = original_enable
                     glmodule.glDisable = original_disable
 
                 rgb = np.ascontiguousarray(np.asarray(imagem.data))
                 if not tracos["fbo"] or not tracos["fbo"][0]["completo"]:
                     raise RuntimeError("FBO OpenGL ausente ou incompleto")
+                if tracos["corpo_desenhado"] < 1 or tracos["outros_objetos"]:
+                    raise RuntimeError("Captura GL não ficou isolada no corpo")
                 observado = bool(tracos["ativacoes_a2c"])
                 if observado != expected:
                     raise RuntimeError(
