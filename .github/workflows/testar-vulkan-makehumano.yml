@@ -217,6 +217,8 @@ jobs:
           python -m pip install --disable-pip-version-check "Pillow>=10,<13"
           python -m unittest discover -s makehumano/testes \
             -p test_mapear_efeito_a2c_rgb_wgpu.py -v
+          python -m unittest discover -s makehumano/testes \
+            -p test_decompor_efeito_a2c_rgb_wgpu.py -v
           python -u makehumano/testes/mapear_efeito_a2c_rgb.py \
             --opengl "${RUNNER_TEMP}/phong-a2c-opengl-ci.json" \
             --vulkan "${RUNNER_TEMP}/phong-a2c-vulkan-ci.json" \
