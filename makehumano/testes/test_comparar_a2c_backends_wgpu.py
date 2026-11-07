@@ -141,6 +141,7 @@ def modelos():
                 "pipeline_a2c_habilitado": False,
                 "uma_superficie_sem_sobreposicao": True,
                 "dimensoes": [64, 64],
+                "rgb_igual_em_todos_os_alfas": True,
                 "controles": {
                     str(alfa): {
                         "sha256_rgb": "8" * 64,
@@ -170,6 +171,8 @@ def modelos():
                   "alfa128_sombras_on_vs_off"):
         vk["comparacao"][chave] = {
             "pixels_divergentes": 0 if "vs128" in chave else 18,
+            "arrays_identicos": "vs128" in chave,
+            "erro_maximo_rgb": 0 if "vs128" in chave else 32,
         }
     return gl, vk
 
@@ -245,17 +248,13 @@ class TesteContratoA2C(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Pipeline sintético"):
             comparar_manifestos(gl, vk)
 
-    def test_relatorio_aceita_diferenca_gpu_sem_esconder(self):
+    def test_relatorio_rejeita_diferenca_gpu_involuntaria(self):
         gl, vk = modelos()
         vk["auditoria_rgba_gpu_sem_overdraw"]["gpu"]["4"]["controles"]["64"][
             "pixels_rgb_diferentes_de_a128"
         ] = 4
-        resultado = comparar_manifestos(gl, vk)
-        self.assertEqual(
-            resultado["auditoria_rgba_gpu_sem_overdraw"]["gpu"]["4"][
-                "controles"]["64"]["pixels_rgb_diferentes_de_a128"
-            ], 4,
-        )
+        with self.assertRaisesRegex(ValueError, "Upload ou sample"):
+            comparar_manifestos(gl, vk)
 
     def test_receive_shadows_desligado_no_vulkan(self):
         gl, vk = modelos()
@@ -266,6 +265,20 @@ class TesteContratoA2C(unittest.TestCase):
         )
         self.assertIn("alfa64_vs128_off_sem_sombras",
                       d["controle_alpha_sem_sombras"]["comparacoes"])
+
+    def test_rejeita_rgb_residual_apos_desligar_sombras(self):
+        gl, vk = modelos()
+        vk["comparacao"]["alfa64_vs128_off_sem_sombras"]["arrays_identicos"] = False
+        with self.assertRaisesRegex(ValueError, "RGB ainda depende"):
+            comparar_manifestos(gl, vk)
+
+    def test_rejeita_sample_gpu_com_alpha_influenciando_rgb(self):
+        gl, vk = modelos()
+        vk["auditoria_rgba_gpu_sem_overdraw"]["gpu"]["4"][
+            "rgb_igual_em_todos_os_alfas"
+        ] = False
+        with self.assertRaisesRegex(ValueError, "Upload ou sample"):
+            comparar_manifestos(gl, vk)
 
     def test_rejeita_controle_de_sombra_ainda_ativo(self):
         gl, vk = modelos()
