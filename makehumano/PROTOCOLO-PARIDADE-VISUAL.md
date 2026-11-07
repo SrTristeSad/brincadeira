@@ -353,3 +353,15 @@ A referência OpenGL Phong com `receiveShadows=False` gerou bytes PNG idênticos
 A região heurística de corpo foi formada por união dos pixels que diferiam do fundo cinza 128 em mais de 8 níveis em ao menos um canal, após normalizações de canal/gama. Nos dois pares foram 45.198 pixels; esse procedimento **não é uma medição de alpha mask**. Foram rechecados os dados dos artefatos completos com Pillow+NumPy, não apenas códigos de saída.
 
 **Decisão técnica desta fase:** nem o especular nem a sombra são a principal causa dos **~4,17% restantes**. A investigação deve prosseguir pelas transformações de normais, direções de luz, contribuição difusa, interpolação e equações GLSL/WGSL. **Não alterar** `vulkan_scene.py`, shaders ou framebuffer de produção enquanto não houver autorização expressa do criador. Não tentar aprovar o shader apenas porque `erro_medio_rgb` global fica abaixo de 3.
+
+## 16. Diagnóstico CPU da geometria e controle de iluminação puramente difusa (execução pendente)
+
+Dois controles adicionais em harnesses efêmeros, sem alterações em shaders/framebuffers de produção:
+
+**(1) Identidade dos buffers:** novo `testes/registrar_geometria_paridade.py` toma o corpo selecionado de `G.world` no original e no candidato e calcula SHA-256 dos arrays de posições e normais (`float32 little-endian`) e índices de quadriláteros (`uint32 little-endian`), número de vértices/faces, BBox e comprimentos das normais. O comparador só marca as entradas `PAR_COMPARAVEL_PARA_DIAGNOSTICO` quando as três assinaturas são iguais. Testes CPU verificam normalização entre NumPy/endianness, divergências e rejeição de NaN.
+
+**(2) Difusa isolada:** nos dois processos, a partir do estado Phong original, o harness gera uma captura adicional com `ambientColor=(0,0,0)`, `specularColor=(0,0,0)` e `receiveShadows=False`, preservando `diffuseColor`, luz, geometria e a câmera. As três propriedades são restauradas em `finally`. O par é medido bruto e após as duas transformações *somente analíticas* R/B e sRGB; calcula também erro por canal na região heurística do corpo, não alfa.
+
+**(3) Posição da luz GL efetiva:** o harness upstream consulta `glGetLightfv(GL_LIGHT0, GL_POSITION)` em contexto real e registra a posição em espaço de câmera, comparando-a numericamente com `view @ light.position` do cenário. A leitura é opcional e registra um erro explícito se o driver não a fornecer; não substitui as métricas visuais. O GLSL Phong opera em espaço de câmera (`gl_NormalMatrix`, `gl_LightSource[0].position`), enquanto a versão WGSL usa normais e luzes em espaço de mundo. É essencial verificar que as transformações preservam o vetor de iluminação.
+
+**Critério:** validar captura só difusa nos dois backends, hashes idênticos de geometria/normais e posição real da luz; interpretar redução/aumento das diferenças com máscara RGB e todos os limites existentes. Resultados desta etapa não estão medidos na documentação inicial; CI deve ser consultada. Nenhuma paridade será homologada por teste de saída 0, nem qualquer correção visual aplicada sem decisão do criador.

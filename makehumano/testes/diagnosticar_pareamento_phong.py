@@ -56,7 +56,8 @@ def _camera_igual(a, b, eps=1e-5):
 
 def avaliar(ref_png, vulkan_png, ref_meta, vulkan_meta, saida, diretorio_diff=None,
            ref_sem_especular=None, vk_sem_especular=None,
-           ref_sem_sombras=None, vk_sem_sombras=None):
+           ref_sem_sombras=None, vk_sem_sombras=None,
+           ref_so_difusa=None, vk_so_difusa=None):
     registro_ref = json.loads(Path(ref_meta).read_text(encoding="utf-8"))
     registro_vk = json.loads(Path(vulkan_meta).read_text(encoding="utf-8"))
     if registro_ref.get("estado") != "CAPTURADO":
@@ -129,6 +130,28 @@ def avaliar(ref_png, vulkan_png, ref_meta, vulkan_meta, saida, diretorio_diff=No
                 trocar_vermelho_azul(no_ref), decodificar_srgb_rgb(no_vk)
             )
         })
+    if (ref_so_difusa is None) != (vk_so_difusa is None):
+        raise ValueError("Controles de difusa precisam ser fornecidos em par")
+    if ref_so_difusa is not None:
+        if not (registro_ref.get("captura_so_difusa") is True
+                and registro_vk.get("captura_so_difusa") is True):
+            raise ValueError("Manifestos não confirmam captura só difusa")
+        estado_r = registro_ref.get("material_so_difusa", {})
+        estado_v = registro_vk.get("estado_material_phong_so_difusa", {})
+        for estado in (estado_r, estado_v):
+            if (estado.get("ambientColor") != [0.0, 0.0, 0.0]
+                    or estado.get("specularColor") != [0.0, 0.0, 0.0]
+                    or estado.get("receiveShadows") is not False):
+                raise ValueError("Experimento só difuso não isolou ambiente/especular/sombra")
+        so_ref, so_vk = pixels(Path(ref_so_difusa)), pixels(Path(vk_so_difusa))
+        if so_ref.shape != ref.shape or so_vk.shape != vk.shape:
+            raise ValueError("Capturas só difusas inválidas")
+        variantes.update({
+            "so_difusa_bruto": (so_ref, so_vk),
+            "so_difusa_gl_rb_e_vk_linear": (
+                trocar_vermelho_azul(so_ref), decodificar_srgb_rgb(so_vk)
+            ),
+        })
     metricas = {}
     for nome, (a,b) in variantes.items():
         m = comparar_pixels(a, b, tolerancia=8, fracao_maxima=0.02)
@@ -141,6 +164,23 @@ def avaliar(ref_png, vulkan_png, ref_meta, vulkan_meta, saida, diretorio_diff=No
             and alpha_mismatch <= .005
         )
         m["alerta_alfa"] = "Ambos os PNGs são RGB; alfa preenchido artificialmente em 255"
+        if nome in ("gl_troca_rb_e_vk_srgb_para_linear",
+                     "so_difusa_gl_rb_e_vk_linear"):
+            # Máscara luminância heurística. NÃO é cobertura alfa.
+            cor_a, cor_b = a[:, :, :3].astype(np.int16), b[:, :, :3].astype(np.int16)
+            regiao = np.any(np.abs(cor_a - 128) > 8, axis=-1) | np.any(
+                np.abs(cor_b - 128) > 8, axis=-1
+            )
+            m["regiao_heuristica_corpo"] = {
+                "pixels": int(np.count_nonzero(regiao)),
+                "erro_medio_rgb": float(np.mean(np.abs(cor_a[regiao] - cor_b[regiao])))
+                if np.any(regiao) else None,
+                "erro_assinado_rgb_por_canal": (
+                    (cor_a[regiao] - cor_b[regiao]).mean(axis=0).tolist()
+                    if np.any(regiao) else None
+                ),
+                "aviso": "Região por contraste com cinza 128, não alpha mask.",
+            }
         metricas[nome] = m
     if diretorio_diff:
         diretorio_diff = Path(diretorio_diff)
@@ -158,7 +198,32 @@ def avaliar(ref_png, vulkan_png, ref_meta, vulkan_meta, saida, diretorio_diff=No
             salvar_mapa_diferencas(
                 a, b, diretorio_diff / "phong-sem-sombras-normalizacoes-diff.png"
             )
+        if "so_difusa_gl_rb_e_vk_linear" in variantes:
+            a, b = variantes["so_difusa_gl_rb_e_vk_linear"]
+            salvar_mapa_diferencas(
+                a, b, diretorio_diff / "phong-so-difusa-normalizacoes-diff.png"
+            )
+    geo_ref = registro_ref.get("geometria")
+    geo_vk = registro_vk.get("geometria")
+    geo_ok = isinstance(geo_ref, dict) and isinstance(geo_vk, dict)
+    geo_campos = ("posicoes", "normais", "primitivas")
+    geo_checks = {
+        nome: bool(
+            geo_ok and geo_ref.get("assinaturas", {}).get(nome)
+            == geo_vk.get("assinaturas", {}).get(nome)
+        ) for nome in geo_campos
+    }
+    geo_id = bool(geo_ok and all(geo_checks.values())
+                  and geo_ref.get("quantidade_vertices") == geo_vk.get("quantidade_vertices")
+                  and geo_ref.get("quantidade_faces") == geo_vk.get("quantidade_faces"))
     condicoes = {
+        "geometria": {
+            "iguais": geo_id,
+            "assinaturas_iguais": geo_checks,
+            "referencia": geo_ref,
+            "vulkan": geo_vk,
+        },
+        "luz_eye_gl_registrada": registro_ref.get("estado_gl_luz"),
         "camera": camera,
         "camera_totalmente_igual": camera_igual,
         "shader_material_e_defines_iguais": dados_identicos,
@@ -171,7 +236,8 @@ def avaliar(ref_png, vulkan_png, ref_meta, vulkan_meta, saida, diretorio_diff=No
             "vulkan": [registro_vk.get("G_windowWidth"), registro_vk.get("G_windowHeight")],
         },
     }
-    entrada_par_comparavel = bool(camera_igual and dados_identicos and iluminacao_igual)
+    entrada_par_comparavel = bool(camera_igual and dados_identicos
+                                 and iluminacao_igual and geo_id)
     resultado = {
         "tipo": "DIAGNOSTICO_PAREADO_PHONG",
         "status": "PAR_COMPARAVEL_PARA_DIAGNOSTICO" if entrada_par_comparavel else "ENTRADAS_NAO_COMPROVADAS_EQUIVALENTES",
@@ -180,6 +246,7 @@ def avaliar(ref_png, vulkan_png, ref_meta, vulkan_meta, saida, diretorio_diff=No
         "fontes_nao_modificadas": True,
         "controle_sem_especular_presente": ref_sem_especular is not None,
         "controle_sem_sombras_presente": ref_sem_sombras is not None,
+        "controle_so_difusa_presente": ref_so_difusa is not None,
         "motivo_normalizacoes": [
             "O upstream usa glReadPixels GL_RGBA mas inverte R/B no array retornado.",
             "O framebuffer Vulkan offscreen foi observado em rgba8unorm-srgb.",
@@ -208,11 +275,14 @@ def main():
     p.add_argument("--vulkan-sem-especular", type=Path)
     p.add_argument("--opengl-sem-sombras", type=Path)
     p.add_argument("--vulkan-sem-sombras", type=Path)
+    p.add_argument("--opengl-so-difusa", type=Path)
+    p.add_argument("--vulkan-so-difusa", type=Path)
     args = p.parse_args()
     avaliar(args.opengl, args.vulkan, args.manifesto_opengl,
             args.manifesto_vulkan, args.json, args.diff_dir,
             args.opengl_sem_especular, args.vulkan_sem_especular,
-            args.opengl_sem_sombras, args.vulkan_sem_sombras)
+            args.opengl_sem_sombras, args.vulkan_sem_sombras,
+            args.opengl_so_difusa, args.vulkan_so_difusa)
 
 
 if __name__ == "__main__":

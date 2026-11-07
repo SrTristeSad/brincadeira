@@ -90,6 +90,11 @@ jobs:
             ${{ runner.temp }}/formato-cena-gui.log
           if-no-files-found: warn
 
+      - name: Testes CPU de assinaturas de geometria (sem GUI)
+        run: |
+          python -m unittest discover -s makehumano/testes \
+            -p test_registrar_geometria_paridade_wgpu.py -v
+
       - name: Comparar Phong com difusa ligada/desligada na GUI isolada
         env:
           WGPU_BACKEND_TYPE: Vulkan
@@ -155,9 +160,11 @@ jobs:
             --opengl "${RUNNER_TEMP}/phong-referencia-opengl-ci.png" \
             --opengl-sem-especular "${RUNNER_TEMP}/phong-referencia-opengl-ci-specular-off.png" \
             --opengl-sem-sombras "${RUNNER_TEMP}/phong-referencia-opengl-ci-shadows-off.png" \
+            --opengl-so-difusa "${RUNNER_TEMP}/phong-referencia-opengl-ci-diffuse-only.png" \
             --vulkan "${RUNNER_TEMP}/phong-diffuse-ci.png" \
             --vulkan-sem-especular "${RUNNER_TEMP}/phong-diffuse-ci-specular-off.png" \
             --vulkan-sem-sombras "${RUNNER_TEMP}/phong-diffuse-ci-shadows-off.png" \
+            --vulkan-so-difusa "${RUNNER_TEMP}/phong-diffuse-ci-diffuse-only.png" \
             --manifesto-opengl "${RUNNER_TEMP}/phong-referencia-opengl-ci.json" \
             --manifesto-vulkan "${RUNNER_TEMP}/phong-diffuse-ci.json" \
             --json "${RUNNER_TEMP}/phong-pareamento-ci.json" \
