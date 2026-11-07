@@ -9,7 +9,8 @@ from pathlib import Path
 import numpy as np
 
 from auditar_cobertura_a2c_sintetica import (
-    CASOS, geometria_do_caso, registrar_rgb, salvar_png_rgb, vertices_do_caso,
+    CASOS, deslocamento_do_caso, geometria_do_caso, registrar_rgb,
+    salvar_png_rgb, vertices_do_caso,
 )
 
 
@@ -146,6 +147,7 @@ def capturar_sintetico_opengl(destino_json):
                 "alfa_u8": alfa,
                 "geometria": geometria_do_caso(nome),
                 "vertices_ndc": [list(pt) for pt in vertices_do_caso(nome)],
+                "deslocamento_px_ndc": list(deslocamento_do_caso(nome)),
                 "amostras": amostras,
                 "amostras_fbo_observadas": amostras_observadas,
                 "a2c_ativo": a2c,
