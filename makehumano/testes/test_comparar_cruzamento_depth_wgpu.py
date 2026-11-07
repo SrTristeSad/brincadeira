@@ -17,7 +17,8 @@ from contrato_cruzamento_depth_sintetica import (
     regioes_analiticas, registrar, passos, vertices,
 )
 from comparar_cruzamento_depth_sintetica import (
-    auditar_manifesto, comparar_cenas, salvar_mapa_categorias,
+    auditar_manifesto, comparar_cenas, mascaras_direcao_rgb,
+    salvar_mapa_categorias,
 )
 
 
@@ -122,6 +123,25 @@ class TesteCruzamentoDepth(unittest.TestCase):
         c["sha256_rgb"] = "b" * 64
         with self.assertRaisesRegex(ValueError, "Bytes RGB"):
             auditar_manifesto(self.gl, "OpenGL")
+
+    def test_mapa_rgb_nao_confunde_direcao_com_efeito_de_z(self):
+        gl = np.zeros((64, 64, 3), np.uint8)
+        vk = gl.copy()
+        gl[4, 4] = [191, 0, 64]
+        vk[4, 4] = [128, 0, 128]  # R maior GL, B maior VK
+        gl[4, 5] = [64, 0, 191]
+        vk[4, 5] = [128, 0, 128]
+        gl[4, 6] = [0, 0, 128]  # desempate pelo B
+        vk[4, 6] = [0, 0, 255]
+        gl_mask, vk_mask = mascaras_direcao_rgb(gl, vk)
+        self.assertFalse(np.any(gl_mask & vk_mask))
+        self.assertTrue(gl_mask[4, 4])
+        self.assertTrue(vk_mask[4, 5])
+        self.assertTrue(vk_mask[4, 6])
+        self.assertEqual(int(gl_mask.sum()), 1)
+        self.assertEqual(int(vk_mask.sum()), 2)
+        with self.assertRaises(ValueError):
+            mascaras_direcao_rgb(gl, vk[:, :, :2])
 
     def test_mapa_de_efeitos_sem_interpolacao(self):
         gl = np.zeros((64, 64), bool)
