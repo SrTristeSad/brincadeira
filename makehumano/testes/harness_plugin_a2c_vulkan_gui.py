@@ -316,6 +316,12 @@ def load(app):
                        in texturas_varredura.items()}
             )
 
+            from capturar_a2c_sintetico_vulkan import capturar_sintetico_vulkan
+            auditoria_sintetica = (
+                capturar_sintetico_vulkan(cena, destino)
+                if suporte["disponivel"] else {"estado": "NAO_TESTAVEL_MSAA_4X"}
+            )
+
             documento = json.loads(provisorio.read_text(encoding="utf-8"))
             documento.update({
                 "backend": "Vulkan",
@@ -329,6 +335,7 @@ def load(app):
                     sorted(texturas_varredura.items())
                 },
                 "auditoria_rgba_gpu_sem_overdraw": auditoria_rgba,
+                "auditoria_sintetica_a2c": auditoria_sintetica,
                 "amostras_iniciais": amostras_originais,
                 "suporte_msaa": suporte,
                 "controles": registros,
