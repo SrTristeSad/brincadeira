@@ -178,7 +178,7 @@ namespace dragonBones {
                 }
             }
 
-            this._timeline = null as any; //
+            this._timeline = null!; //
 
             return timeline;
         }
@@ -324,7 +324,7 @@ namespace dragonBones {
                 }
             }
 
-            this._animation = null as any;
+            this._animation = null!;
 
             return animation;
         }

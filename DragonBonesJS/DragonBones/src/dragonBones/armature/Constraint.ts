@@ -47,9 +47,9 @@ namespace dragonBones {
         protected _bone: Bone | null;
 
         protected _onClear(): void {
-            this._armature = null as any; //
-            this._target = null as any; //
-            this._root = null as any; //
+            this._armature = null!; //
+            this._target = null!; //
+            this._root = null!; //
             this._bone = null;
         }
 
@@ -87,7 +87,7 @@ namespace dragonBones {
             // this._scaleEnabled = false;
             this._bendPositive = false;
             this._weight = 1.0;
-            this._constraintData = null as any;
+            this._constraintData = null!;
         }
 
         private _computeA(): void {
@@ -264,7 +264,7 @@ namespace dragonBones {
             this.rotateMix = 1.0;
             this.translateMix = 1.0;
 
-            this._pathSlot = null as any;
+            this._pathSlot = null!;
             this._bones.length = 0;
 
             this._spaces.length = 0;

@@ -36,8 +36,8 @@ namespace dragonBones {
             this.order = 0;
             this.name = "";
             this.type = ConstraintType.IK;
-            this.target = null as any; //
-            this.root = null as any; //
+            this.target = null!; //
+            this.root = null!; //
             this.bone = null;
         }
     }
@@ -86,8 +86,8 @@ namespace dragonBones {
         protected _onClear() : void {
             super._onClear();
 
-            this.pathSlot = null as any;
-            this.pathDisplayData = null as any;
+            this.pathSlot = null!;
+            this.pathDisplayData = null!;
             this.bones.length = 0;
 
             this.positionMode = PositionMode.Fixed;

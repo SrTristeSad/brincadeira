@@ -69,7 +69,7 @@ namespace dragonBones {
 
             this.name = "";
             // this.displays.clear();
-            this.parent = null as any; //
+            this.parent = null!; //
         }
         /**
          * @internal

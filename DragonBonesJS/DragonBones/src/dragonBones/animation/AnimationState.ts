@@ -239,7 +239,7 @@ namespace dragonBones {
         /**
          * @internal
          */
-        public _actionTimeline: ActionTimelineState = null as any; // Initial value.
+        public _actionTimeline: ActionTimelineState = null!; // Initial value.
         private _zOrderTimeline: ZOrderTimelineState | null = null; // Initial value.
         private _activeChildA: AnimationState | null;
         private _activeChildB: AnimationState | null;
@@ -325,9 +325,9 @@ namespace dragonBones {
             this._animationTimelines.length = 0;
             this._poseTimelines.length = 0;
             // this._bonePoses.clear();
-            this._animationData = null as any; //
-            this._armature = null as any; //
-            this._actionTimeline = null as any; //
+            this._animationData = null!; //
+            this._armature = null!; //
+            this._actionTimeline = null!; //
             this._zOrderTimeline = null;
             this._activeChildA = null;
             this._activeChildB = null;
@@ -884,7 +884,7 @@ namespace dragonBones {
 
             if (isUpdateTimeline) {
                 let isBlend = false;
-                let prevTarget: BlendState | null = null as any; //
+                let prevTarget: BlendState | null = null; //
 
                 if (isUpdateBoneTimeline) {
                     for (let i = 0, l = this._boneTimelines.length; i < l; ++i) {
@@ -1555,7 +1555,7 @@ namespace dragonBones {
         protected _onClear(): void {
             this.reset();
 
-            this.target = null as any;
+            this.target = null!;
         }
 
         public update(animationState: AnimationState): boolean {

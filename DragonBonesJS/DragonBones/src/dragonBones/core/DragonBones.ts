@@ -296,7 +296,7 @@ namespace dragonBones {
         // Nested advanceTime() calls must not process the same queue twice.
         private _drainingObjects: boolean = false;
         private _dispatchingEvents: boolean = false;
-        private _eventManager: IEventDispatcher = null as any;
+        private _eventManager: IEventDispatcher;
 
         public constructor(eventManager: IEventDispatcher) {
             this._eventManager = eventManager;
@@ -396,11 +396,6 @@ if (!console.assert) {
     console.assert = function () { };
 }
 //
-if (!Date.now) {
-    Date.now = function now() {
-        return new Date().getTime();
-    };
-}
 if (typeof global === "undefined" && typeof window !== "undefined") {
     var global = window as any;
 }

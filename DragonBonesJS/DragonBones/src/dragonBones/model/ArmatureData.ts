@@ -217,7 +217,7 @@ namespace dragonBones {
             this.defaultAnimation = null;
             this.canvas = null;
             this.userData = null;
-            this.parent = null as any; //
+            this.parent = null!; //
         }
         /**
          * @internal
@@ -677,7 +677,7 @@ namespace dragonBones {
         /**
          * @private
          */
-        public color: ColorTransform = null as any; // Initial value.
+        public color: ColorTransform = null!; // Initial value.
         /**
          * @private
          */
@@ -705,9 +705,9 @@ namespace dragonBones {
             this.zIndex = 0;
             this.alpha = 1.0;
             this.name = "";
-            this.color = null as any; //
+            this.color = null!; //
             this.userData = null;
-            this.parent = null as any; //
+            this.parent = null!; //
         }
     }
 }

@@ -316,7 +316,7 @@ namespace dragonBones {
             this._colorTransform.identity();
             this._displayFrames.length = 0;
             this._geometryBones.length = 0;
-            this._slotData = null as any; //
+            this._slotData = null!; //
             this._displayFrame = null;
             this._geometryData = null;
             this._boundingBoxData = null;
@@ -325,7 +325,7 @@ namespace dragonBones {
             this._meshDisplay = null;
             this._display = null;
             this._childArmature = null;
-            this._parent = null as any; //
+            this._parent = null!; //
             this._cachedFrameIndices = null;
         }
 

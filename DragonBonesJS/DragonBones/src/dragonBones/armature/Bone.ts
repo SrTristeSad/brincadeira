@@ -101,8 +101,8 @@ namespace dragonBones {
             this._hasConstraint = false;
             this._visible = true;
             this._cachedFrameIndex = -1;
-            this._boneData = null as any; //
-            this._parent = null as any; //
+            this._boneData = null!; //
+            this._parent = null!; //
             this._cachedFrameIndices = null;
         }
 

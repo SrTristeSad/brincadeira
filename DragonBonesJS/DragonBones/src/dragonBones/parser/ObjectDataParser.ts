@@ -93,15 +93,15 @@ namespace dragonBones {
 
         protected _rawTextureAtlasIndex: number = 0;
         protected readonly _rawBones: Array<BoneData> = [];
-        protected _data: DragonBonesData = null as any; //
-        protected _armature: ArmatureData = null as any; //
-        protected _bone: BoneData = null as any; //
-        protected _geometry: GeometryData = null as any; //
-        protected _slot: SlotData = null as any; //
-        protected _skin: SkinData = null as any; //
-        protected _mesh: MeshDisplayData = null as any; //
-        protected _animation: AnimationData = null as any; //
-        protected _timeline: TimelineData = null as any; //
+        protected _data: DragonBonesData = null!; //
+        protected _armature: ArmatureData = null!; //
+        protected _bone: BoneData = null!; //
+        protected _geometry: GeometryData = null!; //
+        protected _slot: SlotData = null!; //
+        protected _skin: SkinData = null!; //
+        protected _mesh: MeshDisplayData = null!; //
+        protected _animation: AnimationData = null!; //
+        protected _timeline: TimelineData = null!; //
         protected _rawTextureAtlases: Array<any> | null = null;
 
         private _frameValueType: FrameValueType = FrameValueType.Step;
@@ -452,7 +452,7 @@ namespace dragonBones {
             this._rawBones.length = 0;
             this._cacheRawMeshes.length = 0;
             this._cacheMeshes.length = 0;
-            this._armature = null as any;
+            this._armature = null!;
 
             for (let k in this._weightSlotPose) {
                 delete this._weightSlotPose[k];
@@ -576,7 +576,7 @@ namespace dragonBones {
             constraint.rotateMix = ObjectDataParser._getNumber(rawData, DataParser.ROTATE_MIX, 1);
             constraint.translateMix = ObjectDataParser._getNumber(rawData, DataParser.TRANSLATE_MIX, 1);
             //
-            for (var boneName of bones) {
+            for (const boneName of bones) {
                 const bone = this._armature.getBone(boneName);
                 if (bone !== null) {
                     constraint.AddBone(bone);
@@ -652,11 +652,11 @@ namespace dragonBones {
                             }
                         }
 
-                        this._slot = null as any; //
+                        this._slot = null!; //
                     }
                 }
 
-                this._skin = null as any; //
+                this._skin = null!; //
             }
 
             return skin;
@@ -956,8 +956,8 @@ namespace dragonBones {
                         this._animation.addSlotTimeline(slotName, timeline);
                     }
 
-                    this._slot = null as any; //
-                    this._mesh = null as any; //
+                    this._slot = null!; //
+                    this._mesh = null!; //
                 }
             }
 
@@ -1120,12 +1120,12 @@ namespace dragonBones {
                                 this._parseDeformFrame
                             );
 
-                            this._geometry = null as any; //
+                            this._geometry = null!; //
                             break;
                         }
 
                         case TimelineType.SlotDeform: {
-                            this._geometry = null as any; //
+                            this._geometry = null!; //
                             for (const skinName in this._armature.skins) {
                                 const skin = this._armature.skins[skinName];
                                 for (const slontName in skin.displays) {
@@ -1149,7 +1149,7 @@ namespace dragonBones {
                                 this._parseDeformFrame
                             );
 
-                            this._geometry = null as any; //
+                            this._geometry = null!; //
                             break;
                         }
 
@@ -1202,7 +1202,7 @@ namespace dragonBones {
                 }
             }
 
-            this._animation = null as any; //
+            this._animation = null!; //
 
             return animation;
         }
@@ -1304,7 +1304,7 @@ namespace dragonBones {
                 }
             }
 
-            this._timeline = null as any; //
+            this._timeline = null!; //
 
             return timeline;
         }
@@ -1372,8 +1372,8 @@ namespace dragonBones {
                 }
             }
 
-            this._bone = null as any; //
-            this._slot = null as any; //
+            this._bone = null!; //
+            this._slot = null!; //
         }
 
         protected _parseSlotTimeline(rawData: any): void {
@@ -1424,7 +1424,7 @@ namespace dragonBones {
                 this._animation.addSlotTimeline(slot.name, colorTimeline);
             }
 
-            this._slot = null as any; //
+            this._slot = null!; //
         }
 
         protected _parseFrame(rawData: any, frameStart: number, frameCount: number): number {
@@ -2329,7 +2329,7 @@ namespace dragonBones {
                         data.stage = data.getArmature(data.armatureNames[0]);
                     }
 
-                    this._data = null as any;
+                    this._data = null!;
                 }
 
                 if (DataParser.TEXTURE_ATLAS in rawData) {

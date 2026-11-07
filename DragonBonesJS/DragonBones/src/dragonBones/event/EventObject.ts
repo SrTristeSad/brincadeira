@@ -271,10 +271,10 @@ namespace dragonBones {
             this.time = 0.0;
             this.type = "";
             this.name = "";
-            this.armature = null as any;
+            this.armature = null!;
             this.bone = null;
             this.slot = null;
-            this.animationState = null as any;
+            this.animationState = null!;
             this.actionData = null;
             this.data = null;
         }

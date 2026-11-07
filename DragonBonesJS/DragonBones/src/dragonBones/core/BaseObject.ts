@@ -40,16 +40,20 @@ namespace dragonBones {
         private static readonly _maxCountMap: Map<number> = Object.create(null);
         private static readonly _poolsMap: Map<Array<BaseObject>> = Object.create(null);
         private static readonly _classTypes: Array<Function> = [];
+        private static _lastConstructor: Function | null = null;
+        private static _lastClassType: number = -1;
 
         // Never identify a class by String(constructor). Distinct classes can
         // have the same toString(), especially after minification.
         private static _getClassType(objectConstructor: Function): number {
-            const index = BaseObject._classTypes.indexOf(objectConstructor);
-            if (index >= 0) {
-                return index;
+            if (objectConstructor === BaseObject._lastConstructor) {
+                return BaseObject._lastClassType;
             }
 
-            return BaseObject._classTypes.push(objectConstructor) - 1;
+            const index = BaseObject._classTypes.indexOf(objectConstructor);
+            BaseObject._lastConstructor = objectConstructor;
+            BaseObject._lastClassType = index >= 0 ? index : BaseObject._classTypes.push(objectConstructor) - 1;
+            return BaseObject._lastClassType;
         }
 
         private static _returnObject(object: BaseObject): void {
@@ -64,8 +68,6 @@ namespace dragonBones {
                 else {
                     console.warn("The object is already in the pool.");
                 }
-            }
-            else {
             }
         }
 

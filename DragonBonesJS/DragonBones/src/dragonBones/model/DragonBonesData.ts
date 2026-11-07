@@ -161,14 +161,14 @@ namespace dragonBones {
             this.cachedFrames.length = 0;
             this.armatureNames.length = 0;
             //this.armatures.clear();
-            this.binary = null as any; //
-            this.intArray = null as any; //
-            this.floatArray = null as any; //
-            this.frameIntArray = null as any; //
-            this.frameFloatArray = null as any; //
-            this.frameArray = null as any; //
-            this.timelineArray = null as any; //
-            this.colorArray = null as any; //
+            this.binary = null!; //
+            this.intArray = null!; //
+            this.floatArray = null!; //
+            this.frameIntArray = null!; //
+            this.frameFloatArray = null!; //
+            this.frameArray = null!; //
+            this.timelineArray = null!; //
+            this.colorArray = null!; //
             this.userData = null;
         }
         /**

@@ -44,8 +44,8 @@ namespace dragonBones {
      * @language zh_CN
      */
     export abstract class BaseFactory {
-        protected static _objectParser: ObjectDataParser = null as any;
-        protected static _binaryParser: BinaryDataParser = null as any;
+        protected static _objectParser: ObjectDataParser = null!;
+        protected static _binaryParser: BinaryDataParser = null!;
         /**
          * @private
          */
@@ -53,8 +53,8 @@ namespace dragonBones {
 
         protected readonly _dragonBonesDataMap: Map<DragonBonesData> = Object.create(null);
         protected readonly _textureAtlasDataMap: Map<Array<TextureAtlasData>> = Object.create(null);
-        protected _dragonBones: DragonBones = null as any;
-        protected _dataParser: DataParser = null as any;
+        protected _dragonBones: DragonBones = null!;
+        protected _dataParser: DataParser = null!;
         /**
          * - Create a factory instance. (typically only one global factory instance is required)
          * @version DragonBones 3.0

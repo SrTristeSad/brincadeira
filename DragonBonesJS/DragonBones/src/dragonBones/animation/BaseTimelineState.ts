@@ -61,7 +61,7 @@ namespace dragonBones {
             this.playState = -1;
             this.currentPlayTimes = 0;
             this.currentTime = -1.0;
-            this.target = null as any;
+            this.target = null!;
 
             this._isTween = false;
             this._valueOffset = 0;
@@ -75,15 +75,15 @@ namespace dragonBones {
             this._duration = 0.0;
             this._timeScale = 1.0;
             this._timeOffset = 0.0;
-            this._animationData = null as any; //
-            this._timelineData = null as any; //
-            this._armature = null as any; //
-            this._animationState = null as any; //
-            this._actionTimeline = null as any; //
-            this._frameArray = null as any; //
-            this._valueArray = null as any; //
-            this._timelineArray = null as any; //
-            this._frameIndices = null as any; //
+            this._animationData = null!; //
+            this._timelineData = null!; //
+            this._armature = null!; //
+            this._animationState = null!; //
+            this._actionTimeline = null!; //
+            this._frameArray = null!; //
+            this._valueArray = null!; //
+            this._timelineArray = null!; //
+            this._frameIndices = null!; //
         }
 
         protected abstract _onArriveAtFrame(): void;
@@ -167,7 +167,7 @@ namespace dragonBones {
             this._actionTimeline = this._animationState._actionTimeline;
 
             if (this === this._actionTimeline) {
-                this._actionTimeline = null as any; //
+                this._actionTimeline = null!; //
             }
 
             this._animationData = this._animationState.animationData;
