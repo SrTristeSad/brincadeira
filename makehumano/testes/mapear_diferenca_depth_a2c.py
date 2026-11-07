@@ -143,7 +143,8 @@ def checar_estados(manifesto, backend):
 def auditar_manifestos(gl, vk):
     if gl.get("estado") != "CAPTURADO" or vk.get("estado") != "OBSERVADO":
         raise ValueError("Captura de referência incompleta")
-    if gl.get("dimensoes_imagem") != vk.get("dimensoes_imagem") != [1024, 768]:
+    if (gl.get("dimensoes_imagem") != [1024, 768]
+            or vk.get("dimensoes_imagem") != [1024, 768]):
         raise ValueError("Dimensões incompatíveis")
     for backend, manifesto in (("OpenGL", gl), ("Vulkan", vk)):
         checar_estados(manifesto, backend)
