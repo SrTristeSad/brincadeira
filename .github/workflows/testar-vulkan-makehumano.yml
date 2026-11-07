@@ -141,6 +141,8 @@ jobs:
           python -m py_compile makehumano/testes/capturar_a2c_sintetico_vulkan.py
           python -m py_compile makehumano/testes/contrato_sobreposicao_depth_sintetica.py \
             makehumano/testes/capturar_sobreposicao_depth_vulkan.py
+          python -m py_compile makehumano/testes/contrato_cruzamento_depth_sintetica.py \
+            makehumano/testes/capturar_cruzamento_depth_vulkan.py
           python -m py_compile makehumano/testes/contrato_coplanares_depth_sintetica.py \
             makehumano/testes/capturar_coplanares_depth_vulkan.py
           python -m py_compile makehumano/testes/harness_plugin_a2c_vulkan_gui.py
@@ -206,6 +208,7 @@ jobs:
           python -m py_compile makehumano/testes/auditar_cobertura_a2c_sintetica.py
           python -m py_compile makehumano/testes/capturar_sobreposicao_depth_opengl.py
           python -m py_compile makehumano/testes/capturar_coplanares_depth_opengl.py
+          python -m py_compile makehumano/testes/capturar_cruzamento_depth_opengl.py
           python -m py_compile makehumano/testes/harness_plugin_a2c_opengl_referencia.py \
             makehumano/testes/executar_harness_a2c_opengl_referencia.py
           xvfb-run -a -s "-screen 0 1280x800x24" \
@@ -260,6 +263,18 @@ jobs:
             --json "${RUNNER_TEMP}/phong-a2c-coplanares-ci.json" \
             --png-less-a2c "${RUNNER_TEMP}/phong-a2c-coplanares-a2c-ci.png" \
             --png-depth-proximo "${RUNNER_TEMP}/phong-a2c-coplanares-perto-ci.png"
+
+      - name: Verificar cruzamento de duas faces em Z com A2C GL/Vulkan
+        run: |
+          python -m py_compile makehumano/testes/comparar_cruzamento_depth_sintetica.py
+          python -m unittest discover -s makehumano/testes \
+            -p test_comparar_cruzamento_depth_wgpu.py -v
+          python -u makehumano/testes/comparar_cruzamento_depth_sintetica.py \
+            --opengl "${RUNNER_TEMP}/phong-a2c-opengl-ci.json" \
+            --vulkan "${RUNNER_TEMP}/phong-a2c-vulkan-ci.json" \
+            --json "${RUNNER_TEMP}/phong-a2c-cruzamento-depth-ci.json" \
+            --png-z-off "${RUNNER_TEMP}/phong-a2c-cruzamento-zefeito-ci.png" \
+            --png-z-on "${RUNNER_TEMP}/phong-a2c-cruzamento-a2c-ci.png"
 
       - name: Mapear interseção espacial A2C entre OpenGL e Vulkan
         run: |
@@ -326,6 +341,9 @@ jobs:
             ${{ runner.temp }}/phong-a2c-sintetico-gpu-ci.json
             ${{ runner.temp }}/phong-a2c-sobreposicao-depth-ci.json
             ${{ runner.temp }}/phong-a2c-coplanares-ci.json
+            ${{ runner.temp }}/phong-a2c-cruzamento-depth-ci.json
+            ${{ runner.temp }}/phong-a2c-cruzamento-zefeito-ci.png
+            ${{ runner.temp }}/phong-a2c-cruzamento-a2c-ci.png
             ${{ runner.temp }}/phong-a2c-coplanares-a2c-ci.png
             ${{ runner.temp }}/phong-a2c-coplanares-perto-ci.png
             ${{ runner.temp }}/phong-a2c-sobreposicao-msaa-ci.png
