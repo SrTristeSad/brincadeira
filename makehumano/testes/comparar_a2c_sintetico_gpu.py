@@ -13,7 +13,8 @@ from pathlib import Path
 import numpy as np
 
 from auditar_cobertura_a2c_sintetica import (
-    CASOS, geometria_do_caso, registrar_rgb, vertices_do_caso,
+    CASOS, DESLOCAMENTOS_SUBPIXEL, deslocamento_do_caso,
+    geometria_do_caso, registrar_rgb, vertices_do_caso,
 )
 
 
@@ -39,6 +40,9 @@ def verificar_manifesto(doc, backend):
             and c.get("vertices_ndc") == [
                 list(v) for v in vertices_do_caso(nome)
             ]
+            and c.get("deslocamento_px_ndc") == list(
+                deslocamento_do_caso(nome)
+            )
         ):
             raise ValueError("Estados sintéticos GPU inesperados: " + backend + " " + nome)
         if backend == "OpenGL" and c.get("amostras_fbo_observadas") != (
@@ -80,6 +84,97 @@ def verificar_manifesto(doc, backend):
         ):
             raise ValueError("Aresta: alfa não poderia mudar RGB sem A2C parcial")
     return imagens
+
+
+def analisar_varredura_subpixel(gl, vk):
+    """Compara deslocamentos da MESMA aresta; sem estimar sample locations.
+
+    A borda é identificada novamente em cada deslocamento, antes de
+    classificar os pixels divergentes. Não comparamos pixel de um caso
+    deslocado à posição teoricamente transladada do outro backend.
+    """
+    casos = (("origem", 0.0, 0.0),) + DESLOCAMENTOS_SUBPIXEL
+    resultado = {}
+    for rotulo, dx, dy in casos:
+        prefixo = (
+            "aresta_4x" if rotulo == "origem"
+            else "aresta_{}_4x".format(rotulo)
+        )
+        nome_off = prefixo + "_a255_a2c_off"
+        nome_on = prefixo + "_a128_a2c_on"
+        base_gl = gl[nome_off][:, :, 0]
+        base_vk = vk[nome_off][:, :, 0]
+        a2c_gl = gl[nome_on][:, :, 0]
+        a2c_vk = vk[nome_on][:, :, 0]
+        borda_gl = (base_gl > 0) & (base_gl < 255)
+        borda_vk = (base_vk > 0) & (base_vk < 255)
+        borda_uniao = borda_gl | borda_vk
+        casos_medido = {}
+        for tipo, imagem_gl, imagem_vk in (
+            ("msaa_puro", base_gl, base_vk),
+            ("a2c_alfa128", a2c_gl, a2c_vk),
+        ):
+            delta = np.abs(
+                imagem_gl.astype(np.int16) - imagem_vk.astype(np.int16)
+            )
+            diferentes = delta != 0
+            casos_medido[tipo] = {
+                "pixels_diferentes": int(diferentes.sum()),
+                "pixels_diferentes_na_borda_subpixel": int(
+                    np.count_nonzero(diferentes & borda_uniao)
+                ),
+                "pixels_diferentes_fora_da_borda_subpixel": int(
+                    np.count_nonzero(diferentes & ~borda_uniao)
+                ),
+                "max_delta_rgb": int(delta.max()),
+                "gl_mais_claro": int(np.count_nonzero(imagem_gl > imagem_vk)),
+                "vk_mais_claro": int(np.count_nonzero(imagem_vk > imagem_gl)),
+            }
+        efeito_gl = np.abs(
+            base_gl.astype(np.int16) - a2c_gl.astype(np.int16)
+        ) > 8
+        efeito_vk = np.abs(
+            base_vk.astype(np.int16) - a2c_vk.astype(np.int16)
+        ) > 8
+        uniao = int(np.count_nonzero(efeito_gl | efeito_vk))
+        inter = int(np.count_nonzero(efeito_gl & efeito_vk))
+        resultado[rotulo] = {
+            "deslocamento_px_ndc": [float(dx), float(dy)],
+            "controles": [nome_off, nome_on],
+            "pixels_cobertura_parcial_gl": int(borda_gl.sum()),
+            "pixels_cobertura_parcial_vk": int(borda_vk.sum()),
+            "pixels_uniao_borda": int(borda_uniao.sum()),
+            "msaa_puro": casos_medido["msaa_puro"],
+            "a2c_alfa128": casos_medido["a2c_alfa128"],
+            "efeito_a2c_128": {
+                "pixels_gl": int(efeito_gl.sum()),
+                "pixels_vk": int(efeito_vk.sum()),
+                "intersecao": inter,
+                "uniao": uniao,
+                "iou_suporte": float(inter / uniao) if uniao else 1.0,
+            },
+        }
+    valores_off = [
+        v["msaa_puro"]["pixels_diferentes"] for v in resultado.values()
+    ]
+    valores_on = [
+        v["a2c_alfa128"]["pixels_diferentes"] for v in resultado.values()
+    ]
+    return {
+        "estado": "MEDIDO_SEM_HOMOLOGACAO",
+        "posicoes": resultado,
+        "amplitude_de_variacao_pixels": {
+            "msaa_puro_min_max": [min(valores_off), max(valores_off)],
+            "a2c_alfa128_min_max": [min(valores_on), max(valores_on)],
+        },
+        "limite": (
+            "Contagens de cores RGBA8 resolvidas para deslocamentos iguais "
+            "nos dois backends. Não recuperam coordenadas individuais das "
+            "amostras MSAA, nem demonstram qual rasterizador está correto. "
+            "Deslocamento no eixo NDC y positivo aparece para cima na cena."
+        ),
+        "nao_homologado": True,
+    }
 
 
 def comparar_sintetico(gl, vk):
@@ -185,6 +280,7 @@ def comparar_sintetico(gl, vk):
         "iluminacao": "ausente",
         "resultados": dados,
         "analise_aresta": analise_aresta,
+        "varredura_subpixel": analisar_varredura_subpixel(imagens_gl, imagens_vk),
         "nao_homologado": True,
         "ressalva": (
             "Cores resolvidas pelo MSAA podem variar por posições de amostra "
