@@ -108,7 +108,10 @@ def auditar_controles(gl, vk, pareamento):
         controle_gl = gl["controles"].get(base)
         if not controle_gl or controle_gl.get("a2c_elegivel") is not a2c:
             raise ValueError("Controle GL não corresponde ao A2C exigido")
-        for nome, recebe_sombras in ((base, True), (sem_sombra, False)):
+        for nome, recebe_sombras in (
+            (base, True), (sem_sombra, False),
+            (base + "_repeticao_apos_sombras", True),
+        ):
             c = vk["controles"].get(nome)
             if not c:
                 raise ValueError("Falta controle Vulkan: " + nome)
@@ -136,6 +139,17 @@ def auditar_controles(gl, vk, pareamento):
                 for d in rastros
             ):
                 raise ValueError("Spy de estado Vulkan inconsistente: " + nome)
+        repetido = vk["controles"][base + "_repeticao_apos_sombras"]
+        if repetido["sha256_rgb"] != vk["controles"][base]["sha256_rgb"]:
+            raise ValueError("RGB não foi restaurado após toggles de sombra: " + estado)
+        chave = "repeticao_a2c_" + estado + "_apos_sombras"
+        comparacao = vk["comparacao"].get(chave, {})
+        if not (
+            comparacao.get("arrays_identicos") is True
+            and comparacao.get("pixels_divergentes") == 0
+            and comparacao.get("erro_maximo_rgb") == 0
+        ):
+            raise ValueError("Captura Vulkan não restaurada após sombras: " + estado)
 
 
 def main():
@@ -168,6 +182,11 @@ def main():
     resultado, mascaras = medir_efeito_sombras(
         gl_off, gl_on, vk_off, vk_on, vk_off_sem, vk_on_sem
     )
+    resultado["restauracao_estado"] = {
+        "a2c_off": vk["comparacao"]["repeticao_a2c_off_apos_sombras"],
+        "a2c_on": vk["comparacao"]["repeticao_a2c_on_apos_sombras"],
+        "resultado": "RGB_IDÊNTICO_APÓS_REATIVAR_SOMBRAS",
+    }
     from PIL import Image
     for estado, img_path, mascara in (
         ("com_sombras", args.png_com_sombras, mascaras["vk_com_sombras"]),
