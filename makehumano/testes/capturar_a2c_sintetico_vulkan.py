@@ -16,8 +16,7 @@ from auditar_cobertura_a2c_sintetica import (
 def shader_vertices(nome):
     # Os números são definidos UMA vez no contrato GL/Vulkan, nunca
     # ajustados por backend para forçar correspondência.
-    pontos = ",
-        ".join(
+    pontos = ",\n        ".join(
         "vec2<f32>({:.9f}, {:.9f})".format(x, y)
         for x, y in vertices_do_caso(nome)
     )
@@ -96,7 +95,7 @@ def capturar_sintetico_vulkan(cena, destino_json):
             **registrar_rgb(rgb),
             "alfa_u8": alfa,
             "geometria": geometria_do_caso(nome),
-                "vertices_ndc": [list(pt) for pt in vertices_do_caso(nome)],
+            "vertices_ndc": [list(pt) for pt in vertices_do_caso(nome)],
             "amostras": amostras,
             "a2c_ativo": a2c,
             "blend_ativo": False,
