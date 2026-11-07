@@ -305,6 +305,10 @@ def load(app):
                            amostras=4, transparente=True, a2c=False,
                            sem_blend=True, escrever_z=True, alfa_textura=128)
 
+            auditoria_sintetica = {"estado": "NAO_TESTAVEL_MSAA_4X"}
+            if suporte["testavel"]:
+                from capturar_a2c_sintetico_opengl import capturar_sintetico_opengl
+                auditoria_sintetica = capturar_sintetico_opengl(destino)
             comparacoes = {}
             if suporte["testavel"]:
                 for nome, a, b in (
@@ -338,6 +342,7 @@ def load(app):
                 "sha_upstream_esperado": "a8bc2d54ff0ac92e78ff71431b1023eda42bf482",
                 "camera": manifesto_camera(camera),
                 "textura_controle": textura_meta,
+                "auditoria_sintetica_a2c": auditoria_sintetica,
                 "texturas_varredura": {
                     str(alfa): meta for alfa, (_path, meta) in
                     sorted(texturas_varredura.items())
