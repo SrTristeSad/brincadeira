@@ -99,14 +99,17 @@ A codificação sRGB de linear 0,5 é aproximadamente 0,735356983, ou **188/255*
 **Experimento isolado:** executar `makehumano/testes/diagnosticar_srgb_offscreen.py` em Xvfb/Lavapipe com o mesmo Qt/rendercanvas/wgpu, criando alvos independentes `rgba8unorm`, `rgba8unorm-srgb` e no formato preferido do contexto. Limpar com o valor linear `(0.5,0.5,0.5,1.0)`, ler os bytes e registrar um JSON. O script **não carrega a cena, não altera pipelines nem troca o formato do renderizador**.
 
 ~~~bash
-cd /home/claude/srtristesad/mh-cand
+git clone --branch makehumano/protocolo-paridade-visual-20261106 \
+  https://github.com/SrTristeSad/brincadeira.git /tmp/brincadeira-srgb
+cd /tmp/brincadeira-srgb
+python -m pip install -r makehumano/codigo/requirements.txt
 VK_ICD_FILENAMES=/opt/lavapipe/lvp_icd.json WGPU_BACKEND_TYPE=Vulkan \
 xvfb-run -a -s "-screen 0 1280x800x24" \
 python makehumano/testes/diagnosticar_srgb_offscreen.py \
   --json /home/claude/srtristesad/resultados/diagnostico-srgb.json
 ~~~
 
-Se este checkout tiver outra raiz, ajustar apenas o `cd` (o caminho do script é relativo à raiz que contém `makehumano/`). **Critério de conclusão do experimento:** observar 128±1 no alvo UNORM e 188±1 no sRGB, identificar o formato preferido do contexto com Qt e confrontar o resultado com o fundo de `phong.png`. Repetir a leitura efetiva de `cena.formato` no harness, se possível; isso diferencia inferência por contexto de medida dentro da cena real.
+O script é executado a partir da raiz de um clone isolado; instalar as dependências antes de rodá-lo. O loader/ICD usado aqui é exclusivo da validação com Vulkan por software. **Critério de conclusão do experimento:** observar 128±1 no alvo UNORM e 188±1 no sRGB, identificar o formato preferido do contexto com Qt e confrontar o resultado com o fundo de `phong.png`. Repetir a leitura efetiva de `cena.formato` no harness, se possível; isso diferencia inferência por contexto de medida dentro da cena real.
 
 **Decisão necessária antes de corrigir a produção:** revisar evidência do experimento, escolher se o contrato de captura deve usar linear UNORM ou normalização explícita (preservando o comportamento do original), avaliar as consequências sobre os outros passes e testes de shader que atualmente dependem do formato sRGB. Não alterar `vulkan_scene.py` antes dessa decisão.
 
