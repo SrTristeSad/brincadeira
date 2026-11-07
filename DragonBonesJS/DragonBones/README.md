@@ -80,3 +80,9 @@ A execução das ações pendentes da armadura agora retira cada ação da fila 
 `BaseObject.setMaxCount()` normaliza capacidades fracionárias para o inteiro inferior com `Math.floor()` (ES5). Antes, reduzir um pool já preenchido para uma capacidade como `1.5` lançava `RangeError` ao atribuir um número fracionário a `Array.length`. Limites inteiros continuam iguais; valores negativos e `NaN` continuam equivalentes a zero, enquanto `Infinity` continua permitindo capacidade sem limite explícito. Quatro testes de regressão foram adicionados.
 
 Uma reprodução isolada desse gerenciamento de pools foi compilada para ES5 com TypeScript 5.8.3 e executada com Node.js 22.16.0: **2/4 testes passavam antes da correção e 4/4 depois**. A compilação integral do DragonBonesJS e a execução dos testes reais seguem pendentes.
+
+## Inicialização do cache de animações
+
+`AnimationData.cacheFrames()` inicializa explicitamente **todas** as posições de `cachedFrames` com `false`. A versão anterior consultava `this.cacheFrames.length` (quantidade de parâmetros do método) em vez de `this.cachedFrames.length` (tamanho do array), deixando a maioria dos flags como lacunas. A mudança não altera o layout, a taxa de cache, os índices de ossos/slots nem os formatos de animação.
+
+Quatro testes de regressão foram adicionados em `tests/animation-cache.test.cjs`. Uma reprodução isolada da lógica existente, compilada para ES5 com TypeScript 5.8.3, apresentou **2/4 testes aprovados antes** e **4/4 depois** no Node.js 22.16.0. O build integral do projeto continua pendente.

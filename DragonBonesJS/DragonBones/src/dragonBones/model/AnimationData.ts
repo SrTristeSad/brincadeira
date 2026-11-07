@@ -241,7 +241,8 @@ namespace dragonBones {
             const cacheFrameCount = Math.ceil(this.cacheFrameRate * this.duration) + 1; // Cache one more frame.
 
             this.cachedFrames.length = cacheFrameCount;
-            for (let i = 0, l = this.cacheFrames.length; i < l; ++i) {
+            // Initialize every frame flag, not the parameter count of cacheFrames().
+            for (let i = 0, l = this.cachedFrames.length; i < l; ++i) {
                 this.cachedFrames[i] = false;
             }
 
