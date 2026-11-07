@@ -616,3 +616,31 @@ O mapa representa **branco** para interseção, **vermelho** para mudança exclu
 **Direção da mudança de cor:** nos **1.836 pixels que mudaram em ambos os backends** para tolerância 8, os vetores RGB `(A2C_ON − A2C_OFF)` têm cosseno mediano **0,98684**, fração com cosseno >0,5 de **80,45%** e fração com cosseno <−0,5 de **15,09%**. Isso mostra alterações frequentemente na mesma direção, mas não avalia paridade de cor absoluta. A diferença de sRGB, o blending (desativado durante A2C) e possíveis diferenças de cobertura por amostra permanecem fatores entrelaçados. **Não** usar a IoU isolada como meta de produto.
 
 **Escopo preservado:** esta etapa alterou apenas `testes/mapear_efeito_a2c_rgb.py`, `testes/test_decompor_efeito_a2c_rgb_wgpu.py`, workflow e este protocolo. Nenhum shader, framebuffer, pipeline ou lógica de produto foi alterado; PR #11 em rascunho, sem merge, e `main` preservada.
+
+## 28. Isolamento causal A2C: blend, escrita Z e cobertura sob MSAA 4×
+
+**Por que medir:** o contraste anterior `4x_sem_a2c` → `4x_com_a2c` não alterava apenas A2C. No Vulkan, `CenaVulkan._pipeline_objeto` muda simultaneamente `alpha_to_coverage_enabled=False→True`, `ColorTargetState.blend=self._blend_malhas→None` e `depth_write_enabled=False→True` para a malha translúcida. No OpenGL upstream, `glmodule.drawMesh` alterna `GL_SAMPLE_ALPHA_TO_COVERAGE`, `GL_BLEND` e `glDepthMask` de modo análogo. O contraste anterior mede uma combinação de efeitos, não a cobertura isolada.
+
+**Instrumentação de referência, não de produto:** foram adicionados dois estados intermediários aos harnesses efêmeros de CI dos dois backends, restaurados após cada captura. No Vulkan, os controles ajustam temporariamente `cena._blend_malhas`, a configuração de escrita Z retornada por `configuracao_raster_vulkan` e o cache de pipelines, com restauração em `finally`. No GL original, wrappers transitórios isolam o corpo e observam `glDrawElements`, `GL_BLEND`, `GL_DEPTH_WRITEMASK` e `GL_SAMPLE_ALPHA_TO_COVERAGE`; o teste força os estados apenas durante o desenho do corpo, restaurando os métodos e a cena. Nenhum código fonte upstream, shader, driver, pipeline de produção ou recurso permanente foi alterado.
+
+| Captura da malha translúcida | Amostras | Blend | Escrita Z | A2C |
+| --- | ---: | --- | --- | --- |
+| `4x_sem_a2c` (baseline original) | 4 | ON | OFF | OFF |
+| `4x_sem_a2c_sem_blend_sem_z` (intermediário) | 4 | OFF | OFF | OFF |
+| `4x_sem_a2c_sem_blend_com_z` (intermediário) | 4 | OFF | ON | OFF |
+| `4x_com_a2c` (caminho original) | 4 | OFF | ON | ON |
+
+**Execução validada:** [CI 42346281119](https://github.com/SrTristeSad/brincadeira/actions/runs/42346281119), commit `e2289d64cc861c549a2bf0ffe916a41441de4dbb`, dois jobs **success**; scripts CPU `test_comparar_a2c_backends_wgpu.py`, harnesses de ambas as GUIs e auditoria PNG concluídos. Baixados os artefatos `phong-a2c-opengl-pareado-ci` e `phong-a2c-vulkan-ci`; as seis capturas RGB de cada backend (12 no total) foram verificadas contra os hashes SHA-256 de pixels e de PNG de seus manifestos, com mesma câmera, malha, Phong DIFFUSE, textura RGBA de alfa 128 e MSAA 4× efetivo. O relatório de comparação exige estados intermediários e rejeita estados GL de draw ou variantes Vulkan incompatíveis. **Sem aprovação de paridade visual.**
+
+| Contraste com apenas uma mudança intencional, RGB acima de 8 | OpenGL | Vulkan | IoU do suporte espacial GL × VK |
+| --- | ---: | ---: | ---: |
+| Desligar BLEND (Z OFF, A2C OFF) | **45.967** | **45.977** | **0,99635** |
+| Ligar escrita Z (BLEND OFF, A2C OFF) | **478** | **0** | **0** (nenhum pixel VK mudou) |
+| Ligar A2C (BLEND OFF, Z ON) | **45.632** | **45.675** | **0,99030** |
+| Contraste histórico OFF→ON (muda os três estados) | **2.372** | **2.456** | **aprox. 0,613** |
+
+O mapa **`phong-a2c-mapa-ci-isolado.png`** acompanha as capturas de referência no artefato de CI; a métrica espacial usa interseção **45.431** e união **45.876** para o efeito A2C isolado, com **201** pixels exclusivos GL e **244** exclusivos Vulkan. O PNG foi incluído pelo script `mapear_efeito_a2c_rgb.py` com hash registrado no manifesto. A alta IoU é **fácil de superinterpretar**: sem blend, ligar A2C com alfa 128 altera a cor da maior parte dos ~46 mil pixels cobertos pela malha, e comparar só o *suporte binário da mudança* quase não testa igualdade dos valores RGB nem das posições individuais das amostras. `IoU=0,9903` **não significa 99% de paridade visual**.
+
+**Interpretação técnica:** (1) desligar blending muda praticamente toda a malha nos dois backends; (2) ligar A2C com blending já desligado muda praticamente toda a malha novamente; (3) o caminho combinado OFF→ON muda apenas cerca de 2,4 mil pixels porque a composição por alpha blending e a cobertura por amostras podem gerar resultados médios semelhantes em boa parte do personagem. O controle isolado de escrita Z modificou **478 pixels no OpenGL e zero no Vulkan**, apesar de ambos terem registrado os estados solicitados. Esta diferença exige inspeção de overdraw, ordenação, culling e fragmentos com profundidade concorrente; **não há causa demonstrada** nem decisão de corrigir produção.
+
+**Próxima etapa proposta:** mapear os 478 pixels sensíveis à profundidade no OpenGL e comparar capturas com níveis adicionais de alfa sob 4× para examinar a quantização de cobertura e as diferenças de sobreposição, sem reescrever shaders ou fixar um contrato de comportamento antes da decisão do criador. Nenhuma alteração na `main`, merge ou mudança de semântica visual.
