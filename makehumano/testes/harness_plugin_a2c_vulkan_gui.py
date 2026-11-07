@@ -47,6 +47,7 @@ def load(app):
             import numpy as np
             from image import Image
             from getpath import getSysDataPath
+            import vulkan_scene as modulo_vulkan
             from vulkan_scene import alpha_to_coverage_vulkan, objeto_translucido_vulkan
 
             cena = G.canvas._garantir_cena()
@@ -89,12 +90,33 @@ def load(app):
             registros = {}
             imagens = {}
 
-            def capturar(nome, *, amostras, transparencia, a2c):
+            def capturar(nome, *, amostras, transparencia, a2c,
+                         sem_blend=False, escrever_z=False):
                 material.transparent = transparencia
                 material.alphaToCoverage = a2c
                 cena.configurar_multisampling(amostras == 4)
                 esperado = bool(alpha_to_coverage_vulkan(corpo, cena.amostras))
+                if escrever_z and esperado:
+                    raise RuntimeError("Controle Z só aceita A2C desligado")
                 observado = []
+                # Fora de produção: o pipeline só lê estes atributos para criar
+                # variantes. Restauramos cache/estados após cada captura.
+                blend_original = cena._blend_malhas
+                cache_original = cena._pipelines_malhas
+                raster_original = modulo_vulkan.configuracao_raster_vulkan
+                if sem_blend:
+                    cena._blend_malhas = None
+                if escrever_z:
+                    def raster_ensaio(obj, *, linhas=False):
+                        config = raster_original(obj, linhas=linhas)
+                        if obj is corpo and not linhas:
+                            return config[0], True, config[2]
+                        return config
+                    modulo_vulkan.configuracao_raster_vulkan = raster_ensaio
+                if sem_blend or escrever_z:
+                    # Sem cache limpo a chave de baseline pode reutilizar
+                    # um pipeline antigo com blend habilitado.
+                    cena._pipelines_malhas = {}
                 # Instrumentação local: registra a chamada REAL do corpo ao pipeline.
                 original = cena._pipeline_objeto
                 anterior = cena.__dict__.get("_pipeline_objeto", None)
@@ -109,6 +131,17 @@ def load(app):
                             "amostras": int(cena.amostras),
                             "linhas": bool(linhas),
                             "pontos": bool(pontos),
+                            "blend_habilitado_previsto": bool(
+                                cena._blend_malhas is not None
+                                and not alpha_to_coverage_vulkan(
+                                    obj, cena.amostras, linhas=bool(linhas or pontos)
+                                )
+                            ),
+                            "escrita_z_prevista": bool(
+                                escrever_z or alpha_to_coverage_vulkan(
+                                    obj, cena.amostras, linhas=bool(linhas or pontos)
+                                )
+                            ),
                         })
                     return original(obj, linhas, pontos=pontos)
 
@@ -123,18 +156,32 @@ def load(app):
                         cena._pipeline_objeto = anterior
                     else:
                         del cena._pipeline_objeto
+                    # Captura a chave e depois restaura cache/override
+                    # sem reutilizar pipelines forçados na GUI.
+                    chaves_da_captura = list(cena._pipelines_malhas)
+                    cena._pipelines_malhas = cache_original
+                    cena._blend_malhas = blend_original
+                    modulo_vulkan.configuracao_raster_vulkan = raster_original
 
                 if not observado:
                     raise RuntimeError("A malha do corpo não atravessou o pipeline")
                 if any(v["a2c_calculado"] != esperado for v in observado):
                     raise RuntimeError("Caminho de A2C inconsistente na malha")
                 chaves = [
-                    k for k in cena._pipelines_malhas
+                    k for k in chaves_da_captura
                     if isinstance(k, tuple) and len(k) >= 4
                     and k[:4] == (amostras, esperado, False, False)
                 ]
                 if not chaves:
                     raise RuntimeError("Pipeline real não foi registrado no cache")
+                blend_esperado = not (esperado or sem_blend)
+                z_esperado = bool(esperado or escrever_z)
+                if any(v["blend_habilitado_previsto"] != blend_esperado
+                       or v["escrita_z_prevista"] != z_esperado
+                       for v in observado):
+                    raise RuntimeError("Diagnóstico GPU Vulkan difere dos estados ensaiados")
+                if escrever_z and not any(k[6] is True for k in chaves if len(k) > 6):
+                    raise RuntimeError("Não houve variante de pipeline com escrita Z")
                 rgb = np.ascontiguousarray(rgb)
                 meta = metadados_rgb(rgb)
                 saida = png if nome == "1x_sem_a2c" else png.with_name(
@@ -146,6 +193,10 @@ def load(app):
                     "captura_rgb": True,
                     "amostras": int(cena.amostras),
                     "a2c_flag_material": bool(a2c),
+                    "controle_blend_desligado": bool(sem_blend),
+                    "controle_escrita_z_forcada": bool(escrever_z),
+                    "blend_habilitado_observado": bool(blend_esperado),
+                    "escrita_z_observada": bool(z_esperado),
                     "material_transparent": bool(transparencia),
                     "opacity": float(material.opacity),
                     "nTransparentPrimitives": int(corpo.nTransparentPrimitives),
@@ -182,6 +233,12 @@ def load(app):
                     capturar("4x_sem_a2c", amostras=4, transparencia=True, a2c=False)
                     capturar("4x_com_a2c", amostras=4, transparencia=True, a2c=True)
                     capturar("4x_inelegivel", amostras=4, transparencia=False, a2c=True)
+                    capturar("4x_sem_a2c_sem_blend_sem_z",
+                             amostras=4, transparencia=True, a2c=False,
+                             sem_blend=True)
+                    capturar("4x_sem_a2c_sem_blend_com_z",
+                             amostras=4, transparencia=True, a2c=False,
+                             sem_blend=True, escrever_z=True)
 
             documento = json.loads(provisorio.read_text(encoding="utf-8"))
             documento.update({
@@ -195,11 +252,14 @@ def load(app):
                 "suporte_msaa": suporte,
                 "controles": registros,
                 "a2c_altera_blend_pipeline": True,
-                "nota": "Comparacao 4x off/on mede A2C junto da mudanca de blend=None.",
+                "nota": (
+                    "Controles extras isolam blend, escrita Z e A2C; "
+                    "variantes temporárias da cena são restauradas."
+                ),
                 "comparacao": {},
             })
             if suporte["disponivel"]:
-                validar_controles(registros)
+                validar_controles({nome: registros[nome] for nome in CONTROLES})
                 documento["comparacao"] = {
                     "msaa_1x_vs_4x": comparar_rgb(
                         imagens["1x_sem_a2c"], imagens["4x_sem_a2c"]
@@ -209,6 +269,18 @@ def load(app):
                     ),
                     "a2c_4x_on_vs_inelegivel": comparar_rgb(
                         imagens["4x_com_a2c"], imagens["4x_inelegivel"]
+                    ),
+                    "somente_blend_4x": comparar_rgb(
+                        imagens["4x_sem_a2c"],
+                        imagens["4x_sem_a2c_sem_blend_sem_z"]
+                    ),
+                    "somente_depth_write_4x": comparar_rgb(
+                        imagens["4x_sem_a2c_sem_blend_sem_z"],
+                        imagens["4x_sem_a2c_sem_blend_com_z"]
+                    ),
+                    "somente_a2c_4x": comparar_rgb(
+                        imagens["4x_sem_a2c_sem_blend_com_z"],
+                        imagens["4x_com_a2c"]
                     ),
                 }
                 mudou = documento["comparacao"]["a2c_4x_off_vs_on"]["pixels_divergentes"] > 0
