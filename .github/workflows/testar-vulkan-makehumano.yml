@@ -136,6 +136,8 @@ jobs:
           python -m unittest discover -s makehumano/testes \
             -p test_auditar_alpha_textura_gpu_wgpu.py -v
           python -m py_compile makehumano/testes/auditar_alpha_textura_gpu.py
+          python -m py_compile makehumano/testes/capturar_a2c_sintetico_vulkan.py \
+            makehumano/testes/auditar_cobertura_a2c_sintetica.py
           python -m py_compile makehumano/testes/harness_plugin_a2c_vulkan_gui.py
           xvfb-run -a -s "-screen 0 1280x800x24" \
             python -u makehumano/testes/executar_harness_formato_gui.py \
@@ -195,6 +197,7 @@ jobs:
           GALLIUM_DRIVER: llvmpipe
           QT_X11_NO_MITSHM: "1"
         run: |
+          python -m py_compile makehumano/testes/capturar_a2c_sintetico_opengl.py
           python -m py_compile makehumano/testes/harness_plugin_a2c_opengl_referencia.py \
             makehumano/testes/executar_harness_a2c_opengl_referencia.py
           xvfb-run -a -s "-screen 0 1280x800x24" \
@@ -213,6 +216,16 @@ jobs:
             --opengl "${RUNNER_TEMP}/phong-a2c-opengl-ci.json" \
             --vulkan "${RUNNER_TEMP}/phong-a2c-vulkan-ci.json" \
             --json "${RUNNER_TEMP}/phong-a2c-backends-ci.json"
+
+      - name: Comparar GPU A2C sintético GL/Vulkan com um triângulo e MSAA real
+        run: |
+          python -m pip install --disable-pip-version-check "Pillow>=10,<13"
+          python -m unittest discover -s makehumano/testes \
+            -p test_comparar_a2c_sintetico_gpu_wgpu.py -v
+          python -u makehumano/testes/comparar_a2c_sintetico_gpu.py \
+            --opengl "${RUNNER_TEMP}/phong-a2c-opengl-ci.json" \
+            --vulkan "${RUNNER_TEMP}/phong-a2c-vulkan-ci.json" \
+            --json "${RUNNER_TEMP}/phong-a2c-sintetico-gpu-ci.json"
 
       - name: Mapear interseção espacial A2C entre OpenGL e Vulkan
         run: |
@@ -276,6 +289,7 @@ jobs:
             ${{ runner.temp }}/phong-a2c-opengl-ci*.png
             ${{ runner.temp }}/phong-a2c-opengl-ci.log
             ${{ runner.temp }}/phong-a2c-backends-ci.json
+            ${{ runner.temp }}/phong-a2c-sintetico-gpu-ci.json
             ${{ runner.temp }}/phong-a2c-mapa-ci.json
             ${{ runner.temp }}/phong-a2c-mapa-ci.png
             ${{ runner.temp }}/phong-a2c-mapa-ci-isolado.png
