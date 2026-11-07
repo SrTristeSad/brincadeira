@@ -15,7 +15,7 @@ from contrato_cruzamento_depth_sintetica import (
 )
 
 
-def capturar_coplanares_opengl(destino_json):
+def capturar_cruzamento_depth_opengl(destino_json):
     from OpenGL import GL
     destino_json = Path(destino_json)
     original_programa = int(GL.glGetIntegerv(GL.GL_CURRENT_PROGRAM))
