@@ -18,12 +18,14 @@ def load(app):
     png_sem_especular = png.with_name(png.stem + "-specular-off.png")
     png_sem_sombras = png.with_name(png.stem + "-shadows-off.png")
     png_so_difusa = png.with_name(png.stem + "-diffuse-only.png")
+    png_mascara = png.with_name(png.stem + "-alpha-api.png")
     pasta_testes = os.environ["MAKEHUMANO_HARNESS_TESTES_DIR"]
     if pasta_testes not in sys.path:
         sys.path.insert(0, pasta_testes)
     from registrar_estado_material import descrever_material, descrever_iluminacao
     from configurar_camera_paridade import fixar_camera, manifesto_camera
     from registrar_geometria_paridade import descrever_geometria
+    from registrar_mascara_paridade import registrar_mascara
 
     iniciado = False
 
@@ -102,6 +104,8 @@ def load(app):
                 material.ambientColor = ambiente_original
                 material.specularColor = especular_original
                 material.receiveShadows = sombras_original
+            # Máscara real do contrato original, NÃO canal alfa inferido do PNG RGB.
+            imagem_mascara = mh.renderAlphaMask(1024, 768)
             pixels = np.asarray(imagem.data)
             pixels_sem_especular = np.asarray(imagem_sem_especular.data)
             pixels_sem_sombras = np.asarray(imagem_sem_sombras.data)
@@ -121,6 +125,7 @@ def load(app):
             imagem_sem_especular.save(str(png_sem_especular))
             imagem_sem_sombras.save(str(png_sem_sombras))
             imagem_so_difusa.save(str(png_so_difusa))
+            info_mascara = registrar_mascara(imagem_mascara, png_mascara)
             resultado = {
                 "estado": "CAPTURADO",
                 "origem": "MakeHuman upstream OpenGL isolado",
@@ -132,6 +137,8 @@ def load(app):
                 "material_sem_especular": estado_sem_especular,
                 "material_sem_sombras": estado_sem_sombras,
                 "material_so_difusa": estado_so_difusa,
+                "captura_mascara_api": True,
+                "mascara_alfa": info_mascara,
                 "geometria": geometria,
                 "estado_gl_luz": estado_gl_luz,
                 "iluminacao": descrever_iluminacao(app.scene),

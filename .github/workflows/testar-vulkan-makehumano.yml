@@ -177,6 +177,18 @@ jobs:
             --json "${RUNNER_TEMP}/phong-pareamento-ci.json" \
             --diff-dir "${RUNNER_TEMP}/phong-pareamento-diffs"
 
+      - name: Comparar máscara ALFA real da API Phong OpenGL e Vulkan
+        run: |
+          python -m unittest discover -s makehumano/testes \
+            -p test_registrar_mascara_paridade_wgpu.py -v
+          python -u makehumano/testes/comparar_mascara_paridade.py \
+            --opengl "${RUNNER_TEMP}/phong-referencia-opengl-ci-alpha-api.png" \
+            --vulkan "${RUNNER_TEMP}/phong-diffuse-ci-alpha-api.png" \
+            --manifesto-opengl "${RUNNER_TEMP}/phong-referencia-opengl-ci.json" \
+            --manifesto-vulkan "${RUNNER_TEMP}/phong-diffuse-ci.json" \
+            --json "${RUNNER_TEMP}/phong-alfa-api-ci.json" \
+            --diff "${RUNNER_TEMP}/phong-alfa-api-diff-ci.png"
+
       - name: Publicar métricas pareadas (sem homologação)
         if: always()
         uses: actions/upload-artifact@v4
@@ -184,6 +196,8 @@ jobs:
           name: phong-pareamento-ci
           path: |
             ${{ runner.temp }}/phong-pareamento-ci.json
+            ${{ runner.temp }}/phong-alfa-api-ci.json
+            ${{ runner.temp }}/phong-alfa-api-diff-ci.png
             ${{ runner.temp }}/phong-pareamento-diffs/
           if-no-files-found: warn
 
