@@ -71,3 +71,24 @@ test('module adapter reuses the global declared by the core bundle', () => {
     assert.doesNotMatch(adapter, /\bdeclare\s+(?:var|let|const)\s+global\b/,
         'a second global declaration may conflict with the core under TypeScript');
 });
+
+test('TypeScript manifest covers every core .ts source', () => {
+    const root = path.join(projectRoot, 'src', 'dragonBones');
+    const pending = [root];
+    const discovered = [];
+    while (pending.length > 0) {
+        const directory = pending.pop();
+        for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+            const fullPath = path.join(directory, entry.name);
+            if (entry.isDirectory()) {
+                pending.push(fullPath);
+            }
+            else if (entry.isFile() && entry.name.endsWith('.ts')) {
+                discovered.push(fullPath);
+            }
+        }
+    }
+    const expected = tsconfig.files.map(name => path.resolve(projectRoot, name));
+    assert.deepEqual(discovered.sort(), expected.sort(),
+        'tsconfig.files must include every core TypeScript source');
+});
