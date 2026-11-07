@@ -89,9 +89,17 @@ def load(app):
 
             registros = {}
             imagens = {}
+            texturas_varredura = {128: (textura_path, textura_meta)}
 
             def capturar(nome, *, amostras, transparencia, a2c,
-                         sem_blend=False, escrever_z=False):
+                         sem_blend=False, escrever_z=False, alfa_textura=128):
+                if alfa_textura not in texturas_varredura:
+                    texturas_varredura[alfa_textura] = salvar_textura_alfa_parcial(
+                        destino.with_name(
+                            destino.stem + "-a2c-textura-a" + str(alfa_textura) + ".png"
+                        ), alfa=alfa_textura,
+                    )
+                material.diffuseTexture = texturas_varredura[alfa_textura][0]
                 material.transparent = transparencia
                 material.alphaToCoverage = a2c
                 cena.configurar_multisampling(amostras == 4)
@@ -201,6 +209,8 @@ def load(app):
                     "escrita_z_observada": bool(z_esperado),
                     "material_transparent": bool(transparencia),
                     "opacity": float(material.opacity),
+                    "alfa_textura": int(alfa_textura),
+                    "sha256_textura_png": texturas_varredura[alfa_textura][1]["sha256_png"],
                     "nTransparentPrimitives": int(corpo.nTransparentPrimitives),
                     "classificado_translucido": bool(objeto_translucido_vulkan(corpo)),
                     "a2c_elegivel": esperado,
@@ -241,6 +251,13 @@ def load(app):
                     capturar("4x_sem_a2c_sem_blend_com_z",
                              amostras=4, transparencia=True, a2c=False,
                              sem_blend=True, escrever_z=True)
+                    for alfa in (64, 192):
+                        capturar("4x_a%03d_sem_a2c_sem_blend_com_z" % alfa,
+                                 amostras=4, transparencia=True, a2c=False,
+                                 sem_blend=True, escrever_z=True, alfa_textura=alfa)
+                        capturar("4x_a%03d_com_a2c" % alfa,
+                                 amostras=4, transparencia=True, a2c=True,
+                                 alfa_textura=alfa)
 
             documento = json.loads(provisorio.read_text(encoding="utf-8"))
             documento.update({
@@ -250,6 +267,10 @@ def load(app):
                 "api_captura": "CenaVulkan.capturar_framebuffer (RGB, nao renderAlphaMask)",
                 "camera": parametros_camera,
                 "textura_controle": textura_meta,
+                "texturas_varredura": {
+                    str(alfa): meta for alfa, (_path, meta) in
+                    sorted(texturas_varredura.items())
+                },
                 "amostras_iniciais": amostras_originais,
                 "suporte_msaa": suporte,
                 "controles": registros,
@@ -283,6 +304,14 @@ def load(app):
                     "somente_a2c_4x": comparar_rgb(
                         imagens["4x_sem_a2c_sem_blend_com_z"],
                         imagens["4x_com_a2c"]
+                    ),
+                    "somente_a2c_4x_alfa64": comparar_rgb(
+                        imagens["4x_a064_sem_a2c_sem_blend_com_z"],
+                        imagens["4x_a064_com_a2c"]
+                    ),
+                    "somente_a2c_4x_alfa192": comparar_rgb(
+                        imagens["4x_a192_sem_a2c_sem_blend_com_z"],
+                        imagens["4x_a192_com_a2c"]
                     ),
                 }
                 mudou = documento["comparacao"]["a2c_4x_off_vs_on"]["pixels_divergentes"] > 0
