@@ -93,3 +93,86 @@ test("setMaxCount is isolated when different classes have the same string name",
         BaseObject.clearPool(SharedNameB);
     }
 });
+
+class FractionalPoolObject extends BaseObject {
+    _onClear() {}
+}
+class DefaultFractionalPoolObject extends BaseObject {
+    _onClear() {}
+}
+class UnlimitedPoolObject extends BaseObject {
+    _onClear() {}
+}
+class InvalidCountPoolObject extends BaseObject {
+    _onClear() {}
+}
+
+test("setMaxCount floors fractional per-class limits without throwing", () => {
+    const objects = [];
+    for (let i = 0; i < 3; i++) {
+        objects.push(BaseObject.borrowObject(FractionalPoolObject));
+    }
+    try {
+        for (const object of objects) object.returnToPool();
+        assert.doesNotThrow(() => BaseObject.setMaxCount(FractionalPoolObject, 1.5));
+        const reused = BaseObject.borrowObject(FractionalPoolObject);
+        const fresh = BaseObject.borrowObject(FractionalPoolObject);
+        assert.ok(objects.includes(reused));
+        assert.ok(!objects.includes(fresh));
+    }
+    finally {
+        BaseObject.setMaxCount(FractionalPoolObject, 3000);
+        BaseObject.clearPool(FractionalPoolObject);
+    }
+});
+
+test("setMaxCount floors fractional global limits across existing pools", () => {
+    const objects = [
+        BaseObject.borrowObject(DefaultFractionalPoolObject),
+        BaseObject.borrowObject(DefaultFractionalPoolObject)
+    ];
+    try {
+        for (const object of objects) object.returnToPool();
+        assert.doesNotThrow(() => BaseObject.setMaxCount(null, 0.5));
+        const fresh = BaseObject.borrowObject(DefaultFractionalPoolObject);
+        assert.ok(!objects.includes(fresh));
+    }
+    finally {
+        BaseObject.setMaxCount(null, 3000);
+        BaseObject.clearPool(DefaultFractionalPoolObject);
+    }
+});
+
+test("setMaxCount keeps positive Infinity as an unlimited capacity", () => {
+    const a = BaseObject.borrowObject(UnlimitedPoolObject);
+    const b = BaseObject.borrowObject(UnlimitedPoolObject);
+    try {
+        a.returnToPool();
+        b.returnToPool();
+        assert.doesNotThrow(() => BaseObject.setMaxCount(UnlimitedPoolObject, Infinity));
+        assert.strictEqual(BaseObject.borrowObject(UnlimitedPoolObject), b);
+        assert.strictEqual(BaseObject.borrowObject(UnlimitedPoolObject), a);
+    }
+    finally {
+        BaseObject.setMaxCount(UnlimitedPoolObject, 3000);
+        BaseObject.clearPool(UnlimitedPoolObject);
+    }
+});
+
+test("setMaxCount continues to treat negative and NaN limits as zero", () => {
+    try {
+        BaseObject.setMaxCount(InvalidCountPoolObject, -1);
+        const first = BaseObject.borrowObject(InvalidCountPoolObject);
+        first.returnToPool();
+        assert.notStrictEqual(BaseObject.borrowObject(InvalidCountPoolObject), first);
+
+        BaseObject.setMaxCount(InvalidCountPoolObject, NaN);
+        const second = BaseObject.borrowObject(InvalidCountPoolObject);
+        second.returnToPool();
+        assert.notStrictEqual(BaseObject.borrowObject(InvalidCountPoolObject), second);
+    }
+    finally {
+        BaseObject.setMaxCount(InvalidCountPoolObject, 3000);
+        BaseObject.clearPool(InvalidCountPoolObject);
+    }
+});

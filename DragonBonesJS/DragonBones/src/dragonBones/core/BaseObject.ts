@@ -91,6 +91,10 @@ namespace dragonBones {
                 maxCount = 0;
             }
 
+            // A pool capacity is a whole-object count. Fractional values
+            // would throw RangeError when assigned to Array.length.
+            maxCount = Math.floor(maxCount);
+
             if (objectConstructor !== null) {
                 const classType = BaseObject._getClassType(objectConstructor);
                 const pool = classType in BaseObject._poolsMap ? BaseObject._poolsMap[classType] : null;

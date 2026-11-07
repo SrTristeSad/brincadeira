@@ -74,3 +74,9 @@ Cinco cenários de regressão foram adicionados. A lógica correspondente foi co
 ## Fila de ações em Armature.advanceTime()
 
 A execução das ações pendentes da armadura agora retira cada ação da fila **antes** de chamar `fadeIn()`. Ações adicionadas por callbacks (no início ou no fim) são executadas em sequência sem repetir uma entrada já processada. A devolução ao pool ocorre em `finally`: se o callback falhar, a ação já consumida não é repetida, e as demais permanecem disponíveis para o frame seguinte. O tratamento de tipos, a API e o formato original das animações são preservados. Cinco testes de regressão foram adicionados em `armature-update.test.cjs`. Uma reprodução isolada compilada para ES5 com TypeScript 5.8.3 passou em 5/5 testes; o build completo permanece pendente.
+
+## Limites de objetos em pool
+
+`BaseObject.setMaxCount()` normaliza capacidades fracionárias para o inteiro inferior com `Math.floor()` (ES5). Antes, reduzir um pool já preenchido para uma capacidade como `1.5` lançava `RangeError` ao atribuir um número fracionário a `Array.length`. Limites inteiros continuam iguais; valores negativos e `NaN` continuam equivalentes a zero, enquanto `Infinity` continua permitindo capacidade sem limite explícito. Quatro testes de regressão foram adicionados.
+
+Uma reprodução isolada desse gerenciamento de pools foi compilada para ES5 com TypeScript 5.8.3 e executada com Node.js 22.16.0: **2/4 testes passavam antes da correção e 4/4 depois**. A compilação integral do DragonBonesJS e a execução dos testes reais seguem pendentes.
