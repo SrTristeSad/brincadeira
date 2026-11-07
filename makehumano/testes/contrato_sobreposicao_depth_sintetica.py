@@ -37,7 +37,7 @@ def vertices_com_profundidade(face):
         vertices, z = VERTICES_TELA, DEPTH_FUNDO
     else:
         raise ValueError("Face sintética não identificada")
-    return [(float(x), float(y), float(z)) for x, y in vertices]
+    return [[float(x), float(y), float(z)] for x, y in vertices]
 
 
 def sequencia_draw(a2c, escrita_z, ordem):
