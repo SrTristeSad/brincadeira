@@ -167,7 +167,7 @@ def load(app):
                     "captura_rgb": True,
                     "amostras_solicitadas": amostras,
                     "amostras_fbo_observadas": amostras_fbo,
-                    "amostras": amostras_fbo,
+                    "amostras": max(1, amostras_fbo),  # GL_SAMPLES=0 corresponde a raster 1x
                     "a2c_flag_material": bool(a2c),
                     "material_transparent": bool(transparente),
                     "opacity": float(material.opacity),
