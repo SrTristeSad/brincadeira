@@ -124,7 +124,36 @@ def comparar_sintetico(gl, vk):
         mascaras[backend] = np.any(np.abs(b - a) > 8, axis=2)
     inter = int(np.count_nonzero(mascaras["gl"] & mascaras["vk"]))
     uniao = int(np.count_nonzero(mascaras["gl"] | mascaras["vk"]))
+    # Separa o desacordo que já ocorre com raster MSAA puro daquele
+    # medido com A2C. É comparação de SUPORTE, não decomposição causal
+    # das cores (a mesma amostra pode mudar de intensidade).
+    diferente_msaa = np.any(
+        imagens_gl["aresta_4x_a255_a2c_off"] !=
+        imagens_vk["aresta_4x_a255_a2c_off"], axis=2,
+    )
+    diferente_a2c = np.any(
+        imagens_gl["aresta_4x_a128_a2c_on"] !=
+        imagens_vk["aresta_4x_a128_a2c_on"], axis=2,
+    )
     analise_aresta = {
+        "diferencas_msaa_puro_vs_a2c": {
+            "pixels_msaa_puro": int(diferente_msaa.sum()),
+            "pixels_com_a2c_alfa128": int(diferente_a2c.sum()),
+            "pixels_em_ambos": int(np.count_nonzero(
+                diferente_msaa & diferente_a2c
+            )),
+            "pixels_somente_no_controle_msaa": int(np.count_nonzero(
+                diferente_msaa & ~diferente_a2c
+            )),
+            "pixels_somente_ao_ativar_a2c": int(np.count_nonzero(
+                diferente_a2c & ~diferente_msaa
+            )),
+            "ressalva": (
+                "As máscaras diferentes são de RGB resolvido por pixel, "
+                "não representam sample mask individual nem isolam "
+                "causalmente a implementação A2C."
+            ),
+        },
         "pixels_borda_parcial_gl": int(np.count_nonzero(
             (borda_gl > 0) & (borda_gl < 255)
         )),
