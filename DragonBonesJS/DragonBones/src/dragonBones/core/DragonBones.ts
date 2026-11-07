@@ -293,6 +293,9 @@ namespace dragonBones {
         private readonly _clock: WorldClock = new WorldClock();
         private readonly _events: Array<EventObject> = [];
         private readonly _objects: Array<BaseObject> = [];
+        // Nested advanceTime() calls must not process the same queue twice.
+        private _drainingObjects: boolean = false;
+        private _dispatchingEvents: boolean = false;
         private _eventManager: IEventDispatcher = null as any;
 
         public constructor(eventManager: IEventDispatcher) {
@@ -302,7 +305,8 @@ namespace dragonBones {
         }
 
         public advanceTime(passedTime: number): void {
-            if (this._objects.length > 0) {
+            if (this._objects.length > 0 && !this._drainingObjects) {
+                this._drainingObjects = true;
                 let processed = 0;
                 try {
                     // Return objects added by callbacks in the same update, as before.
@@ -322,12 +326,14 @@ namespace dragonBones {
                     else {
                         this._objects.splice(0, processed);
                     }
+                    this._drainingObjects = false;
                 }
             }
 
             this._clock.advanceTime(passedTime);
 
-            if (this._events.length > 0) {
+            if (this._events.length > 0 && !this._dispatchingEvents) {
+                this._dispatchingEvents = true;
                 let processed = 0;
                 try {
                     // Keep dispatching events added by callbacks in this frame.
@@ -355,6 +361,7 @@ namespace dragonBones {
                     // Preserve any undelivered events for the next update.
                     // Never re-dispatch an event whose listener threw.
                     this._events.splice(0, processed);
+                    this._dispatchingEvents = false;
                 }
             }
         }
