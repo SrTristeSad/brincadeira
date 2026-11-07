@@ -209,7 +209,8 @@ def load(app):
                 if not tracos["draw_states"]:
                     raise RuntimeError("Nenhum glDrawElements observado para o corpo")
                 blend_esperado = not (sem_blend or expected)
-                depth_esperado = bool(escrever_z or expected)
+                depth_esperado = bool(escrever_z or expected or
+                                      int(corpo.nTransparentPrimitives) == 0)
                 if any(
                     estado != {"blend": blend_esperado,
                                "escrita_z": depth_esperado, "a2c": expected}
