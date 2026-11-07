@@ -300,7 +300,7 @@ namespace dragonBones {
             this._lockUpdate = true;
 
             try {
-            if (this._armatureData === null) {
+                if (this._armatureData === null) {
                     console.warn("The armature has been disposed.");
                     return;
                 }
@@ -308,20 +308,20 @@ namespace dragonBones {
                     console.warn("The armature data has been disposed.\nPlease make sure dispose armature before call factory.clear().");
                     return;
                 }
-    
+
                 const prevCacheFrameIndex = this._cacheFrameIndex;
                 // Update animation.
                 this._animation.advanceTime(passedTime);
                 // Sort slots.
                 if (this._slotsDirty || this._zIndexDirty) {
                     this._slots.sort(Armature._onSortSlots);
-    
+
                     if (this._zIndexDirty) {
                         for (let i = 0, l = this._slots.length; i < l; ++i) {
                             this._slots[i]._setZOrder(i); // 
                         }
                     }
-    
+
                     this._slotsDirty = false;
                     this._zIndexDirty = false;
                 }
@@ -329,11 +329,11 @@ namespace dragonBones {
                 if (this._alphaDirty) {
                     this._alphaDirty = false;
                     this._globalAlpha = this._alpha * (this._parent !== null ? this._parent._globalAlpha : 1.0);
-    
+
                     for (const bone of this._bones) {
                         bone._updateAlpha();
                     }
-    
+
                     for (const slot of this._slots) {
                         slot._updateAlpha();
                     }
@@ -344,7 +344,7 @@ namespace dragonBones {
                     for (i = 0, l = this._bones.length; i < l; ++i) {
                         this._bones[i].update(this._cacheFrameIndex);
                     }
-    
+
                     for (i = 0, l = this._slots.length; i < l; ++i) {
                         this._slots[i].update(this._cacheFrameIndex);
                     }
@@ -376,13 +376,13 @@ namespace dragonBones {
                                 }
                             }
                         }
-    
+
                         action.returnToPool();
                     }
-    
+
                     this._actions.length = 0;
                 }
-    
+
             }
             finally {
                 // A failed animation, bone, slot or action update must not
