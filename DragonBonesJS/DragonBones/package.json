@@ -1,17 +1,12 @@
 {
   "name": "dragonbones-js",
   "version": "5.7.0",
-  "main": "",
+  "main": "./out/dragonBones.js",
   "scripts": {
     "build": "npm run build:ts && uglifyjs ./out/dragonBones.js -o ./out/dragonBones.min.js -m",
-    "build-egret": "cd .. & cd Egret & cd 4.x & npm run build & cd .. & cd .. & cd DragonBones",
-    "build-pixi": "cd .. & cd Pixi & cd 4.x & npm run build & cd .. & cd Demos & tsc & cd .. & cd .. & cd DragonBones",
-    "build-phaser": "cd .. & cd Phaser & cd 2.x & npm run build & cd .. & cd Demos & tsc & cd .. & cd .. & cd DragonBones",
-    "build-hilo": "cd .. & cd Hilo & cd 1.x & npm run build & cd .. & cd Demos & tsc & cd .. & cd .. & cd DragonBones",
-    "build-cocos": "cd .. & cd Cocos & cd 1.x & npm run build & cd .. & cd .. & cd DragonBones",
-    "build-all": "npm run build-egret & npm run build-pixi & npm run build-phaser & npm run build-hilo & npm run build-cocos",
     "build:ts": "tsc --project tsconfig.json",
-    "test": "npm run build && node --test"
+    "test": "npm run build && node --test",
+    "test:preflight": "node --test tests/preflight.test.cjs"
   },
   "devDependencies": {
     "typescript": "5.8.3",
@@ -19,5 +14,12 @@
   },
   "engines": {
     "node": ">=22"
-  }
+  },
+  "types": "./out/dragonBones.d.ts",
+  "files": [
+    "out/",
+    "LICENSE",
+    "README.md"
+  ],
+  "license": "MIT"
 }

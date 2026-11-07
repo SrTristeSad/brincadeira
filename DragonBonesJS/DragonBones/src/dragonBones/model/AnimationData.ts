@@ -232,16 +232,49 @@ namespace dragonBones {
         /**
          * @internal
          */
+        public _getCacheFrameCount(frameRate: number): number {
+            // Validate without allocating so ArmatureData can check every clip
+            // before committing the armature's cache frame rate.
+            // An animation without its armature cannot build the bone/slot
+            // cache tables. Reject it before committing any cache state.
+            if (this.parent === null || !(frameRate > 0.0) || !isFinite(frameRate) || !isFinite(this.scale) ||
+                !(this.duration >= 0.0) || !isFinite(this.duration)) {
+                return 0;
+            }
+
+            const cacheFrameRate = Math.max(Math.ceil(frameRate * this.scale), 1.0);
+            const cacheFrameCount = Math.ceil(cacheFrameRate * this.duration) + 1; // Cache one more frame.
+            if (!isFinite(cacheFrameRate) || !isFinite(cacheFrameCount) || cacheFrameCount > 4294967295) {
+                return 0;
+            }
+
+            // A clip cached independently cannot be reused with a different
+            // effective rate or a changed duration.
+            if (this.cacheFrameRate > 0.0 &&
+                (this.cacheFrameRate !== cacheFrameRate || this.cachedFrames.length !== cacheFrameCount)) {
+                return 0;
+            }
+
+            return cacheFrameCount;
+        }
+        /**
+         * @internal
+         */
         public cacheFrames(frameRate: number): void {
-            if (this.cacheFrameRate > 0.0) { // TODO clear cache.
+            if (this.cacheFrameRate > 0.0) {
                 return;
             }
 
-            this.cacheFrameRate = Math.max(Math.ceil(frameRate * this.scale), 1.0);
-            const cacheFrameCount = Math.ceil(this.cacheFrameRate * this.duration) + 1; // Cache one more frame.
+            const cacheFrameCount = this._getCacheFrameCount(frameRate);
+            if (cacheFrameCount === 0) {
+                return;
+            }
 
+            const cacheFrameRate = Math.max(Math.ceil(frameRate * this.scale), 1.0);
+            this.cacheFrameRate = cacheFrameRate;
             this.cachedFrames.length = cacheFrameCount;
-            for (let i = 0, l = this.cacheFrames.length; i < l; ++i) {
+            // Initialize every frame flag, not the parameter count of cacheFrames().
+            for (let i = 0, l = this.cachedFrames.length; i < l; ++i) {
                 this.cachedFrames[i] = false;
             }
 

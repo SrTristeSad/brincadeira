@@ -46,3 +46,47 @@ npm run build
 - Avaliar integrações com motores gráficos somente depois da estabilização do núcleo.
 
 **Regra:** todos os arquivos alterados ou adicionados neste trabalho devem permanecer dentro de `DragonBonesJS/`. Não modificar outras pastas do repositório.
+
+## Etapa de empacotamento (em revisão)
+
+- `DragonBones/package.json` passa a declarar caminhos reais de entrada JavaScript e de tipos TypeScript, mantendo a saída ES5 existente.
+- O pacote inclui a própria cópia da licença MIT e declara os artefatos gerados como conteúdo distribuível.
+- Comandos antigos para integrações gráficas ausentes são removidos apenas do subpacote `DragonBones/`.
+- Testes adicionais verificam, após o build, se os pontos de entrada existem e se o pacote pode ser carregado pelo Node.
+- **Não há execução confirmada do build integral**: qualquer falha remanescente do TypeScript 5.8.3 precisa ser corrigida antes de considerar o núcleo estável.
+
+## Compatibilidade da herança TypeScript (em revisão)
+
+O código original sobrescrevia a variável global `__extends` com um helper antigo para Weixin. Ao compilar com TypeScript 5.8 para ES5, essa implementação substituía a versão gerada pelo compilador e perdia a ligação entre construtores usados na herança estática. Removemos somente esse helper legado, permitindo que o compilador forneça sua implementação, e adicionamos dois testes de regressão de herança, sem alterar as classes nem a API pública.
+
+Uma reprodução isolada com TypeScript 5.8.3 e Node.js 22 confirmou a diferença entre o helper antigo e o helper gerado pelo compilador. **Os testes do núcleo completo ainda não foram executados.**
+
+## Estabilidade do relógio de animação (em revisão)
+
+O `WorldClock` agora libera referências imediatamente em `remove()` e `clear()` quando não há atualização em andamento, reduzindo o acúmulo de posições vazias entre quadros. Durante `advanceTime()`, as remoções continuam sendo adiadas até o término da atualização mais externa. O bloco `finally` também libera posições após exceções em callbacks. Não há alteração intencional da API pública ou do formato de animações.
+
+Foram acrescentados cinco testes de regressão, totalizando **31 testes definidos** no núcleo. Em uma reprodução **isolada** do relógio, compilada com TypeScript 5.8.3 e executada com Node 22, sete casos de referência passaram; **isso não substitui a execução de `npm test` no projeto DragonBonesJS completo**, que segue pendente.
+
+## Correção de identificação do pool (em revisão)
+
+O pool de `BaseObject` não usa mais `String(constructor)` como chave. Duas classes distintas podem ter o mesmo `toString()`, especialmente após minificação, e acabavam recebendo objetos uma da outra. Agora os identificadores internos são atribuídos pela **identidade do construtor**, sem alterar métodos públicos nem exigir APIs novas de runtime. A troca usa um registro de construtores em memória e mantém o alvo ES5. Foram acrescentados três testes de regressão.
+
+O defeito foi reproduzido em JavaScript isolado; o build completo e a suíte completa do núcleo ainda precisam ser executados.
+
+## Correção de troca de relógio (em revisão)
+
+Ao transferir um objeto que implementa `IAnimatable` com `clock` como propriedade simples, o `WorldClock.add()` agora o remove explicitamente do relógio anterior antes de associá-lo ao novo. Sem isso, o objeto podia receber atualizações duas vezes (uma de cada relógio). Foram adicionados três testes de regressão para transferências normais, transferências durante a atualização e adições repetidas. A interface pública permanece igual.
+
+O comportamento anterior e a correção foram reproduzidos num caso JavaScript isolado. A suíte completa do DragonBonesJS ainda não foi executada.
+
+## Proteção contra hierarquias externas corrompidas (em revisão)
+
+`WorldClock.contains()` agora detecta referências cíclicas entre objetos `IAnimatable`, retornando `false` quando o ciclo não conduz ao relógio consultado. Isso evita buscas infinitas caso alguma integração externa forneça um encadeamento de relógios inválido, sem mudar o comportamento das hierarquias válidas ou a API pública. Adicionados três testes específicos.
+
+O trecho foi compilado e executado num módulo isolado com TypeScript 5.8.3 / Node.js 22: **3 de 3 testes passaram**. A compilação completa do núcleo e a execução de toda a suíte continuam pendentes.
+
+## Distribuição de módulos e ordem de compilação (em revisão)
+
+O adaptador de distribuição foi extraído do início do núcleo para `DragonBones/src/dragonBones/core/ModuleExports.ts`, declarado **por último** no `tsconfig.json`. O total passa a **38 arquivos TypeScript: 37 arquivos originais do núcleo mais um adaptador de distribuição**. Isso garante que AMD, CommonJS e os ambientes que fornecem apenas `exports` recebam o namespace DragonBones completo.
+
+A dependência AMD circular foi removida; o caminho `exports` agora popula o objeto fornecido, sem reatribuir a variável local. O teste de pré-verificação confere a ordem do adaptador e os testes de distribuição exercitam os dois artefatos compilados. Os três formatos foram validados em uma reprodução TypeScript ES5 isolada com Node.js 22, mas o **build integral e os testes completos continuam pendentes**.

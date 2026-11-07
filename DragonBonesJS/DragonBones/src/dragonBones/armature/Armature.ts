@@ -299,90 +299,101 @@ namespace dragonBones {
 
             this._lockUpdate = true;
 
-            if (this._armatureData === null) {
-                console.warn("The armature has been disposed.");
-                return;
-            }
-            else if (this._armatureData.parent === null) {
-                console.warn("The armature data has been disposed.\nPlease make sure dispose armature before call factory.clear().");
-                return;
-            }
-
-            const prevCacheFrameIndex = this._cacheFrameIndex;
-            // Update animation.
-            this._animation.advanceTime(passedTime);
-            // Sort slots.
-            if (this._slotsDirty || this._zIndexDirty) {
-                this._slots.sort(Armature._onSortSlots);
-
-                if (this._zIndexDirty) {
-                    for (let i = 0, l = this._slots.length; i < l; ++i) {
-                        this._slots[i]._setZOrder(i); // 
-                    }
+            try {
+                if (this._armatureData === null) {
+                    console.warn("The armature has been disposed.");
+                    return;
+                }
+                else if (this._armatureData.parent === null) {
+                    console.warn("The armature data has been disposed.\nPlease make sure dispose armature before call factory.clear().");
+                    return;
                 }
 
-                this._slotsDirty = false;
-                this._zIndexDirty = false;
-            }
-            // Update alpha.
-            if (this._alphaDirty) {
-                this._alphaDirty = false;
-                this._globalAlpha = this._alpha * (this._parent !== null ? this._parent._globalAlpha : 1.0);
+                const prevCacheFrameIndex = this._cacheFrameIndex;
+                // Update animation.
+                this._animation.advanceTime(passedTime);
+                // Sort slots.
+                if (this._slotsDirty || this._zIndexDirty) {
+                    this._slots.sort(Armature._onSortSlots);
 
-                for (const bone of this._bones) {
-                    bone._updateAlpha();
-                }
-
-                for (const slot of this._slots) {
-                    slot._updateAlpha();
-                }
-            }
-            // Update bones and slots.
-            if (this._cacheFrameIndex < 0 || this._cacheFrameIndex !== prevCacheFrameIndex) {
-                let i = 0, l = 0;
-                for (i = 0, l = this._bones.length; i < l; ++i) {
-                    this._bones[i].update(this._cacheFrameIndex);
-                }
-
-                for (i = 0, l = this._slots.length; i < l; ++i) {
-                    this._slots[i].update(this._cacheFrameIndex);
-                }
-            }
-            // Do actions.
-            if (this._actions.length > 0) {
-                for (const action of this._actions) {
-                    const actionData = action.actionData;
-                    if (actionData !== null) {
-                        if (actionData.type === ActionType.Play) {
-                            if (action.slot !== null) {
-                                const childArmature = action.slot.childArmature;
-                                if (childArmature !== null) {
-                                    childArmature.animation.fadeIn(actionData.name);
-                                }
-                            }
-                            else if (action.bone !== null) {
-                                for (const slot of this.getSlots()) {
-                                    if (slot.parent === action.bone) {
-                                        const childArmature = slot.childArmature;
-                                        if (childArmature !== null) {
-                                            childArmature.animation.fadeIn(actionData.name);
-                                        }
-                                    }
-                                }
-                            }
-                            else {
-                                this._animation.fadeIn(actionData.name);
-                            }
+                    if (this._zIndexDirty) {
+                        for (let i = 0, l = this._slots.length; i < l; ++i) {
+                            this._slots[i]._setZOrder(i); // 
                         }
                     }
 
-                    action.returnToPool();
+                    this._slotsDirty = false;
+                    this._zIndexDirty = false;
+                }
+                // Update alpha.
+                if (this._alphaDirty) {
+                    this._alphaDirty = false;
+                    this._globalAlpha = this._alpha * (this._parent !== null ? this._parent._globalAlpha : 1.0);
+
+                    for (const bone of this._bones) {
+                        bone._updateAlpha();
+                    }
+
+                    for (const slot of this._slots) {
+                        slot._updateAlpha();
+                    }
+                }
+                // Update bones and slots.
+                if (this._cacheFrameIndex < 0 || this._cacheFrameIndex !== prevCacheFrameIndex) {
+                    let i = 0, l = 0;
+                    for (i = 0, l = this._bones.length; i < l; ++i) {
+                        this._bones[i].update(this._cacheFrameIndex);
+                    }
+
+                    for (i = 0, l = this._slots.length; i < l; ++i) {
+                        this._slots[i].update(this._cacheFrameIndex);
+                    }
+                }
+                // Do actions. Consume each entry before invoking animation
+                // callbacks, which may prepend or append more actions.
+                while (this._actions.length > 0) {
+                    const action = this._actions.shift() as EventObject;
+                    try {
+                        const actionData = action.actionData;
+                        if (actionData !== null) {
+                            if (actionData.type === ActionType.Play) {
+                                if (action.slot !== null) {
+                                    const childArmature = action.slot.childArmature;
+                                    if (childArmature !== null) {
+                                        childArmature.animation.fadeIn(actionData.name);
+                                    }
+                                }
+                                else if (action.bone !== null) {
+                                    for (const slot of this.getSlots()) {
+                                        if (slot.parent === action.bone) {
+                                            const childArmature = slot.childArmature;
+                                            if (childArmature !== null) {
+                                                childArmature.animation.fadeIn(actionData.name);
+                                            }
+                                        }
+                                    }
+                                }
+                                else {
+                                    this._animation.fadeIn(actionData.name);
+                                }
+                            }
+                        }
+                    }
+                    finally {
+                        // Even when fadeIn() fails, do not replay this action
+                        // or keep it in the queue until the next frame.
+                        action.returnToPool();
+                    }
                 }
 
-                this._actions.length = 0;
+            }
+            finally {
+                // A failed animation, bone, slot or action update must not
+                // permanently freeze this armature on subsequent frames.
+                this._lockUpdate = false;
             }
 
-            this._lockUpdate = false;
+            // Keep proxy notifications outside the lock, as before.
             this._proxy.dbUpdate();
         }
         /**

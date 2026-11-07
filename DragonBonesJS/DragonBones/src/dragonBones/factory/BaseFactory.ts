@@ -949,11 +949,13 @@ namespace dragonBones {
                 const rawAnimations = armature.animation.animations;
                 const animations: Map<AnimationData> = Object.create(null);
 
-                for (let k in rawAnimations) {
+                // Animation maps can be supplied by external integrations.
+                // Merge only their own entries, not enumerable prototype keys.
+                for (const k of Object.keys(rawAnimations)) {
                     animations[k] = rawAnimations[k];
                 }
 
-                for (let k in armatureData.animations) {
+                for (const k of Object.keys(armatureData.animations)) {
                     animations[k] = armatureData.animations[k];
                 }
 

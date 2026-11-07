@@ -39,9 +39,21 @@ namespace dragonBones {
         // Use dictionaries without inherited keys, so constructor names are safe.
         private static readonly _maxCountMap: Map<number> = Object.create(null);
         private static readonly _poolsMap: Map<Array<BaseObject>> = Object.create(null);
+        private static readonly _classTypes: Array<Function> = [];
+
+        // Never identify a class by String(constructor). Distinct classes can
+        // have the same toString(), especially after minification.
+        private static _getClassType(objectConstructor: Function): number {
+            const index = BaseObject._classTypes.indexOf(objectConstructor);
+            if (index >= 0) {
+                return index;
+            }
+
+            return BaseObject._classTypes.push(objectConstructor) - 1;
+        }
 
         private static _returnObject(object: BaseObject): void {
-            const classType = String(object.constructor);
+            const classType = BaseObject._getClassType(object.constructor);
             const maxCount = classType in BaseObject._maxCountMap ? BaseObject._maxCountMap[classType] : BaseObject._defaultMaxCount;
             const pool = BaseObject._poolsMap[classType] = BaseObject._poolsMap[classType] || [];
             if (pool.length < maxCount) {
@@ -79,8 +91,12 @@ namespace dragonBones {
                 maxCount = 0;
             }
 
+            // A pool capacity is a whole-object count. Fractional values
+            // would throw RangeError when assigned to Array.length.
+            maxCount = Math.floor(maxCount);
+
             if (objectConstructor !== null) {
-                const classType = String(objectConstructor);
+                const classType = BaseObject._getClassType(objectConstructor);
                 const pool = classType in BaseObject._poolsMap ? BaseObject._poolsMap[classType] : null;
                 if (pool !== null && pool.length > maxCount) {
                     pool.length = maxCount;
@@ -117,7 +133,7 @@ namespace dragonBones {
          */
         public static clearPool(objectConstructor: (typeof BaseObject) | null = null): void {
             if (objectConstructor !== null) {
-                const classType = String(objectConstructor);
+                const classType = BaseObject._getClassType(objectConstructor);
                 const pool = classType in BaseObject._poolsMap ? BaseObject._poolsMap[classType] : null;
                 if (pool !== null && pool.length > 0) {
                     pool.length = 0;
@@ -143,7 +159,7 @@ namespace dragonBones {
          * @language zh_CN
          */
         public static borrowObject<T extends BaseObject>(objectConstructor: { new(): T; }): T {
-            const classType = String(objectConstructor);
+            const classType = BaseObject._getClassType(objectConstructor);
             const pool = classType in BaseObject._poolsMap ? BaseObject._poolsMap[classType] : null;
             if (pool !== null && pool.length > 0) {
                 const object = pool.pop() as T;
