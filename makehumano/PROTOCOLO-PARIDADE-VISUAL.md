@@ -585,3 +585,34 @@ Os controles com material marcado `transparent=True` reclassificam as primitivas
 O mapa representa **branco** para interseção, **vermelho** para mudança exclusiva GL, **ciano** para mudança exclusiva Vulkan e **preto** para nenhuma mudança. Houve uma execução intermediária [42341556845](https://github.com/SrTristeSad/brincadeira/actions/runs/42341556845) interrompida por condição de corrida no harness A2C Vulkan: o observador gravava JSON preliminar no mesmo caminho do relatório final, permitindo que o executor encerrasse o processo cedo. O commit `cc696765` separou `*-observacao.json` do JSON terminal, sem qualquer modificação de renderização; a execução final passou. Também foi removida a contagem indevida de A2C de outros objetos GL, isolando a malha antes da captura.
 
 **Interpretação e bloqueios:** temos **MSAA 4× e A2C reais exercitados nos dois renderizadores**, mas IoU de **0,6136** não permite aprovação de paridade espacial. Além disso, nos dois caminhos o modo de blending muda quando A2C fica ativo; o contraste RGB ON/OFF mede esse efeito **combinado**, não exclusivamente a máscara de cobertura por amostra. O resultado não prova equivalência com GPUs físicas, shaders adicionais, roupa, cabelo, semântica de `opacity` ou cor/sRGB legada. Não se alterou shader, pipeline, compositor, framebuffer, interface, asset ou código da aplicação em produção. PR DRAFT; `main` e decisões de produto preservadas.
+
+## 27. A2C: decomposição espacial, dependência do limiar e auditoria de alinhamento
+
+**CI confirmada:** [GitHub Actions 42345597866](https://github.com/SrTristeSad/brincadeira/actions/runs/42345597866), commit `488f68ebea04a6205f81f08cd006d2a55961a7a1`; ambos os jobs `vulkan-gui-original` e `vulkan-gui-sem-opengl` concluíram **success**. Cinco testes de regressão adicionais validaram `decompor_efeito_a2c`: morfologia 8-conexa, varredura de limiar, translação inteira sem wraparound e orientação de deltas RGB. A captura Phong A2C 4× continuou com observação real dos pipelines GL/Vulkan. Artefato `phong-a2c-opengl-pareado-ci` (ID 13563717146) contém `phong-a2c-mapa-ci.json` e seu PNG 1024×768, com SHA-256 do arquivo `419762cebadb44df3ecc273d792fabecd455d52826d2dcb29ab1c746df0e9ffd`. A saída é **diagnóstico sem homologação**.
+
+**Problema de interpretação:** cada backend renderiza o fundo RGB neutro com valores **GL=[128,128,128]**, **Vulkan=[188,188,188]**, compatíveis com a diferença de codificação sRGB já identificada. Por isso, o script mantém dois controles **intrabackend** (4× A2C desligado/ligado) e identifica pixels alterados sem tentar alinhar as cores absolutas GL/Vulkan. A varredura confirma que a IoU depende do limiar RGB escolhido:
+
+| Limiar RGB intrabackend | Pixels GL alterados | Pixels Vulkan alterados | IoU da localização |
+| ---: | ---: | ---: | ---: |
+| 2 | 2.684 | 5.121 | **0,3790** |
+| 4 | 2.576 | 3.237 | **0,5366** |
+| 8 | 2.372 | 2.459 | **0,6130** |
+| 12 | 2.277 | 1.611 | **0,5105** |
+| 16 | 1.132 | 1.131 | **0,6410** |
+| 24 | 910 | 871 | **0,6295** |
+
+**Decomposição por contorno estimado:** por backend, o PNG **4× A2C OFF** é comparado com o seu próprio pixel de fundo no canto, limiar RGB 10; erodimos a região estimada do personagem em 5 pixels por vizinhança 8-conexa. Isso **não** é máscara geométrica de verdade: pode confundir superfícies cuja cor se aproxima do fundo, pequenas áreas transparentes e overdraw. Mesmo com essa ressalva, oferece diagnóstico reproduzível sem alterar pixels ou rasterização:
+
+| Medida, tolerância de efeito RGB 8 | OpenGL | Vulkan |
+| --- | ---: | ---: |
+| Pixels de efeito A2C (ON/OFF) | 2.372 | 2.459 |
+| Na borda/faixa externa estimada de 5 px | 1.731 (**72,98%**) | 1.768 (**71,90%**) |
+| No interior estimado após erosão | 641 | 691 |
+| Fora da região de corpo estimada | 0 | 117 |
+| Pixels da região de corpo estimada, OFF | 45.969 | 45.872 |
+
+**Alinhamento:** varredura de translação **inteira**, deslocando somente a máscara de efeitos GL de −2 a +2 pixels em ambos os eixos (sem wraparound), mostrou melhor IoU **0,6130217 em dx=0,dy=0**, igual à IoU sem deslocamento. Uma simples translação inteira do enquadramento, nessa faixa, não explica o resíduo. Ao dividir a imagem ao meio, as alterações exclusivas **GL** são **401 à esquerda/135 à direita**, e as exclusivas **Vulkan** são **169 à esquerda/454 à direita**; há assimetria espacial, mas nenhuma hipótese sobre sample locations, winding, projeção ou antialiasing está demonstrada por esses dados.
+
+**Direção da mudança de cor:** nos **1.836 pixels que mudaram em ambos os backends** para tolerância 8, os vetores RGB `(A2C_ON − A2C_OFF)` têm cosseno mediano **0,98684**, fração com cosseno >0,5 de **80,45%** e fração com cosseno <−0,5 de **15,09%**. Isso mostra alterações frequentemente na mesma direção, mas não avalia paridade de cor absoluta. A diferença de sRGB, o blending (desativado durante A2C) e possíveis diferenças de cobertura por amostra permanecem fatores entrelaçados. **Não** usar a IoU isolada como meta de produto.
+
+**Escopo preservado:** esta etapa alterou apenas `testes/mapear_efeito_a2c_rgb.py`, `testes/test_decompor_efeito_a2c_rgb_wgpu.py`, workflow e este protocolo. Nenhum shader, framebuffer, pipeline ou lógica de produto foi alterado; PR #11 em rascunho, sem merge, e `main` preservada.
