@@ -211,6 +211,19 @@ jobs:
             --vulkan "${RUNNER_TEMP}/phong-a2c-vulkan-ci.json" \
             --json "${RUNNER_TEMP}/phong-a2c-backends-ci.json"
 
+      - name: Mapear interseção espacial A2C entre OpenGL e Vulkan
+        run: |
+          # Pillow serve somente à auditoria PNG, não às requirements do produto.
+          python -m pip install --disable-pip-version-check "Pillow>=10,<13"
+          python -m unittest discover -s makehumano/testes \
+            -p test_mapear_efeito_a2c_rgb_wgpu.py -v
+          python -u makehumano/testes/mapear_efeito_a2c_rgb.py \
+            --opengl "${RUNNER_TEMP}/phong-a2c-opengl-ci.json" \
+            --vulkan "${RUNNER_TEMP}/phong-a2c-vulkan-ci.json" \
+            --pareamento "${RUNNER_TEMP}/phong-a2c-backends-ci.json" \
+            --json "${RUNNER_TEMP}/phong-a2c-mapa-ci.json" \
+            --png "${RUNNER_TEMP}/phong-a2c-mapa-ci.png"
+
       - name: Publicar diagnóstico RGB A2C OpenGL e comparação entre backends
         if: always()
         uses: actions/upload-artifact@v4
@@ -221,6 +234,8 @@ jobs:
             ${{ runner.temp }}/phong-a2c-opengl-ci*.png
             ${{ runner.temp }}/phong-a2c-opengl-ci.log
             ${{ runner.temp }}/phong-a2c-backends-ci.json
+            ${{ runner.temp }}/phong-a2c-mapa-ci.json
+            ${{ runner.temp }}/phong-a2c-mapa-ci.png
           if-no-files-found: warn
 
       - name: Diagnosticar par Phong bruto e normalizações somente de teste
