@@ -59,6 +59,7 @@ def load(app):
                 "opacity": float(material.opacity),
                 "transparent": bool(material.transparent),
                 "a2c": bool(material.alphaToCoverage),
+                "recebe_sombras": bool(getattr(material, "receiveShadows", True)),
             }
             amostras_originais = int(cena.amostras)
             camera = fixar_camera(app)
@@ -92,7 +93,8 @@ def load(app):
             texturas_varredura = {128: (textura_path, textura_meta)}
 
             def capturar(nome, *, amostras, transparencia, a2c,
-                         sem_blend=False, escrever_z=False, alfa_textura=128):
+                         sem_blend=False, escrever_z=False, alfa_textura=128,
+                         sem_sombras=False):
                 if alfa_textura not in texturas_varredura:
                     texturas_varredura[alfa_textura] = salvar_textura_alfa_parcial(
                         destino.with_name(
@@ -136,6 +138,9 @@ def load(app):
                             "a2c_calculado": bool(alpha_to_coverage_vulkan(
                                 obj, cena.amostras, linhas=bool(linhas or pontos)
                             )),
+                            "recebe_sombras_material_observado": bool(
+                                getattr(obj.material, "receiveShadows", True)
+                            ),
                             "amostras": int(cena.amostras),
                             "linhas": bool(linhas),
                             "pontos": bool(pontos),
@@ -155,12 +160,18 @@ def load(app):
                     return original(obj, linhas, pontos=pontos)
 
                 cena._pipeline_objeto = espionar
+                sombras_original = bool(
+                    getattr(material, "receiveShadows", True)
+                )
+                if sem_sombras:
+                    material.receiveShadows = False
                 try:
                     rgb = cena.capturar_framebuffer(
                         [corpo], G.cameras, 1024, 768,
                         incluir_alfa=False, cor_fundo=(0.5, 0.5, 0.5, 1.0),
                     )
                 finally:
+                    material.receiveShadows = sombras_original
                     if existia:
                         cena._pipeline_objeto = anterior
                     else:
@@ -176,6 +187,12 @@ def load(app):
                     raise RuntimeError("A malha do corpo não atravessou o pipeline")
                 if any(v["a2c_calculado"] != esperado for v in observado):
                     raise RuntimeError("Caminho de A2C inconsistente na malha")
+                if any(
+                    v["recebe_sombras_material_observado"] is not (
+                        sem_sombras is True or not sombras_original
+                    ) for v in observado
+                ):
+                    raise RuntimeError("Material receiveShadows inesperado na GPU")
                 chaves = [
                     k for k in chaves_da_captura
                     if isinstance(k, tuple) and len(k) >= 4
@@ -205,6 +222,10 @@ def load(app):
                     "a2c_flag_material": bool(a2c),
                     "controle_blend_desligado": bool(sem_blend),
                     "controle_escrita_z_forcada": bool(escrever_z),
+                    "controle_sombras_desligadas": bool(sem_sombras),
+                    "recebe_sombras_material_observado": bool(
+                        sombras_original and not sem_sombras
+                    ),
                     "blend_habilitado_observado": bool(blend_esperado),
                     "escrita_z_observada": bool(z_esperado),
                     "material_transparent": bool(transparencia),
@@ -261,6 +282,13 @@ def load(app):
                     capturar("4x_a128_repeticao_sem_a2c_sem_blend_com_z",
                              amostras=4, transparencia=True, a2c=False,
                              sem_blend=True, escrever_z=True, alfa_textura=128)
+                    # Prova causal: a configuração de receiveShadows é
+                    # desligada SÓ DURANTE o draw, sem alterar o shader.
+                    for alfa in (64, 128, 192):
+                        capturar(f"4x_a{alfa:03d}_sem_a2c_sem_blend_com_z_sem_sombras",
+                                 amostras=4, transparencia=True, a2c=False,
+                                 sem_blend=True, escrever_z=True,
+                                 alfa_textura=alfa, sem_sombras=True)
 
             # Prova independente do corpo/Phong: mesmo loader, sampler e
             # recurso de textura, mas um triângulo sem overdraw. Mantém
@@ -346,6 +374,18 @@ def load(app):
                         imagens["4x_a192_com_a2c"],
                         imagens["4x_com_a2c"]
                     ),
+                    "alfa64_vs128_off_sem_sombras": comparar_rgb(
+                        imagens["4x_a064_sem_a2c_sem_blend_com_z_sem_sombras"],
+                        imagens["4x_a128_sem_a2c_sem_blend_com_z_sem_sombras"]
+                    ),
+                    "alfa192_vs128_off_sem_sombras": comparar_rgb(
+                        imagens["4x_a192_sem_a2c_sem_blend_com_z_sem_sombras"],
+                        imagens["4x_a128_sem_a2c_sem_blend_com_z_sem_sombras"]
+                    ),
+                    "alfa128_sombras_on_vs_off": comparar_rgb(
+                        imagens["4x_sem_a2c_sem_blend_com_z"],
+                        imagens["4x_a128_sem_a2c_sem_blend_com_z_sem_sombras"]
+                    ),
                 }
                 mudou = documento["comparacao"]["a2c_4x_off_vs_on"]["pixels_divergentes"] > 0
                 documento["resultado_a2c"] = (
@@ -374,6 +414,7 @@ def load(app):
                 material.opacity = originais["opacity"]
                 material.transparent = originais["transparent"]
                 material.alphaToCoverage = originais["a2c"]
+                material.receiveShadows = originais["recebe_sombras"]
 
     QtCore.QTimer.singleShot(250, medir)
 
