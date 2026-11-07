@@ -114,6 +114,31 @@ class TesteAutoSobreposicao(unittest.TestCase):
                 largura=64, altura=64
             )
 
+    def test_corrige_aspecto_da_captura_offscreen(self):
+        imagem = np.zeros((64, 64, 3), np.uint8)
+        imagem[20:44, 20:44] = 100
+        base = auditar_corpo(
+            self.corpo, self.camera, imagem, imagem,
+            largura=64, altura=64, max_controles=0
+        )
+        offscreen = auditar_corpo(
+            self.corpo, self.camera, imagem, imagem,
+            largura=64, altura=64, max_controles=0,
+            tamanho_origem=(128, 64),
+        )
+        self.assertEqual(offscreen["ajuste_aspecto_fbo"], 2.0)
+        self.assertEqual(offscreen["tamanho_janela_origem"], [128, 64])
+        self.assertNotEqual(
+            base["sha256_mvp_float64"],
+            offscreen["sha256_mvp_float64"],
+        )
+        with self.assertRaisesRegex(ValueError, "Dimensões originais"):
+            auditar_corpo(
+                self.corpo, self.camera, imagem, imagem,
+                largura=64, altura=64,
+                tamanho_origem=(0, 64),
+            )
+
     def test_sem_falso_positivo_quando_cores_iguais(self):
         imagem = np.zeros((64, 64, 3), np.uint8)
         imagem[20:44, 20:44] = 100
