@@ -337,3 +337,19 @@ Para investigar o brilho sem modificar o produto, ambos os harnesses efêmeros f
 **Nova hipótese restrita:** GLSL `phong_fragment_shader.txt` original não avalia sombra por pixel; Vulkan inclui `shadow_visibility()` no `fator_luz` do preset Phong, a depender de `material.receiveShadows`. Não assumir que isto explica o desvio sem medir. Para o controle seguinte, cada harness descartável captura outro PNG com a propriedade preexistente `receiveShadows=False` no mesmo material/câmera e restaura o estado em `finally`; a ferramenta de comparação registra versões bruta e normalizada. Não há mudança em produção ou na interface.
 
 **Critério do controle:** os manifestos devem confirmar `receiveShadows=False`, shader Phong e dimensões idênticas, e as métricas serem comparadas ao par normal da mesma execução. O experimento **não altera o contrato final de sombras** e não homologa equivalência. Esta etapa está apenas implementada, aguardando CI na revisão subsequente.
+
+### Resultado medido do controle de sombras
+
+**Execução:** [GitHub Actions 42328823083](https://github.com/SrTristeSad/brincadeira/actions/runs/42328823083), commit `cfe535f8472d575f37be95569fb70809b4f3c92b`, jobs Vulkan concluídos com sucesso, artifacts `phong-referencia-opengl-ci`, `phong-diffuse-on-off-ci`, `phong-pareamento-ci`. A comparação usou OpenGL e Vulkan pareados com os parâmetros originais de câmera e material, modificando apenas `receiveShadows=False` nos dois harnesses efêmeros e restaurando o estado em seguida.
+
+| Cenário (após correções de R/B na referência e decodificação sRGB Vulkan, **somente para diagnóstico**) | Pixels >8 | Fração | Erro médio RGB global | Erro médio RGB na região heurística do corpo | Máximo RGBA |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Phong original | 32.935 / 786.432 | **4,1879%** | **0,799804** | **13,9164** | 203 |
+| Phong com especular zerado | 32.618 / 786.432 | **4,1476%** | **0,766646** | Não calculado | 149 |
+| Phong com `receiveShadows=False` | 32.786 / 786.432 | **4,1690%** | **0,763142** | **13,2785** | 128 |
+
+A referência OpenGL Phong com `receiveShadows=False` gerou bytes PNG idênticos aos do controle original (mesmo SHA-256 `7e5c444966a3ad3bc3c11a1710150a62b0a423a9782e092d79d8ad9248ac4c87`); no candidato Vulkan os PNGs **não** são idênticos (SHA-256 normal `df03b154b8a747f8edb9383cbe7d98e49e3435c6216ede981ef666d33563b63c`, sem sombras `9485b516060b89977d9a9cee7e60d9836c5e999b3f0c0e431bda42a036f422f9`). Esse controle demonstra uma diferença de comportamento de recepção de sombras na rota Phong, mas explica apenas parte pequena da divergência RGB do par.
+
+A região heurística de corpo foi formada por união dos pixels que diferiam do fundo cinza 128 em mais de 8 níveis em ao menos um canal, após normalizações de canal/gama. Nos dois pares foram 45.198 pixels; esse procedimento **não é uma medição de alpha mask**. Foram rechecados os dados dos artefatos completos com Pillow+NumPy, não apenas códigos de saída.
+
+**Decisão técnica desta fase:** nem o especular nem a sombra são a principal causa dos **~4,17% restantes**. A investigação deve prosseguir pelas transformações de normais, direções de luz, contribuição difusa, interpolação e equações GLSL/WGSL. **Não alterar** `vulkan_scene.py`, shaders ou framebuffer de produção enquanto não houver autorização expressa do criador. Não tentar aprovar o shader apenas porque `erro_medio_rgb` global fica abaixo de 3.
