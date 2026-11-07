@@ -54,7 +54,8 @@ def _camera_igual(a, b, eps=1e-5):
     return resultado
 
 
-def avaliar(ref_png, vulkan_png, ref_meta, vulkan_meta, saida, diretorio_diff=None):
+def avaliar(ref_png, vulkan_png, ref_meta, vulkan_meta, saida, diretorio_diff=None,
+           ref_sem_especular=None, vk_sem_especular=None):
     registro_ref = json.loads(Path(ref_meta).read_text(encoding="utf-8"))
     registro_vk = json.loads(Path(vulkan_meta).read_text(encoding="utf-8"))
     if registro_ref.get("estado") != "CAPTURADO":
@@ -87,6 +88,26 @@ def avaliar(ref_png, vulkan_png, ref_meta, vulkan_meta, saida, diretorio_diff=No
             trocar_vermelho_azul(ref), decodificar_srgb_rgb(vk),
         ),
     }
+    if (ref_sem_especular is None) != (vk_sem_especular is None):
+        raise ValueError("Capturas sem especular precisam ser fornecidas em par")
+    if ref_sem_especular is not None:
+        if not (registro_ref.get("captura_especular_desligado") is True
+                and registro_vk.get("captura_especular_desligado") is True):
+            raise ValueError("Manifestos não confirmam capturas sem especular")
+        estado_ref = registro_ref.get("material_sem_especular", {})
+        estado_vk = registro_vk.get("estado_material_phong_sem_especular", {})
+        if (estado_ref.get("specularColor") != [0.0, 0.0, 0.0]
+                or estado_vk.get("specularColor") != [0.0, 0.0, 0.0]):
+            raise ValueError("Capturas de controle precisam de especular zero")
+        no_ref, no_vk = pixels(Path(ref_sem_especular)), pixels(Path(vk_sem_especular))
+        if no_ref.shape != ref.shape or no_vk.shape != vk.shape:
+            raise ValueError("Controles sem especular têm dimensões distintas")
+        variantes.update({
+            "sem_especular_bruto": (no_ref, no_vk),
+            "sem_especular_gl_rb_e_vk_linear": (
+                trocar_vermelho_azul(no_ref), decodificar_srgb_rgb(no_vk)
+            )
+        })
     metricas = {}
     for nome, (a,b) in variantes.items():
         m = comparar_pixels(a, b, tolerancia=8, fracao_maxima=0.02)
@@ -106,6 +127,11 @@ def avaliar(ref_png, vulkan_png, ref_meta, vulkan_meta, saida, diretorio_diff=No
         salvar_mapa_diferencas(ref, vk, diretorio_diff / "phong-bruto-diff.png")
         a, b = variantes["gl_troca_rb_e_vk_srgb_para_linear"]
         salvar_mapa_diferencas(a, b, diretorio_diff / "phong-normalizacoes-diff.png")
+        if "sem_especular_gl_rb_e_vk_linear" in variantes:
+            a, b = variantes["sem_especular_gl_rb_e_vk_linear"]
+            salvar_mapa_diferencas(
+                a, b, diretorio_diff / "phong-sem-especular-normalizacoes-diff.png"
+            )
     condicoes = {
         "camera": camera,
         "camera_totalmente_igual": camera_igual,
@@ -126,6 +152,7 @@ def avaliar(ref_png, vulkan_png, ref_meta, vulkan_meta, saida, diretorio_diff=No
         "comparacao_mecanismos_apenas": True,
         "paridade_com_original_homologada": False,
         "fontes_nao_modificadas": True,
+        "controle_sem_especular_presente": ref_sem_especular is not None,
         "motivo_normalizacoes": [
             "O upstream usa glReadPixels GL_RGBA mas inverte R/B no array retornado.",
             "O framebuffer Vulkan offscreen foi observado em rgba8unorm-srgb.",
@@ -150,9 +177,12 @@ def main():
     p.add_argument("--manifesto-vulkan", type=Path, required=True)
     p.add_argument("--json", type=Path, required=True)
     p.add_argument("--diff-dir", type=Path)
+    p.add_argument("--opengl-sem-especular", type=Path)
+    p.add_argument("--vulkan-sem-especular", type=Path)
     args = p.parse_args()
     avaliar(args.opengl, args.vulkan, args.manifesto_opengl,
-            args.manifesto_vulkan, args.json, args.diff_dir)
+            args.manifesto_vulkan, args.json, args.diff_dir,
+            args.opengl_sem_especular, args.vulkan_sem_especular)
 
 
 if __name__ == "__main__":
