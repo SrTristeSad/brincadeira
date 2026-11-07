@@ -141,6 +141,7 @@ jobs:
           python -m py_compile makehumano/testes/capturar_a2c_sintetico_vulkan.py
           python -m py_compile makehumano/testes/contrato_sobreposicao_depth_sintetica.py \
             makehumano/testes/capturar_sobreposicao_depth_vulkan.py
+          python -m py_compile makehumano/testes/auditar_auto_sobreposicao_malha.py
           python -m py_compile makehumano/testes/contrato_cruzamento_depth_sintetica.py \
             makehumano/testes/capturar_cruzamento_depth_vulkan.py
           python -m py_compile makehumano/testes/contrato_coplanares_depth_sintetica.py \
@@ -328,6 +329,20 @@ jobs:
             --png-gl "${RUNNER_TEMP}/phong-a2c-depth-gl-ci.png" \
             --png-vk "${RUNNER_TEMP}/phong-a2c-depth-vk-ci.png"
 
+      - name: Auditar faces projetadas sobre pixels de efeito Z no corpo real
+        run: |
+          python -m py_compile makehumano/testes/comparar_auto_sobreposicao_z.py
+          python -m unittest discover -s makehumano/testes \
+            -p test_auditar_auto_sobreposicao_malha_wgpu.py -v
+          python -m unittest discover -s makehumano/testes \
+            -p test_comparar_auto_sobreposicao_z_wgpu.py -v
+          python -u makehumano/testes/comparar_auto_sobreposicao_z.py \
+            --opengl "${RUNNER_TEMP}/phong-a2c-opengl-ci.json" \
+            --vulkan "${RUNNER_TEMP}/phong-a2c-vulkan-ci.json" \
+            --json "${RUNNER_TEMP}/phong-a2c-auto-sobreposicao-z-ci.json" \
+            --png-gl "${RUNNER_TEMP}/phong-a2c-auto-sobreposicao-gl-ci.png" \
+            --png-vk "${RUNNER_TEMP}/phong-a2c-auto-sobreposicao-vk-ci.png"
+
       - name: Publicar diagnóstico RGB A2C OpenGL e comparação entre backends
         if: always()
         uses: actions/upload-artifact@v4
@@ -354,6 +369,9 @@ jobs:
             ${{ runner.temp }}/phong-a2c-mapa-ci.png
             ${{ runner.temp }}/phong-a2c-mapa-ci-isolado.png
             ${{ runner.temp }}/phong-a2c-depth-diferencas-ci.json
+            ${{ runner.temp }}/phong-a2c-auto-sobreposicao-z-ci.json
+            ${{ runner.temp }}/phong-a2c-auto-sobreposicao-gl-ci.png
+            ${{ runner.temp }}/phong-a2c-auto-sobreposicao-vk-ci.png
             ${{ runner.temp }}/phong-a2c-depth-gl-ci.png
             ${{ runner.temp }}/phong-a2c-depth-vk-ci.png
             ${{ runner.temp }}/phong-a2c-sombras-pareadas-ci.json
