@@ -175,7 +175,7 @@ def _resumir(pontos, medidas):
 
 def auditar_corpo(corpo, camera, rgb_sem_z, rgb_com_z,
                   *, largura=1024, altura=768, tolerancia=8,
-                  max_controles=512):
+                  max_controles=512, tamanho_origem=None):
     """Relaciona máscara RGB observada à projeção de faces da mesma malha."""
     a, b = np.asarray(rgb_sem_z), np.asarray(rgb_com_z)
     if (
@@ -189,6 +189,22 @@ def auditar_corpo(corpo, camera, rgb_sem_z, rgb_com_z,
         camera.updateCamera()
         camera.updated = True
     proj, view = camera.getMatrices(0)
+    proj = np.asarray(proj, dtype=np.float64).copy()
+    # mh.renderToBuffer altera G.windowWidth/Height para 1024×768 ANTES
+    # de glmodule.cameraPosition(). A função WGPU matriz_wgpu corrige
+    # o eixo X pelo aspecto do destino. Após a captura, G já retornou
+    # às dimensões da janela; reconstruir o aspecto real do FBO.
+    aspecto_origem = None
+    if tamanho_origem is not None:
+        if (
+            not isinstance(tamanho_origem, (tuple, list))
+            or len(tamanho_origem) != 2
+            or any(not isinstance(v, int) or v <= 0 for v in tamanho_origem)
+        ):
+            raise ValueError("Dimensões originais da janela inválidas")
+        ow, oh = tamanho_origem
+        aspecto_origem = float(ow) / float(oh)
+        proj[0, :] *= aspecto_origem / (float(largura) / float(altura))
     model = camera.getModelMatrix(corpo)
     pos = np.asarray(corpo.verts)
     faces = np.asarray(corpo.primitives)
@@ -227,6 +243,13 @@ def auditar_corpo(corpo, camera, rgb_sem_z, rgb_com_z,
         "nao_homologado": True,
         "dimensoes": [largura, altura],
         "tolerancia_rgb": tolerancia,
+        "tamanho_janela_origem": (
+            list(tamanho_origem) if tamanho_origem is not None else None
+        ),
+        "ajuste_aspecto_fbo": (
+            aspecto_origem / (float(largura) / float(altura))
+            if aspecto_origem is not None else 1.0
+        ),
         "sha256_rgb_sem_z": hashlib.sha256(
             np.ascontiguousarray(a).tobytes()
         ).hexdigest(),
