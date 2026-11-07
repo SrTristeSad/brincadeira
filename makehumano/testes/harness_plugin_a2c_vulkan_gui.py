@@ -258,6 +258,9 @@ def load(app):
                         capturar("4x_a%03d_com_a2c" % alfa,
                                  amostras=4, transparencia=True, a2c=True,
                                  alfa_textura=alfa)
+                    capturar("4x_a128_repeticao_sem_a2c_sem_blend_com_z",
+                             amostras=4, transparencia=True, a2c=False,
+                             sem_blend=True, escrever_z=True, alfa_textura=128)
 
             documento = json.loads(provisorio.read_text(encoding="utf-8"))
             documento.update({
@@ -312,6 +315,26 @@ def load(app):
                     "somente_a2c_4x_alfa192": comparar_rgb(
                         imagens["4x_a192_sem_a2c_sem_blend_com_z"],
                         imagens["4x_a192_com_a2c"]
+                    ),
+                    "repeticao_a128_off": comparar_rgb(
+                        imagens["4x_sem_a2c_sem_blend_com_z"],
+                        imagens["4x_a128_repeticao_sem_a2c_sem_blend_com_z"]
+                    ),
+                    "alfa64_vs128_off": comparar_rgb(
+                        imagens["4x_a064_sem_a2c_sem_blend_com_z"],
+                        imagens["4x_sem_a2c_sem_blend_com_z"]
+                    ),
+                    "alfa192_vs128_off": comparar_rgb(
+                        imagens["4x_a192_sem_a2c_sem_blend_com_z"],
+                        imagens["4x_sem_a2c_sem_blend_com_z"]
+                    ),
+                    "alfa64_vs128_on": comparar_rgb(
+                        imagens["4x_a064_com_a2c"],
+                        imagens["4x_com_a2c"]
+                    ),
+                    "alfa192_vs128_on": comparar_rgb(
+                        imagens["4x_a192_com_a2c"],
+                        imagens["4x_com_a2c"]
                     ),
                 }
                 mudou = documento["comparacao"]["a2c_4x_off_vs_on"]["pixels_divergentes"] > 0
