@@ -43,10 +43,46 @@ VERTICES_ARESTA = (
     (-0.34765625, 0.91015625),
 )
 
+# Deslocamentos em PIXELS da grade do framebuffer 64x64, compartilhados
+# por OpenGL e Vulkan. 1 px equivale a 2/64 em coordenadas NDC.
+# A origem é o ensaio precedente, não se desloca o produto para casar CI.
+DESLOCAMENTOS_SUBPIXEL = (
+    ("dx_m025", -0.25, 0.0),
+    ("dx_p025", +0.25, 0.0),
+    ("dy_m025", 0.0, -0.25),
+    ("dy_p025", 0.0, +0.25),
+)
+
+CASOS += tuple(
+    (
+        "aresta_{}_4x_a{:03d}_a2c_{}".format(
+            rotulo, alfa, "on" if a2c else "off"
+        ),
+        4, a2c, alfa,
+    )
+    for rotulo, _dx, _dy in DESLOCAMENTOS_SUBPIXEL
+    for a2c, alfa in ((False, 255), (True, 128))
+)
+
+
+def deslocamento_do_caso(nome):
+    if not nome.startswith("aresta_"):
+        return (0.0, 0.0)
+    for rotulo, dx, dy in DESLOCAMENTOS_SUBPIXEL:
+        if nome.startswith("aresta_" + rotulo + "_"):
+            return (dx, dy)
+    return (0.0, 0.0)
+
 
 def vertices_do_caso(nome):
     if nome.startswith("aresta_"):
-        return VERTICES_ARESTA
+        dx, dy = deslocamento_do_caso(nome)
+        # dy é deslocamento no eixo NDC; no PNG com origem no topo,
+        # deslocamento vertical aparente tem sinal invertido.
+        return tuple(
+            (x + dx * 2.0 / 64.0, y + dy * 2.0 / 64.0)
+            for x, y in VERTICES_ARESTA
+        )
     if nome.startswith(("1x_", "4x_")):
         return VERTICES_TELA
     raise ValueError("Geometria sintética desconhecida: " + str(nome))
