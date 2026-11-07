@@ -313,21 +313,34 @@ namespace dragonBones {
             this._clock.advanceTime(passedTime);
 
             if (this._events.length > 0) {
-                for (let i = 0; i < this._events.length; ++i) {
-                    const eventObject = this._events[i];
-                    const armature = eventObject.armature;
+                let processed = 0;
+                try {
+                    // Keep dispatching events added by callbacks in this frame.
+                    while (processed < this._events.length) {
+                        const eventObject = this._events[processed];
+                        try {
+                            const armature = eventObject.armature;
 
-                    if (armature._armatureData !== null) { // May be armature disposed before advanceTime.
-                        armature.eventDispatcher.dispatchDBEvent(eventObject.type, eventObject);
-                        if (eventObject.type === EventObject.SOUND_EVENT) {
-                            this._eventManager.dispatchDBEvent(eventObject.type, eventObject);
+                            if (armature._armatureData !== null) { // May be armature disposed before advanceTime.
+                                armature.eventDispatcher.dispatchDBEvent(eventObject.type, eventObject);
+                                if (eventObject.type === EventObject.SOUND_EVENT) {
+                                    this._eventManager.dispatchDBEvent(eventObject.type, eventObject);
+                                }
+                            }
+                        }
+                        finally {
+                            // Even if a listener throws, this event is already
+                            // delivered and must return to the pool exactly once.
+                            processed++;
+                            this.bufferObject(eventObject);
                         }
                     }
-
-                    this.bufferObject(eventObject);
                 }
-
-                this._events.length = 0;
+                finally {
+                    // Preserve any undelivered events for the next update.
+                    // Never re-dispatch an event whose listener threw.
+                    this._events.splice(0, processed);
+                }
             }
         }
 
