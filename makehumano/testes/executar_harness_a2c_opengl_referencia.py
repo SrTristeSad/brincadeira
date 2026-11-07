@@ -106,7 +106,8 @@ def executar(raiz, python, saida_json, saida_png, logfile, limite):
         from diagnosticar_a2c_msaa import validar_controles
         controles = registro["controles"]
         # Exige amostras do FBO REAL, além da flag CLI.
-        validar_controles(controles)
+        from diagnosticar_a2c_msaa import CONTROLES
+        validar_controles({nome: controles[nome] for nome in CONTROLES})
         for nome in ("4x_sem_a2c", "4x_com_a2c", "4x_inelegivel"):
             arq = saida_png.with_name(saida_png.stem + "-" + nome + ".png")
             if not arq.is_file() or controles[nome]["amostras_fbo_observadas"] != 4:
