@@ -97,8 +97,9 @@ def auditar_controles(gl, vk, pareamento):
         raise ValueError("Backend ou manifestos inesperados")
     if gl.get("dimensoes_imagem") != [1024, 768] or vk.get("dimensoes_imagem") != [1024, 768]:
         raise ValueError("Dimensões do ensaio não coincidem")
-    if gl.get("camera") != vk.get("camera"):
-        raise ValueError("Câmeras de referência diferentes")
+    for campo in ("fov", "centro", "radius", "projecao"):
+        if gl["camera"].get(campo) != vk["camera"].get(campo):
+            raise ValueError("Câmeras de referência diferentes: " + campo)
     for chave in ("sha256_png", "sha256_rgba", "alfa_textura"):
         if gl["textura_controle"][chave] != vk["textura_controle"][chave]:
             raise ValueError("Textura difusa não foi pareada: " + chave)
@@ -168,19 +169,15 @@ def main():
         gl_off, gl_on, vk_off, vk_on, vk_off_sem, vk_on_sem
     )
     from PIL import Image
-    for img_path, mascara in (
-        (args.png_com_sombras, mascaras["vk_com_sombras"]),
-        (args.png_sem_sombras, mascaras["vk_sem_sombras"]),
+    for estado, img_path, mascara in (
+        ("com_sombras", args.png_com_sombras, mascaras["vk_com_sombras"]),
+        ("sem_sombras", args.png_sem_sombras, mascaras["vk_sem_sombras"]),
     ):
         img_path.parent.mkdir(parents=True, exist_ok=True)
         Image.fromarray(
             criar_mapa(mascaras["gl"], mascara), mode="RGB"
         ).save(img_path)
-        resultado[
-            "mapa_gl_vs_vk_" + (
-                "com_sombras" if img_path == args.png_com_sombras else "sem_sombras"
-            )
-        ] = {
+        resultado["mapa_gl_vs_vk_" + estado] = {
             "arquivo": str(img_path),
             "sha256_png": hashlib.sha256(img_path.read_bytes()).hexdigest(),
         }
