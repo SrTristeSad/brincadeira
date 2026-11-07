@@ -40,6 +40,22 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r makehumano/codigo/requirements.txt
           python -c "import importlib.util; assert importlib.util.find_spec('OpenGL') is None"
+      - name: Diagnosticar clear sRGB e formato Qt sem alterar renderização
+        env:
+          WGPU_BACKEND_TYPE: Vulkan
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          QT_X11_NO_MITSHM: "1"
+        run: |
+          xvfb-run -a -s "-screen 0 1280x800x24" \
+            python -u makehumano/testes/diagnosticar_srgb_offscreen.py \
+            --json "${RUNNER_TEMP}/diagnostico-srgb.json"
+      - name: Publicar evidência de codificação sRGB
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnostico-srgb-offscreen
+          path: ${{ runner.temp }}/diagnostico-srgb.json
+          if-no-files-found: warn
       - name: Abrir MakeHuman ORIGINAL e desenhar G.world via Vulkan
         env:
           WGPU_BACKEND_TYPE: Vulkan
@@ -48,6 +64,337 @@ jobs:
         run: |
           xvfb-run -a -s "-screen 0 1280x800x24" \
             python -u makehumano/testes/smoke_gui.py
+
+      - name: Capturar formato da cena Vulkan real com harness temporário
+        env:
+          WGPU_BACKEND_TYPE: Vulkan
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          QT_X11_NO_MITSHM: "1"
+        run: |
+          python -m py_compile makehumano/testes/harness_plugin_formato_gui.py \
+            makehumano/testes/executar_harness_formato_gui.py
+          xvfb-run -a -s "-screen 0 1280x800x24" \
+            python -u makehumano/testes/executar_harness_formato_gui.py \
+              --json "${RUNNER_TEMP}/formato-cena-gui.json" \
+              --png "${RUNNER_TEMP}/formato-cena-gui.png" \
+              --log "${RUNNER_TEMP}/formato-cena-gui.log"
+
+      - name: Publicar captura real de CI (não pareada com OpenGL)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: formato-real-gui-ci
+          path: |
+            ${{ runner.temp }}/formato-cena-gui.json
+            ${{ runner.temp }}/formato-cena-gui.png
+            ${{ runner.temp }}/formato-cena-gui.log
+          if-no-files-found: warn
+
+      - name: Testes CPU de assinaturas de geometria (sem GUI)
+        run: |
+          python -m unittest discover -s makehumano/testes \
+            -p test_registrar_geometria_paridade_wgpu.py -v
+
+      - name: Testes CPU de transformação de luz GL eye→world
+        run: |
+          python -m unittest discover -s makehumano/testes \
+            -p test_compensar_luz_eye_legacy_wgpu.py -v
+
+      - name: Comparar Phong com difusa ligada/desligada na GUI isolada
+        env:
+          WGPU_BACKEND_TYPE: Vulkan
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          QT_X11_NO_MITSHM: "1"
+        run: |
+          python -m py_compile makehumano/testes/harness_plugin_material_phong_gui.py
+          xvfb-run -a -s "-screen 0 1280x800x24" \
+            python -u makehumano/testes/executar_harness_formato_gui.py \
+              --plugin-source makehumano/testes/harness_plugin_material_phong_gui.py \
+              --json "${RUNNER_TEMP}/phong-diffuse-ci.json" \
+              --png "${RUNNER_TEMP}/phong-diffuse-ci.png" \
+              --log "${RUNNER_TEMP}/phong-diffuse-ci.log"
+
+      - name: Publicar experimento Phong de CI (não pareado com OpenGL)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phong-diffuse-on-off-ci
+          path: |
+            ${{ runner.temp }}/phong-diffuse-ci.json
+            ${{ runner.temp }}/phong-diffuse-ci*.png
+            ${{ runner.temp }}/phong-diffuse-ci.log
+          if-no-files-found: warn
+
+      - name: Diagnosticar RGB/MSAA/A2C Vulkan sem mudar produção
+        env:
+          WGPU_BACKEND_TYPE: Vulkan
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          QT_X11_NO_MITSHM: "1"
+        run: |
+          python -m unittest discover -s makehumano/testes \
+            -p test_diagnosticar_a2c_msaa_wgpu.py -v
+          python -m unittest discover -s makehumano/testes \
+            -p test_auditar_alpha_textura_gpu_wgpu.py -v
+          python -m py_compile makehumano/testes/auditar_alpha_textura_gpu.py
+          python -m py_compile makehumano/testes/capturar_a2c_sintetico_vulkan.py \
+            makehumano/testes/auditar_cobertura_a2c_sintetica.py
+          python -m py_compile makehumano/testes/capturar_a2c_sintetico_vulkan.py
+          python -m py_compile makehumano/testes/contrato_sobreposicao_depth_sintetica.py \
+            makehumano/testes/capturar_sobreposicao_depth_vulkan.py
+          python -m py_compile makehumano/testes/harness_plugin_a2c_vulkan_gui.py
+          xvfb-run -a -s "-screen 0 1280x800x24" \
+            python -u makehumano/testes/executar_harness_formato_gui.py \
+              --plugin-source makehumano/testes/harness_plugin_a2c_vulkan_gui.py \
+              --json "${RUNNER_TEMP}/phong-a2c-vulkan-ci.json" \
+              --png "${RUNNER_TEMP}/phong-a2c-vulkan-ci.png" \
+              --log "${RUNNER_TEMP}/phong-a2c-vulkan-ci.log"
+
+      - name: Publicar capturas A2C Vulkan (diagnóstico, não paridade)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phong-a2c-vulkan-ci
+          path: |
+            ${{ runner.temp }}/phong-a2c-vulkan-ci.json
+            ${{ runner.temp }}/phong-a2c-vulkan-ci*.png
+            ${{ runner.temp }}/phong-a2c-vulkan-ci.log
+          if-no-files-found: warn
+
+      - name: Obter upstream OpenGL pinado em checkout EXTERNO de referência
+        run: |
+          git clone --quiet https://github.com/makehumancommunity/makehuman.git \
+            "${RUNNER_TEMP}/makehuman-original"
+          git -C "${RUNNER_TEMP}/makehuman-original" checkout --quiet \
+            a8bc2d54ff0ac92e78ff71431b1023eda42bf482
+          test "$(git -C "${RUNNER_TEMP}/makehuman-original" rev-parse HEAD)" = \
+            "a8bc2d54ff0ac92e78ff71431b1023eda42bf482"
+
+      - name: Python separado para OpenGL upstream (NumPy 1.26.4)
+        run: |
+          python -m venv "${RUNNER_TEMP}/makehuman-opengl-venv"
+          "${RUNNER_TEMP}/makehuman-opengl-venv/bin/python" -m pip install \
+            "numpy==1.26.4" "PyQt5>=5.12.8" "PyOpenGL>=3.1.0"
+          "${RUNNER_TEMP}/makehuman-opengl-venv/bin/python" -c \
+            "import numpy, OpenGL.GL; from PyQt5 import QtOpenGL; assert numpy.__version__ == '1.26.4'"
+
+      - name: Capturar Phong no MakeHuman OpenGL upstream, processo isolado
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          GALLIUM_DRIVER: llvmpipe
+          QT_X11_NO_MITSHM: "1"
+        run: |
+          python -m py_compile makehumano/testes/harness_plugin_opengl_referencia.py \
+            makehumano/testes/executar_harness_opengl_referencia.py \
+            makehumano/testes/configurar_camera_paridade.py
+          xvfb-run -a -s "-screen 0 1280x800x24" \
+            python -u makehumano/testes/executar_harness_opengl_referencia.py \
+              --repo "${RUNNER_TEMP}/makehuman-original" \
+              --python "${RUNNER_TEMP}/makehuman-opengl-venv/bin/python" \
+              --json "${RUNNER_TEMP}/phong-referencia-opengl-ci.json" \
+              --png "${RUNNER_TEMP}/phong-referencia-opengl-ci.png" \
+              --log "${RUNNER_TEMP}/phong-referencia-opengl-ci.log"
+
+      - name: Capturar A2C RGB OpenGL original com MSAA solicitado e verificado
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          GALLIUM_DRIVER: llvmpipe
+          QT_X11_NO_MITSHM: "1"
+        run: |
+          python -m py_compile makehumano/testes/capturar_a2c_sintetico_opengl.py
+          python -m py_compile makehumano/testes/auditar_cobertura_a2c_sintetica.py
+          python -m py_compile makehumano/testes/capturar_sobreposicao_depth_opengl.py
+          python -m py_compile makehumano/testes/harness_plugin_a2c_opengl_referencia.py \
+            makehumano/testes/executar_harness_a2c_opengl_referencia.py
+          xvfb-run -a -s "-screen 0 1280x800x24" \
+            python -u makehumano/testes/executar_harness_a2c_opengl_referencia.py \
+              --repo "${RUNNER_TEMP}/makehuman-original" \
+              --python "${RUNNER_TEMP}/makehuman-opengl-venv/bin/python" \
+              --json "${RUNNER_TEMP}/phong-a2c-opengl-ci.json" \
+              --png "${RUNNER_TEMP}/phong-a2c-opengl-ci.png" \
+              --log "${RUNNER_TEMP}/phong-a2c-opengl-ci.log"
+
+      - name: Comparar controles reais RGB A2C GL/Vulkan (sem homologar)
+        run: |
+          python -m unittest discover -s makehumano/testes \
+            -p test_comparar_a2c_backends_wgpu.py -v
+          python -u makehumano/testes/comparar_a2c_backends.py \
+            --opengl "${RUNNER_TEMP}/phong-a2c-opengl-ci.json" \
+            --vulkan "${RUNNER_TEMP}/phong-a2c-vulkan-ci.json" \
+            --json "${RUNNER_TEMP}/phong-a2c-backends-ci.json"
+
+      - name: Comparar GPU A2C sintético GL/Vulkan com um triângulo e MSAA real
+        run: |
+          python -m pip install --disable-pip-version-check "Pillow>=10,<13"
+          python -m unittest discover -s makehumano/testes \
+            -p test_comparar_a2c_sintetico_gpu_wgpu.py -v
+          python -u makehumano/testes/comparar_a2c_sintetico_gpu.py \
+            --opengl "${RUNNER_TEMP}/phong-a2c-opengl-ci.json" \
+            --vulkan "${RUNNER_TEMP}/phong-a2c-vulkan-ci.json" \
+            --json "${RUNNER_TEMP}/phong-a2c-sintetico-gpu-ci.json" \
+            --png-msaa "${RUNNER_TEMP}/phong-a2c-aresta-msaa-ci.png" \
+            --png-a2c-128 "${RUNNER_TEMP}/phong-a2c-aresta-a2c-ci.png"
+
+      - name: Comparar duas faces com escrita Z e A2C sintéticos GL/Vulkan
+        run: |
+          python -m py_compile makehumano/testes/comparar_sobreposicao_depth_sintetica.py
+          python -m unittest discover -s makehumano/testes \
+            -p test_comparar_sobreposicao_depth_wgpu.py -v
+          python -u makehumano/testes/comparar_sobreposicao_depth_sintetica.py \
+            --opengl "${RUNNER_TEMP}/phong-a2c-opengl-ci.json" \
+            --vulkan "${RUNNER_TEMP}/phong-a2c-vulkan-ci.json" \
+            --json "${RUNNER_TEMP}/phong-a2c-sobreposicao-depth-ci.json" \
+            --png-msaa "${RUNNER_TEMP}/phong-a2c-sobreposicao-msaa-ci.png" \
+            --png-a2c "${RUNNER_TEMP}/phong-a2c-sobreposicao-a2c-ci.png"
+
+      - name: Mapear interseção espacial A2C entre OpenGL e Vulkan
+        run: |
+          # Pillow serve somente à auditoria PNG, não às requirements do produto.
+          python -m pip install --disable-pip-version-check "Pillow>=10,<13"
+          python -m unittest discover -s makehumano/testes \
+            -p test_mapear_efeito_a2c_rgb_wgpu.py -v
+          python -m unittest discover -s makehumano/testes \
+            -p test_decompor_efeito_a2c_rgb_wgpu.py -v
+          python -u makehumano/testes/mapear_efeito_a2c_rgb.py \
+            --opengl "${RUNNER_TEMP}/phong-a2c-opengl-ci.json" \
+            --vulkan "${RUNNER_TEMP}/phong-a2c-vulkan-ci.json" \
+            --pareamento "${RUNNER_TEMP}/phong-a2c-backends-ci.json" \
+            --json "${RUNNER_TEMP}/phong-a2c-mapa-ci.json" \
+            --png "${RUNNER_TEMP}/phong-a2c-mapa-ci.png"
+
+      - name: Comparar A2C GL/Vulkan com e sem recebimento de sombras
+        run: |
+          python -m py_compile makehumano/testes/comparar_sombras_a2c_gl_vulkan.py
+          python -m unittest discover -s makehumano/testes \
+            -p test_comparar_sombras_a2c_gl_vulkan_wgpu.py -v
+          python -u makehumano/testes/comparar_sombras_a2c_gl_vulkan.py \
+            --opengl "${RUNNER_TEMP}/phong-a2c-opengl-ci.json" \
+            --vulkan "${RUNNER_TEMP}/phong-a2c-vulkan-ci.json" \
+            --pareamento "${RUNNER_TEMP}/phong-a2c-backends-ci.json" \
+            --json "${RUNNER_TEMP}/phong-a2c-sombras-pareadas-ci.json" \
+            --png-com-sombras "${RUNNER_TEMP}/phong-a2c-sombras-com-ci.png" \
+            --png-sem-sombras "${RUNNER_TEMP}/phong-a2c-sombras-sem-ci.png"
+
+      - name: Diagnosticar proximidade do resíduo espacial A2C GL/Vulkan
+        run: |
+          python -m py_compile makehumano/testes/diagnosticar_residuo_a2c.py
+          python -m unittest discover -s makehumano/testes \
+            -p test_diagnosticar_residuo_a2c_wgpu.py -v
+          python -u makehumano/testes/diagnosticar_residuo_a2c.py \
+            --opengl "${RUNNER_TEMP}/phong-a2c-opengl-ci.json" \
+            --vulkan "${RUNNER_TEMP}/phong-a2c-vulkan-ci.json" \
+            --pareamento "${RUNNER_TEMP}/phong-a2c-backends-ci.json" \
+            --json "${RUNNER_TEMP}/phong-a2c-residuo-ci.json" \
+            --png-sem-sombras "${RUNNER_TEMP}/phong-a2c-residuo-sem-ci.png" \
+            --png-com-sombras "${RUNNER_TEMP}/phong-a2c-residuo-com-ci.png"
+
+      - name: Mapear diferenças isoladas da escrita Z, OpenGL e Vulkan
+        run: |
+          python -m unittest discover -s makehumano/testes \
+            -p test_mapear_diferenca_depth_a2c_wgpu.py -v
+          python -u makehumano/testes/mapear_diferenca_depth_a2c.py \
+            --opengl "${RUNNER_TEMP}/phong-a2c-opengl-ci.json" \
+            --vulkan "${RUNNER_TEMP}/phong-a2c-vulkan-ci.json" \
+            --json "${RUNNER_TEMP}/phong-a2c-depth-diferencas-ci.json" \
+            --png-gl "${RUNNER_TEMP}/phong-a2c-depth-gl-ci.png" \
+            --png-vk "${RUNNER_TEMP}/phong-a2c-depth-vk-ci.png"
+
+      - name: Publicar diagnóstico RGB A2C OpenGL e comparação entre backends
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phong-a2c-opengl-pareado-ci
+          path: |
+            ${{ runner.temp }}/phong-a2c-opengl-ci.json
+            ${{ runner.temp }}/phong-a2c-opengl-ci*.png
+            ${{ runner.temp }}/phong-a2c-opengl-ci.log
+            ${{ runner.temp }}/phong-a2c-backends-ci.json
+            ${{ runner.temp }}/phong-a2c-sintetico-gpu-ci.json
+            ${{ runner.temp }}/phong-a2c-sobreposicao-depth-ci.json
+            ${{ runner.temp }}/phong-a2c-sobreposicao-msaa-ci.png
+            ${{ runner.temp }}/phong-a2c-sobreposicao-a2c-ci.png
+            ${{ runner.temp }}/phong-a2c-aresta-msaa-ci.png
+            ${{ runner.temp }}/phong-a2c-aresta-a2c-ci.png
+            ${{ runner.temp }}/phong-a2c-mapa-ci.json
+            ${{ runner.temp }}/phong-a2c-mapa-ci.png
+            ${{ runner.temp }}/phong-a2c-mapa-ci-isolado.png
+            ${{ runner.temp }}/phong-a2c-depth-diferencas-ci.json
+            ${{ runner.temp }}/phong-a2c-depth-gl-ci.png
+            ${{ runner.temp }}/phong-a2c-depth-vk-ci.png
+            ${{ runner.temp }}/phong-a2c-sombras-pareadas-ci.json
+            ${{ runner.temp }}/phong-a2c-sombras-com-ci.png
+            ${{ runner.temp }}/phong-a2c-sombras-sem-ci.png
+            ${{ runner.temp }}/phong-a2c-residuo-ci.json
+            ${{ runner.temp }}/phong-a2c-residuo-sem-ci.png
+            ${{ runner.temp }}/phong-a2c-residuo-com-ci.png
+            ${{ runner.temp }}/phong-a2c-mapa-ci-alfa064.png
+            ${{ runner.temp }}/phong-a2c-mapa-ci-alfa128.png
+            ${{ runner.temp }}/phong-a2c-mapa-ci-alfa192.png
+          if-no-files-found: warn
+
+      - name: Diagnosticar par Phong bruto e normalizações somente de teste
+        run: |
+          python -u makehumano/testes/diagnosticar_pareamento_phong.py \
+            --opengl "${RUNNER_TEMP}/phong-referencia-opengl-ci.png" \
+            --opengl-sem-especular "${RUNNER_TEMP}/phong-referencia-opengl-ci-specular-off.png" \
+            --opengl-sem-sombras "${RUNNER_TEMP}/phong-referencia-opengl-ci-shadows-off.png" \
+            --opengl-so-difusa "${RUNNER_TEMP}/phong-referencia-opengl-ci-diffuse-only.png" \
+            --vulkan "${RUNNER_TEMP}/phong-diffuse-ci.png" \
+            --vulkan-sem-especular "${RUNNER_TEMP}/phong-diffuse-ci-specular-off.png" \
+            --vulkan-sem-sombras "${RUNNER_TEMP}/phong-diffuse-ci-shadows-off.png" \
+            --vulkan-so-difusa "${RUNNER_TEMP}/phong-diffuse-ci-diffuse-only.png" \
+            --vulkan-luz-eye-legada "${RUNNER_TEMP}/phong-diffuse-ci-legacy-gl-eye-light.png" \
+            --vulkan-luz-eye-legada-so-difusa "${RUNNER_TEMP}/phong-diffuse-ci-legacy-gl-eye-light-diffuse-only.png" \
+            --manifesto-opengl "${RUNNER_TEMP}/phong-referencia-opengl-ci.json" \
+            --manifesto-vulkan "${RUNNER_TEMP}/phong-diffuse-ci.json" \
+            --json "${RUNNER_TEMP}/phong-pareamento-ci.json" \
+            --diff-dir "${RUNNER_TEMP}/phong-pareamento-diffs"
+
+      - name: Comparar máscara ALFA real da API Phong OpenGL e Vulkan
+        run: |
+          # Dependência somente do comparador de testes; NÃO das requirements do produto.
+          python -m pip install --disable-pip-version-check "Pillow>=10,<13"
+          python -m unittest discover -s makehumano/testes \
+            -p test_registrar_mascara_paridade_wgpu.py -v
+          python -m unittest discover -s makehumano/testes \
+            -p test_textura_alpha_controle_wgpu.py -v
+          python -u makehumano/testes/comparar_mascara_paridade.py \
+            --opengl "${RUNNER_TEMP}/phong-referencia-opengl-ci-alpha-api.png" \
+            --vulkan "${RUNNER_TEMP}/phong-diffuse-ci-alpha-api.png" \
+            --opengl-parcial "${RUNNER_TEMP}/phong-referencia-opengl-ci-alpha-parcial-api.png" \
+            --vulkan-parcial "${RUNNER_TEMP}/phong-diffuse-ci-alpha-parcial-api.png" \
+            --opengl-opacidade "${RUNNER_TEMP}/phong-referencia-opengl-ci-opacity-half-alpha-api.png" \
+            --vulkan-opacidade "${RUNNER_TEMP}/phong-diffuse-ci-opacity-half-alpha-api.png" \
+            --manifesto-opengl "${RUNNER_TEMP}/phong-referencia-opengl-ci.json" \
+            --manifesto-vulkan "${RUNNER_TEMP}/phong-diffuse-ci.json" \
+            --json "${RUNNER_TEMP}/phong-alfa-api-ci.json" \
+            --diff "${RUNNER_TEMP}/phong-alfa-api-diff-ci.png" \
+            --diff-parcial "${RUNNER_TEMP}/phong-alfa-parcial-diff-ci.png" \
+            --diff-opacidade "${RUNNER_TEMP}/phong-opacidade-meia-diff-ci.png"
+
+      - name: Publicar métricas pareadas (sem homologação)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phong-pareamento-ci
+          path: |
+            ${{ runner.temp }}/phong-pareamento-ci.json
+            ${{ runner.temp }}/phong-alfa-api-ci.json
+            ${{ runner.temp }}/phong-alfa-api-diff-ci.png
+            ${{ runner.temp }}/phong-alfa-parcial-diff-ci.png
+            ${{ runner.temp }}/phong-opacidade-meia-diff-ci.png
+            ${{ runner.temp }}/phong-pareamento-diffs/
+          if-no-files-found: warn
+
+      - name: Publicar referência OpenGL externa à aplicação final
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phong-referencia-opengl-ci
+          path: |
+            ${{ runner.temp }}/phong-referencia-opengl-ci.json
+            ${{ runner.temp }}/phong-referencia-opengl-ci*.png
+            ${{ runner.temp }}/phong-referencia-opengl-ci.log
+          if-no-files-found: warn
 
   vulkan-gui-sem-opengl:
     runs-on: ubuntu-24.04
