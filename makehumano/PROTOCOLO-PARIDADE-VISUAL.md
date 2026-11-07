@@ -119,34 +119,57 @@ A seguir, coletar dos **dois** processos antes da captura os campos `material.sh
 
 **Critério de paridade:** gerar novamente o par `phong.png` após cada mudança autorizada, registrar todas as métricas do protocolo e revisar visualmente o diff. `exit code 0` do comparador verifica apenas a fração divergente; **não é aceite integral**.
 
-## 7. Medir o formato real durante a captura Phong
+## 7. Rastreio estático da captura e medição real pendente
 
-**Estado:** o harness externo 99_captura_referencia.py não está disponível neste ambiente; a instrumentação foi preparada, mas o formato efetivo da cena real ainda não foi medido.
+**Rastreio confirmado nos arquivos da branch (sem executar o harness):**
 
-O helper de testes/observar_formato_cena_vulkan.py é exclusivo de diagnóstico. Importá-lo SOMENTE na cópia isolada do harness Vulkan, após a CenaVulkan existir. Envolver a CHAMADA REAL que já produz phong.png, sem recriar cena nem alterar o renderizador:
+1. `codigo/makehuman/lib/mh.py`: `mh.renderToBuffer(1024, 768)` chama `_canvas_vulkan().renderToBuffer(width, height, productionRender)`.
+2. `codigo/makehuman/lib/vulkan_canvas.py`: `CanvasVulkan.renderToBuffer()` obtém `cena = self._garantir_cena()`, chama `cena.capturar_framebuffer(G.world, G.cameras, 1024, 768, productionRender=..., cor_fundo=(0.5, 0.5, 0.5, 1.0))` e envolve os pixels num `Image`.
+3. `codigo/makehuman/lib/vulkan_scene.py`: `CenaVulkan.capturar_framebuffer()` invoca `self.framebuffer_offscreen(1024, 768)`, chama `desenhar(..., alvo=alvo)` e depois `ler_framebuffer_rgb(alvo)`.
+4. `CenaVulkan.framebuffer_offscreen()` usa `formato = self.formato` quando não existe parâmetro explícito, cria a textura com esse formato e a retorna. `self.formato` vem de `self.contexto.get_preferred_format(self.adapter)` na construção da cena.
 
-    import sys
-    from core import G
-    sys.path.insert(0, '/tmp/brincadeira-srgb/makehumano/testes')
-    from observar_formato_cena_vulkan import observar_captura_offscreen
-    cena = getattr(G.canvas, '_cena', None)
-    with observar_captura_offscreen(
-        cena, '/home/claude/srtristesad/resultados/formato-real-phong.json'
-    ):
-        # INSERIR AQUI a chamada de captura Phong que já existe no harness
-        # Não substituir a captura real por um clear sintético
-        ...
+**Conclusão estritamente estática:** `framebuffer_offscreen()` cria a textura de cor final (ou alvo de resolve com MSAA) do caminho `mh.renderToBuffer`. O observador existente intercepta esse método, não um caminho alternativo. Ele **não** mede separadamente os attachments de profundidade ou a textura multisample auxiliar; não confundir esses buffers com a textura de saída RGB. Só a execução real confirmará o formato efetivo da captura Phong.
 
-O bloco acima é uma indicação de inserção, NÃO um harness executável completo: substituir a linha de reticências pela chamada real existente, sem alterar seus argumentos. Manter o harness externo fora da árvore versionada.
+### Uso no harness **isolado** do candidato
 
-Executar os testes CPU do helper, sem Vulkan:
+O harness real está em `/home/claude/srtristesad/mh-cand/plugins/99_captura_referencia.py` e não foi disponibilizado a este ambiente. Não inserimos instrumentação no código de produção, em `mh.py` ou em `vulkan_scene.py`.
 
-    python -m unittest discover -s makehumano/testes -p 'test_observar_formato_cena_wgpu.py' -v
+Antes de editar, verificar que a função que gera `phong.png` já concluiu a configuração da cena, da câmera e do material. Naquele ponto, **substituir exatamente a chamada `mh.renderToBuffer(1024, 768)` existente** pela mesma chamada dentro do bloco abaixo, preservando o nome da variável de resultado e o salvamento PNG que já existe no harness:
 
-Depois da captura no ambiente isolado, ler o resultado:
+~~~python
+import sys
+from core import G
 
-    cat /home/claude/srtristesad/resultados/formato-real-phong.json
+sys.path.insert(0, '/tmp/brincadeira-observador/makehumano/testes')
+from observar_formato_cena_vulkan import observar_captura_offscreen
 
-**Critério de medição:** captura_concluida_sem_excecao e observou_captura_offscreen devem ser true; pelo menos uma textura efetiva deve ter largura=1024, altura=768. Comparar formato_real_da_textura, formato_cena_no_instante e formato_preferido_superficie, além dos pixels 128/188 do par real. Se não ocorrer chamada offscreen, o helper informa observou_captura_offscreen=false. Um teste unitário do helper não é comprovação do formato da CenaVulkan real, nem da paridade contra o OpenGL.
+# É o método real chamado por CanvasVulkan.renderToBuffer,
+# não presumimos que a primeira renderização já criou G.canvas._cena.
+cena = G.canvas._garantir_cena()
+with observar_captura_offscreen(
+    cena,
+    '/home/claude/srtristesad/resultados/formato-real-phong.json',
+):
+    imagem = mh.renderToBuffer(1024, 768)
 
-**Limite:** nenhuma alteração do framebuffer ou de shaders de produção está autorizada até a revisão da evidência e decisão do criador.
+# Prosseguir com o mesmo código do harness que salva imagem como phong.png.
+~~~
+
+`imagem` é apenas o nome demonstrativo: conservar o identificador original do harness. **Não duplicar a captura**, mudar parâmetros, alterar os shaders ou repetir o método de configuração da cena. `G.canvas._garantir_cena()` é o mesmo método invocado internamente por `CanvasVulkan.renderToBuffer()`; retorna a mesma instância (ou cria a primeira antes da captura). Usar o observador apenas no checkout isolado do **candidato Vulkan**, não no MakeHuman OpenGL de referência.
+
+### Validação e interpretação
+
+~~~bash
+# Com o clone do PR #11 disponível em /tmp/brincadeira-observador:
+cd /tmp/brincadeira-observador
+python -m unittest discover -s makehumano/testes -p 'test_observar_formato_cena_wgpu.py' -v
+
+# No ambiente do harness, após refazer a captura:
+cat /home/claude/srtristesad/resultados/formato-real-phong.json
+~~~
+
+**Critério de observação:** `captura_concluida_sem_excecao=true`, `captura_1024x768_observada=true` e `estado="OBSERVADO"`, com pelo menos uma entrada em `texturas_offscreen_observadas` cujos `largura` e `altura` sejam `1024` e `768`. Validar `formato_preferido_superficie`, `formato_cena_no_instante` e `formato_real_da_textura`, além de preservar o PNG e seu checksum no manifesto. Se não houver textura 1024×768, o relatório fica `estado="NAO_OBSERVADO"`, ainda que outra dimensão tenha sido interceptada e o bloco termine normalmente.
+
+**Depois da leitura:** se o alvo real estiver em `*-srgb`, o fato de a cor linear 0,5 produzir cerca de 188 corrobora a hipótese de conversão do fundo. Caso esteja em `*unorm`, a causa exata do fundo 188 permanece em aberto. Em ambos os casos, isso não explica sozinho as diferenças de pele/textura nem comprova paridade OpenGL × Vulkan.
+
+**Limitações:** testes unitários com objetos simulados não substituem execução da GUI original; a execução não foi feita aqui porque o harness externo não está montado. Nenhuma mudança de renderização de produção está autorizada. Plataformas-alvo: **Windows e Linux**; macOS fora do escopo por decisão do criador.

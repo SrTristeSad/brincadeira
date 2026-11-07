@@ -63,6 +63,15 @@ def observar_captura_offscreen(cena, destino_json):
         evidencia["observou_captura_offscreen"] = bool(
             evidencia["texturas_offscreen_observadas"]
         )
+        evidencia["captura_1024x768_observada"] = any(
+            item["largura"] == 1024 and item["altura"] == 768
+            for item in evidencia["texturas_offscreen_observadas"]
+        )
+        evidencia["estado"] = (
+            "OBSERVADO" if evidencia["captura_concluida_sem_excecao"]
+            and evidencia["captura_1024x768_observada"]
+            else "NAO_OBSERVADO"
+        )
         destino = Path(destino_json)
         destino.parent.mkdir(parents=True, exist_ok=True)
         destino.write_text(

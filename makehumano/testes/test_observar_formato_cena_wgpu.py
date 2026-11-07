@@ -43,6 +43,8 @@ class TestarObservacaoDeCena(unittest.TestCase):
             self.assertEqual(dados["formato_preferido_superficie"], "bgra8unorm-srgb")
             self.assertTrue(dados["observou_captura_offscreen"])
             self.assertTrue(dados["captura_concluida_sem_excecao"])
+            self.assertTrue(dados["captura_1024x768_observada"])
+            self.assertEqual(dados["estado"], "OBSERVADO")
             self.assertEqual(dados["texturas_offscreen_observadas"], [{
                 "largura": 1024,
                 "altura": 768,
@@ -60,6 +62,8 @@ class TestarObservacaoDeCena(unittest.TestCase):
             dados = json.loads(destino.read_text(encoding="utf-8"))
             self.assertFalse(dados["observou_captura_offscreen"])
             self.assertEqual(dados["texturas_offscreen_observadas"], [])
+            self.assertFalse(dados["captura_1024x768_observada"])
+            self.assertEqual(dados["estado"], "NAO_OBSERVADO")
 
     def test_excecao_restaura_metodo_e_registra_falha(self):
         with tempfile.TemporaryDirectory() as pasta:
@@ -72,8 +76,21 @@ class TestarObservacaoDeCena(unittest.TestCase):
             self.assertNotIn("framebuffer_offscreen", cena.__dict__)
             dados = json.loads(destino.read_text(encoding="utf-8"))
             self.assertFalse(dados["captura_concluida_sem_excecao"])
+            self.assertFalse(dados["captura_1024x768_observada"])
+            self.assertEqual(dados["estado"], "NAO_OBSERVADO")
             self.assertIn("erro propositado", dados["erro_da_captura"])
             self.assertEqual(dados["texturas_offscreen_observadas"][0]["formato_real_da_textura"], "rgba8unorm")
+
+    def test_alvo_outro_tamanho_nao_homologa(self):
+        with tempfile.TemporaryDirectory() as pasta:
+            cena = CenaFalsa()
+            destino = Path(pasta) / "tamanho-diferente.json"
+            with observar_captura_offscreen(cena, destino):
+                cena.framebuffer_offscreen(160, 120)
+            dados = json.loads(destino.read_text(encoding="utf-8"))
+            self.assertTrue(dados["observou_captura_offscreen"])
+            self.assertFalse(dados["captura_1024x768_observada"])
+            self.assertEqual(dados["estado"], "NAO_OBSERVADO")
 
     def test_cena_ausente_e_erro_explicito(self):
         with self.assertRaisesRegex(RuntimeError, "ausente"):
