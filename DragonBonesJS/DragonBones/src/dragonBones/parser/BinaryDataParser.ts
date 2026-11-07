@@ -393,7 +393,11 @@ namespace dragonBones {
         }
 
         public parseDragonBonesData(rawData: any, scale: number = 1): DragonBonesData | null {
-            console.assert(rawData !== null && rawData !== undefined && rawData instanceof ArrayBuffer, "Data error.");
+            // Reject invalid or truncated input before creating typed array views.
+            if (!(rawData instanceof ArrayBuffer) || rawData.byteLength < 12) {
+                console.assert(false, "Data error.");
+                return null;
+            }
 
             const tag = new Uint8Array(rawData, 0, 8);
             if (
@@ -407,6 +411,12 @@ namespace dragonBones {
             }
 
             const headerLength = new Uint32Array(rawData, 8, 1)[0];
+            // The declared JSON header must fit in the remaining buffer.
+            if (headerLength === 0 || headerLength > rawData.byteLength - 12) {
+                console.assert(false, "Incomplete binary header.");
+                return null;
+            }
+
             const headerBytes = new Uint8Array(rawData, 8 + 4, headerLength);
             const headerString = this._decodeUTF8(headerBytes);
             const header = JSON.parse(headerString);
