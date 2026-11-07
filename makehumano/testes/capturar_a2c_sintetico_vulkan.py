@@ -8,19 +8,27 @@ from pathlib import Path
 
 import numpy as np
 
-from auditar_cobertura_a2c_sintetica import CASOS, registrar_rgb, salvar_png_rgb
+from auditar_cobertura_a2c_sintetica import (
+    CASOS, geometria_do_caso, registrar_rgb, salvar_png_rgb, vertices_do_caso,
+)
 
 
-VERTICE = """
-@vertex fn vs_main(@builtin(vertex_index) vid: u32) -> @builtin(position) vec4<f32> {
+def shader_vertices(nome):
+    # Os números são definidos UMA vez no contrato GL/Vulkan, nunca
+    # ajustados por backend para forçar correspondência.
+    pontos = ",
+        ".join(
+        "vec2<f32>({:.9f}, {:.9f})".format(x, y)
+        for x, y in vertices_do_caso(nome)
+    )
+    return """
+@vertex fn vs_main(@builtin(vertex_index) vid: u32) -> @builtin(position) vec4<f32> {{
     let corners = array<vec2<f32>, 3>(
-        vec2<f32>(-1.0, -1.0),
-        vec2<f32>(3.0, -1.0),
-        vec2<f32>(-1.0, 3.0)
+        {}
     );
     return vec4<f32>(corners[vid], 0.0, 1.0);
-}
-"""
+}}
+""".format(pontos)
 
 
 def capturar_sintetico_vulkan(cena, destino_json):
@@ -30,7 +38,7 @@ def capturar_sintetico_vulkan(cena, destino_json):
 
     for nome, amostras, a2c, alfa in CASOS:
         shader = dev.create_shader_module(
-            code=VERTICE + """
+            code=shader_vertices(nome) + """
 @fragment fn fs_main() -> @location(0) vec4<f32> {
     return vec4<f32>(1.0, 1.0, 1.0, """ +
             format(alfa / 255, ".9f") + """);
@@ -87,6 +95,7 @@ def capturar_sintetico_vulkan(cena, destino_json):
         controles[nome] = {
             **registrar_rgb(rgb),
             "alfa_u8": alfa,
+            "geometria": geometria_do_caso(nome),
             "amostras": amostras,
             "a2c_ativo": a2c,
             "blend_ativo": False,
