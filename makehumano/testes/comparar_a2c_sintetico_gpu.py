@@ -1,7 +1,8 @@
 """Compare real GPU fullscreen A2C probes without assuming sample locations.
 
-RGB must come from verifiable PNG files, not only JSON claims. White solid
-triangle over black, rgba8unorm LINEAR, MSAA 4x, no blending/depth/Phong.
+RGB must come from verifiable PNG files, not only JSON claims. White
+full-screen or diagonal subpixel triangle over black, rgba8unorm LINEAR,
+MSAA 4x, no blending/depth/Phong.
 Resolved color alone does not reveal individual subpixel sample masks.
 """
 import argparse
@@ -11,7 +12,9 @@ from pathlib import Path
 
 import numpy as np
 
-from auditar_cobertura_a2c_sintetica import CASOS, registrar_rgb
+from auditar_cobertura_a2c_sintetica import (
+    CASOS, geometria_do_caso, registrar_rgb, vertices_do_caso,
+)
 
 
 def verificar_manifesto(doc, backend):
@@ -32,6 +35,10 @@ def verificar_manifesto(doc, backend):
             and c.get("a2c_ativo") is a2c
             and c.get("blend_ativo") is False
             and c.get("profundidade_ativa") is False
+            and c.get("geometria") == geometria_do_caso(nome)
+            and c.get("vertices_ndc") == [
+                list(v) for v in vertices_do_caso(nome)
+            ]
         ):
             raise ValueError("Estados sintéticos GPU inesperados: " + backend + " " + nome)
         if backend == "OpenGL" and c.get("amostras_fbo_observadas") != (
@@ -56,11 +63,22 @@ def verificar_manifesto(doc, backend):
                 raise ValueError("Controle branco integral incorreto: " + nome)
         if nome == "4x_a000_a2c_on" and not np.all(rgb == 0):
             raise ValueError("A2C alpha zero deveria cobrir zero pixels")
+        if nome in ("aresta_1x_a255_a2c_off", "aresta_4x_a255_a2c_off"):
+            if not np.any(rgb == 0) or not np.any(rgb == 255):
+                raise ValueError("Aresta sintética sem fundo preto/interior branco")
+        if nome == "aresta_4x_a255_a2c_off":
+            if not np.any((rgb[:, :, 0] > 0) & (rgb[:, :, 0] < 255)):
+                raise ValueError("MSAA 4× sintético não produziu cobertura parcial de borda")
         imagens[nome] = rgb
     for a in (64, 128, 192):
         nome = f"4x_a{a:03d}_a2c_on"
         if np.array_equal(imagens[nome], imagens["4x_a128_a2c_off"]):
             raise ValueError("Driver não alterou cobertura A2C com alfa parcial")
+    for nome in ("aresta_4x_a128_a2c_off", "aresta_4x_a255_a2c_on"):
+        if not np.array_equal(
+            imagens[nome], imagens["aresta_4x_a255_a2c_off"]
+        ):
+            raise ValueError("Aresta: alfa não poderia mudar RGB sem A2C parcial")
     return imagens
 
 
@@ -68,6 +86,14 @@ def comparar_sintetico(gl, vk):
     imagens_gl = verificar_manifesto(gl, "OpenGL")
     imagens_vk = verificar_manifesto(vk, "Vulkan")
     dados = {}
+    # Borda geométrica é definida pela cobertura PARCIAL em alpha255 com
+    # A2C desligado, não pela cor absoluta GL/Vulkan de uma cena Phong.
+    borda_gl = imagens_gl["aresta_4x_a255_a2c_off"][:, :, 0]
+    borda_vk = imagens_vk["aresta_4x_a255_a2c_off"][:, :, 0]
+    borda_uniao = (
+        ((borda_gl > 0) & (borda_gl < 255))
+        | ((borda_vk > 0) & (borda_vk < 255))
+    )
     for nome, amostras, a2c, alfa in CASOS:
         a = imagens_gl[nome].astype(np.int16)
         b = imagens_vk[nome].astype(np.int16)
@@ -75,13 +101,48 @@ def comparar_sintetico(gl, vk):
         diferentes = np.any(delta != 0, axis=2)
         dados[nome] = {
             "alfa": alfa, "amostras": amostras, "a2c": a2c,
+            "geometria": geometria_do_caso(nome),
             "media_cobertura_gl": gl["controles"][nome]["media_r"] / 255,
             "media_cobertura_vk": vk["controles"][nome]["media_r"] / 255,
             "pixels_rgb_distintos": int(np.count_nonzero(diferentes)),
             "max_diferenca_rgb": int(delta.max()),
+            "pixels_diferentes_na_borda_subpixel": int(
+                np.count_nonzero(diferentes & borda_uniao)
+            ) if nome.startswith("aresta_") else None,
+            "pixels_diferentes_fora_da_borda_subpixel": int(
+                np.count_nonzero(diferentes & ~borda_uniao)
+            ) if nome.startswith("aresta_") else None,
             "histograma_gl": gl["controles"][nome]["histograma_r"],
             "histograma_vk": vk["controles"][nome]["histograma_r"],
         }
+    # Como muda A2C na MESMA geometria: não inferimos amostras
+    # individuais a partir da diferença de imagens resolvidas.
+    mascaras = {}
+    for backend, imagens in (("gl", imagens_gl), ("vk", imagens_vk)):
+        a = imagens["aresta_4x_a128_a2c_off"].astype(np.int16)
+        b = imagens["aresta_4x_a128_a2c_on"].astype(np.int16)
+        mascaras[backend] = np.any(np.abs(b - a) > 8, axis=2)
+    inter = int(np.count_nonzero(mascaras["gl"] & mascaras["vk"]))
+    uniao = int(np.count_nonzero(mascaras["gl"] | mascaras["vk"]))
+    analise_aresta = {
+        "pixels_borda_parcial_gl": int(np.count_nonzero(
+            (borda_gl > 0) & (borda_gl < 255)
+        )),
+        "pixels_borda_parcial_vk": int(np.count_nonzero(
+            (borda_vk > 0) & (borda_vk < 255)
+        )),
+        "pixels_uniao_bordas": int(np.count_nonzero(borda_uniao)),
+        "pixels_efeito_a2c_128_gl": int(mascaras["gl"].sum()),
+        "pixels_efeito_a2c_128_vk": int(mascaras["vk"].sum()),
+        "pixels_intersecao_efeito_a2c": inter,
+        "pixels_uniao_efeito_a2c": uniao,
+        "iou_efeito_a2c": float(inter / uniao) if uniao else 1.0,
+        "nota": (
+            "Borda subpixel: cobertura parcial 0<R<255 em alpha255 A2C OFF. "
+            "Suporte RGB de A2C usa delta máximo >8 entre OFF/ON alpha128. "
+            "Não representa sample mask nem posições de amostra."
+        ),
+    }
     return {
         "tipo": "COMPARACAO_GPU_SINTETICA_A2C_4X",
         "estado": "MEDIDO_SEM_HOMOLOGACAO",
@@ -94,6 +155,7 @@ def comparar_sintetico(gl, vk):
         "textura": "ausente",
         "iluminacao": "ausente",
         "resultados": dados,
+        "analise_aresta": analise_aresta,
         "nao_homologado": True,
         "ressalva": (
             "Cores resolvidas pelo MSAA podem variar por posições de amostra "
