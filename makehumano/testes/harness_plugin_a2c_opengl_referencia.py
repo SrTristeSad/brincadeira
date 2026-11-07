@@ -300,6 +300,10 @@ def load(app):
                                sem_blend=True, escrever_z=True, alfa_textura=alfa)
                         captar(capturar_a2c, amostras=4, transparente=True, a2c=True,
                                alfa_textura=alfa)
+                    # Repetir alfa 128 NO FINAL: isola efeito de ordem/cache.
+                    captar("4x_a128_repeticao_sem_a2c_sem_blend_com_z",
+                           amostras=4, transparente=True, a2c=False,
+                           sem_blend=True, escrever_z=True, alfa_textura=128)
 
             comparacoes = {}
             if suporte["testavel"]:
@@ -317,6 +321,14 @@ def load(app):
                      "4x_a064_com_a2c"),
                     ("somente_a2c_4x_alfa192", "4x_a192_sem_a2c_sem_blend_com_z",
                      "4x_a192_com_a2c"),
+                    ("repeticao_a128_off", "4x_sem_a2c_sem_blend_com_z",
+                     "4x_a128_repeticao_sem_a2c_sem_blend_com_z"),
+                    ("alfa64_vs128_off", "4x_a064_sem_a2c_sem_blend_com_z",
+                     "4x_sem_a2c_sem_blend_com_z"),
+                    ("alfa192_vs128_off", "4x_a192_sem_a2c_sem_blend_com_z",
+                     "4x_sem_a2c_sem_blend_com_z"),
+                    ("alfa64_vs128_on", "4x_a064_com_a2c", "4x_com_a2c"),
+                    ("alfa192_vs128_on", "4x_a192_com_a2c", "4x_com_a2c"),
                 ):
                     comparacoes[nome] = comparar_rgb(imagens[a], imagens[b])
             saida = {
