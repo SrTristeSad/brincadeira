@@ -159,12 +159,13 @@ namespace dragonBones {
                 return;
             }
 
-            if (passedTime < 0.0) {
-                this.time -= passedTime;
+            // Reject accumulated-time overflow before updating child clocks.
+            const nextTime = this.time + Math.abs(passedTime);
+            if (!isFinite(nextTime)) {
+                return;
             }
-            else {
-                this.time += passedTime;
-            }
+
+            this.time = nextTime;
 
             this._advancingDepth++;
             try {

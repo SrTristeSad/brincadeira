@@ -590,3 +590,30 @@ test("WorldClock rejects negative infinity instead of treating it as automatic t
     assert.equal(clock.time, 0.25);
     assert.deepEqual(child.updates, [0.25]);
 });
+
+test("WorldClock rejects finite elapsed time that overflows its accumulated time", () => {
+    const clock = new WorldClock(Number.MAX_VALUE);
+    const child = animatable();
+    clock.add(child);
+    clock.advanceTime(Number.MAX_VALUE);
+    assert.equal(clock.time, Number.MAX_VALUE);
+    assert.deepEqual(child.updates, []);
+    clock.time = 0;
+    clock.advanceTime(0.25);
+    assert.equal(clock.time, 0.25);
+    assert.deepEqual(child.updates, [0.25]);
+});
+
+test("WorldClock protects accumulated time with a finite negative timeScale", () => {
+    const clock = new WorldClock(Number.MAX_VALUE);
+    const child = animatable();
+    clock.add(child);
+    clock.timeScale = -1;
+    clock.advanceTime(Number.MAX_VALUE);
+    assert.equal(clock.time, Number.MAX_VALUE);
+    assert.deepEqual(child.updates, []);
+    clock.time = 0;
+    clock.advanceTime(0.25);
+    assert.equal(clock.time, 0.25);
+    assert.deepEqual(child.updates, [-0.25]);
+});
