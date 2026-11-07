@@ -311,3 +311,99 @@ test("unattached animation caches normally after assignment to an armature", () 
         armature.returnToPool();
     }
 });
+
+test("cacheFrames clears partial bone indices and allows a retry after a getter throws", () => {
+    const animation = createAnimation(1);
+    let broken = true;
+    animation.parent.sortedBones = [
+        { name: "root" },
+        { get name() {
+            if (broken) throw new Error("bone name unavailable");
+            return "recovered";
+        } }
+    ];
+    try {
+        assert.throws(() => animation.cacheFrames(3), /bone name unavailable/);
+        assert.equal(animation.cacheFrameRate, 0);
+        assert.deepEqual(animation.cachedFrames, []);
+        assert.deepEqual(Object.keys(animation.boneCachedFrameIndices), []);
+        assert.deepEqual(Object.keys(animation.slotCachedFrameIndices), []);
+
+        broken = false;
+        animation.cacheFrames(3);
+        assert.equal(animation.cacheFrameRate, 3);
+        assert.deepEqual(animation.boneCachedFrameIndices.root, Array(4).fill(-1));
+        assert.deepEqual(animation.boneCachedFrameIndices.recovered, Array(4).fill(-1));
+    }
+    finally {
+        animation.returnToPool();
+    }
+});
+
+test("cacheFrames rolls back bone tables when a slot name getter throws", () => {
+    const animation = createAnimation(1);
+    let broken = true;
+    animation.parent.sortedSlots = [
+        { get name() {
+            if (broken) throw new Error("slot name unavailable");
+            return "hand";
+        } }
+    ];
+    try {
+        assert.throws(() => animation.cacheFrames(2), /slot name unavailable/);
+        assert.equal(animation.cacheFrameRate, 0);
+        assert.deepEqual(animation.cachedFrames, []);
+        assert.deepEqual(Object.keys(animation.boneCachedFrameIndices), []);
+        assert.deepEqual(Object.keys(animation.slotCachedFrameIndices), []);
+
+        broken = false;
+        animation.cacheFrames(2);
+        assert.equal(animation.cacheFrameRate, 2);
+        assert.deepEqual(animation.boneCachedFrameIndices.root, Array(3).fill(-1));
+        assert.deepEqual(animation.slotCachedFrameIndices.hand, Array(3).fill(-1));
+    }
+    finally {
+        animation.returnToPool();
+    }
+});
+
+test("armature remains retryable when a later clip fails during cache allocation", () => {
+    const { ArmatureData } = require("../out/dragonBones.js");
+    const armature = BaseObject.borrowObject(ArmatureData);
+    const walk = BaseObject.borrowObject(AnimationData);
+    const jump = BaseObject.borrowObject(AnimationData);
+    walk.name = "walk";
+    jump.name = "jump";
+    walk.duration = 1;
+    jump.duration = 1;
+    let reads = 0;
+    let broken = true;
+    armature.sortedBones.push({
+        get name() {
+            reads++;
+            if (broken && reads === 2) throw new Error("second clip failed");
+            return "root";
+        }
+    });
+    armature.addAnimation(walk);
+    armature.addAnimation(jump);
+    try {
+        assert.throws(() => armature.cacheFrames(4), /second clip failed/);
+        assert.equal(armature.cacheFrameRate, 0);
+        assert.equal(walk.cacheFrameRate, 4);
+        assert.equal(jump.cacheFrameRate, 0);
+        assert.deepEqual(jump.cachedFrames, []);
+        assert.deepEqual(Object.keys(jump.boneCachedFrameIndices), []);
+
+        broken = false;
+        armature.cacheFrames(4);
+        assert.equal(armature.cacheFrameRate, 4);
+        assert.equal(walk.cacheFrameRate, 4);
+        assert.equal(jump.cacheFrameRate, 4);
+        assert.deepEqual(walk.boneCachedFrameIndices.root, Array(5).fill(-1));
+        assert.deepEqual(jump.boneCachedFrameIndices.root, Array(5).fill(-1));
+    }
+    finally {
+        armature.returnToPool();
+    }
+});

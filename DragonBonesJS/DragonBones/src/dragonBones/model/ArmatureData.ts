@@ -293,10 +293,13 @@ namespace dragonBones {
                 }
             }
 
-            this.cacheFrameRate = frameRate;
             for (let k in this.animations) {
-                this.animations[k].cacheFrames(this.cacheFrameRate);
+                this.animations[k].cacheFrames(frameRate);
             }
+
+            // A clip can throw while building its indices. Keep the armature
+            // retryable until every clip finishes initialization.
+            this.cacheFrameRate = frameRate;
         }
         /**
          * @internal

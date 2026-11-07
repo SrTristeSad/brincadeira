@@ -271,30 +271,45 @@ namespace dragonBones {
             }
 
             const cacheFrameRate = Math.max(Math.ceil(frameRate * this.scale), 1.0);
+            try {
+                this.cachedFrames.length = cacheFrameCount;
+                // Initialize every frame flag, not the parameter count of cacheFrames().
+                for (let i = 0, l = this.cachedFrames.length; i < l; ++i) {
+                    this.cachedFrames[i] = false;
+                }
+
+                for (const bone of this.parent.sortedBones) {
+                    const indices = new Array<number>(cacheFrameCount);
+                    for (let i = 0, l = indices.length; i < l; ++i) {
+                        indices[i] = -1;
+                    }
+
+                    this.boneCachedFrameIndices[bone.name] = indices;
+                }
+
+                for (const slot of this.parent.sortedSlots) {
+                    const indices = new Array<number>(cacheFrameCount);
+                    for (let i = 0, l = indices.length; i < l; ++i) {
+                        indices[i] = -1;
+                    }
+
+                    this.slotCachedFrameIndices[slot.name] = indices;
+                }
+            }
+            catch (error) {
+                // Discard partially created indices and allow a later retry.
+                this.cachedFrames.length = 0;
+                for (let k in this.boneCachedFrameIndices) {
+                    delete this.boneCachedFrameIndices[k];
+                }
+                for (let k in this.slotCachedFrameIndices) {
+                    delete this.slotCachedFrameIndices[k];
+                }
+                throw error;
+            }
+
+            // Only publish a cache rate once all index tables are ready.
             this.cacheFrameRate = cacheFrameRate;
-            this.cachedFrames.length = cacheFrameCount;
-            // Initialize every frame flag, not the parameter count of cacheFrames().
-            for (let i = 0, l = this.cachedFrames.length; i < l; ++i) {
-                this.cachedFrames[i] = false;
-            }
-
-            for (const bone of this.parent.sortedBones) {
-                const indices = new Array<number>(cacheFrameCount);
-                for (let i = 0, l = indices.length; i < l; ++i) {
-                    indices[i] = -1;
-                }
-
-                this.boneCachedFrameIndices[bone.name] = indices;
-            }
-
-            for (const slot of this.parent.sortedSlots) {
-                const indices = new Array<number>(cacheFrameCount);
-                for (let i = 0, l = indices.length; i < l; ++i) {
-                    indices[i] = -1;
-                }
-
-                this.slotCachedFrameIndices[slot.name] = indices;
-            }
         }
         /**
          * @private
