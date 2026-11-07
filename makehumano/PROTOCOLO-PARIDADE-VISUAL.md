@@ -185,3 +185,49 @@ O runner observa o formato efetivo da textura de cor, `CenaVulkan.formato`, o fo
 **Limite metodológico:** esta é uma **nova captura Vulkan do estado padrão da GUI na CI**, não reproduz necessariamente o material/câmera do harness externo e **não** produz imagem de referência OpenGL. Portanto ela poderá comprovar a escolha de formato numa execução real da CenaVulkan sob Linux/Lavapipe, mas não comprova paridade Phong nem o formato exato da execução externa anterior. Esse par continua exigindo o procedimento da seção 7 e os arquivos externos reais.
 
 **Windows e Linux** são as plataformas-alvo do projeto; o harness novo exercita somente o runner Linux e não homologa GPUs físicas. A política de alteração do framebuffer de produção continua dependente de decisão explícita do criador.
+
+## 9. Evidência obtida na GUI real da CI — formato sRGB
+
+**Executado e verificado:** GitHub Actions [run 42325773604](https://github.com/SrTristeSad/brincadeira/actions/runs/42325773604), commit `54ccb9e8adcd4cb08ecd21dfa648e427277c2e2f`, no job `vulkan-gui-original`. Artefato `formato-real-gui-ci` (`formato-cena-gui.json`, PNG e log). O plugin do harness foi colocado temporariamente na instalação de CI e removido ao encerrar; nenhum arquivo de produção versionado foi modificado.
+
+| Campo observado | Resultado |
+| --- | --- |
+| `formato_preferido_superficie` | `rgba8unorm-srgb` |
+| `formato_cena_inicial` e final | `rgba8unorm-srgb` |
+| `formato_real_da_textura` | `rgba8unorm-srgb` |
+| Dimensões e conclusão | 1024 × 768, `estado=OBSERVADO`, sem exceção |
+| Pixel superior esquerdo | RGB `(188, 188, 188)` |
+| Shader do material capturado | LitSphere (não Phong) |
+| SHA-256 pixels RGB | `7580e785c691e3c27e031474e6d054e42d9bc18313637bfdd6fcfa932fecb949` |
+| SHA-256 PNG | `501e253559034b83756b57bc974ed9efc56eca764b2795818fce7f6948c63fb8` |
+
+**Interpretação:** a GUI real no runner Linux com driver Vulkan por software herdou `rgba8unorm-srgb` e renderizou o fundo 0,5 como byte 188. Isso comprova o mecanismo nessa execução da CenaVulkan, mas **não** prova o formato do processo Phong externo anterior nem paridade OpenGL × Vulkan. Nenhuma alteração de produção é autorizada por esta medição, isoladamente.
+
+### Estado do material: diagnóstico que falta antes de corrigir Phong
+
+O shader GLSL **do próprio upstream `a8bc2d54ff0ac92e78ff71431b1023eda42bf482`** contém `#ifdef DIFFUSE` e só amostra `diffuseTexture` quando o define está ativo. Sem ele, a variável do shader usa branco. Portanto a hipótese de que o Phong original sempre ignora textura é incorreta; o estado efetivo `shaderDefines`, `shaderConfig`, mapas e material precisa ser medido.
+
+Foi adicionado `testes/registrar_estado_material.py` (stdlib, sem imports de OpenGL/Vulkan), com regressões em `testes/test_registrar_estado_material_wgpu.py`. O módulo registra `shader`, `shaderDefines` (incluindo DIFFUSE efetivo), `shaderConfig`, parâmetros, cores, mapas e seus SHA-256 quando arquivos, além das entradas de iluminação. Ele **não** altera a aplicação e pode ser copiado para os dois ambientes de captura isolados.
+
+Para preservar correspondência com o mesmo `phong.png`, inserir **imediatamente antes da chamada de render já existente** em cada uma das duas cópias externas do harness:
+
+~~~python
+import sys
+from pathlib import Path
+from registrar_estado_material import salvar_estado  # disponibilizar o módulo via sys.path da cópia isolada
+from core import G
+
+lado = 'opengl'  # na cópia Vulkan usar 'vulkan'
+material = G.app.selectedHuman.material
+salvar_estado(
+    Path('/home/claude/srtristesad/resultados') / ('estado-material-' + lado + '.json'),
+    material, G.app.scene, referencia=lado,
+)
+# A seguir, manter mh.renderToBuffer(1024, 768) e o mesmo salvamento PNG.
+~~~
+
+**Preparação:** copiar `registrar_estado_material.py` para um diretório de diagnóstico importável pelas duas cópias isoladas do harness; não instalá-lo como plugin nem alterar código de produção. O snippet pressupõe que essa importação já está disponível (configurar `sys.path` para o diretório externo, se necessário).
+
+**Critério:** arquivos `estado-material-opengl.json` e `estado-material-vulkan.json` do mesmo par, com checksums de textura, shader, defines, material e iluminação. Comparar nomes lógicos e hashes, não presumir igualdade de caminhos absolutos entre diferentes instalações. Só depois de uma diferença controlada no material, medir novos PNGs e todas as métricas do protocolo. Ainda **não** há snapshots dos dois processos nesta revisão.
+
+**Limite:** a campanha e o código do produto continuam restritos a Windows e Linux, sem alterações visuais ou de backend nesta fase.
