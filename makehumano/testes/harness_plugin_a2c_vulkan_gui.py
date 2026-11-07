@@ -299,6 +299,13 @@ def load(app):
                                  amostras=4, transparencia=True, a2c=False,
                                  sem_blend=True, escrever_z=True,
                                  alfa_textura=alfa, sem_sombras=True)
+                    # Teste de restauração: após trocar receiveShadows no
+                    # corpo, os estados naturais devem produzir EXACTAMENTE
+                    # os mesmos pixels de antes, com as sombras reativadas.
+                    capturar("4x_sem_a2c_repeticao_apos_sombras",
+                             amostras=4, transparencia=True, a2c=False)
+                    capturar("4x_com_a2c_repeticao_apos_sombras",
+                             amostras=4, transparencia=True, a2c=True)
 
             # Prova independente do corpo/Phong: mesmo loader, sampler e
             # recurso de textura, mas um triângulo sem overdraw. Mantém
@@ -407,6 +414,14 @@ def load(app):
                     "efeito_sombras_no_a2c_on_4x": comparar_rgb(
                         imagens["4x_com_a2c"],
                         imagens["4x_com_a2c_sem_sombras"]
+                    ),
+                    "repeticao_a2c_off_apos_sombras": comparar_rgb(
+                        imagens["4x_sem_a2c"],
+                        imagens["4x_sem_a2c_repeticao_apos_sombras"]
+                    ),
+                    "repeticao_a2c_on_apos_sombras": comparar_rgb(
+                        imagens["4x_com_a2c"],
+                        imagens["4x_com_a2c_repeticao_apos_sombras"]
                     ),
                 }
                 mudou = documento["comparacao"]["a2c_4x_off_vs_on"]["pixels_divergentes"] > 0
