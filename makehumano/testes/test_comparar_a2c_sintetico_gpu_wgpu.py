@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from auditar_cobertura_a2c_sintetica import (
     CASOS, geometria_do_caso, registrar_rgb, salvar_png_rgb, vertices_do_caso,
 )
-from comparar_a2c_sintetico_gpu import comparar_sintetico
+from comparar_a2c_sintetico_gpu import comparar_sintetico, mapa_diferenca_rgb
 
 
 class TesteSinteticoGPU(unittest.TestCase):
@@ -105,6 +105,20 @@ class TesteSinteticoGPU(unittest.TestCase):
         doc["sha256_png"] = salvar_png_rgb(rgb, caminho)
         with self.assertRaisesRegex(ValueError, "cobertura parcial"):
             comparar_sintetico(self.gl, self.vk)
+
+    def test_mapa_visual_distingue_mais_luminoso_gl_e_vk(self):
+        gl = np.zeros((64, 64, 3), dtype=np.uint8)
+        vk = gl.copy()
+        gl[1, 1], vk[1, 1] = (64, 64, 64), (128, 128, 128)
+        gl[1, 2], vk[1, 2] = (128, 128, 128), (64, 64, 64)
+        gl[1, 3], vk[1, 3] = (255, 255, 255), (255, 255, 255)
+        mapa = mapa_diferenca_rgb(gl, vk)
+        self.assertEqual(mapa[1, 1].tolist(), [25, 220, 255])
+        self.assertEqual(mapa[1, 2].tolist(), [255, 65, 65])
+        self.assertEqual(mapa[1, 3].tolist(), [130, 130, 130])
+        self.assertEqual(mapa[0, 0].tolist(), [0, 0, 0])
+        with self.assertRaises(ValueError):
+            mapa_diferenca_rgb(gl, vk[:, :, :2])
 
     def test_rejeita_amostras_fbo_gl_falsas(self):
         self.gl["controles"]["4x_a128_a2c_on"]["amostras_fbo_observadas"] = 0
