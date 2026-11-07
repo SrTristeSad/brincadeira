@@ -124,6 +124,35 @@ def modelos():
             m["comparacao"][chave] = {
                 "pixels_divergentes": 0 if chave.endswith("_off") else 250,
             }
+    vk["auditoria_rgba_gpu_sem_overdraw"] = {
+        "tipo": "AUDITORIA_RGBA_CPU_GPU_TRIANGULO_SEM_SOBREPOSICAO",
+        "cpu": {
+            str(alfa): {
+                "sha256_rgba": vk["texturas_varredura"][str(alfa)]["sha256_rgba"],
+                "sha256_rgb": "7" * 64,
+                "alfa_min": alfa,
+                "alfa_max": alfa,
+            }
+            for alfa in (64, 128, 192)
+        },
+        "gpu": {
+            str(amostras): {
+                "amostras": amostras, "pipeline_blend_habilitado": False,
+                "pipeline_a2c_habilitado": False,
+                "uma_superficie_sem_sobreposicao": True,
+                "dimensoes": [64, 64],
+                "controles": {
+                    str(alfa): {
+                        "sha256_rgb": "8" * 64,
+                        "sha256_rgba": "9" * 64,
+                        "pixels_rgb_diferentes_de_a128": 0,
+                    }
+                    for alfa in (64, 128, 192)
+                },
+            }
+            for amostras in (1, 4)
+        },
+    }
     return gl, vk
 
 
@@ -185,6 +214,30 @@ class TesteContratoA2C(unittest.TestCase):
         vk["controles"]["4x_a064_com_a2c"]["pipeline_a2c_observado"] = False
         with self.assertRaisesRegex(ValueError, "Estados alpha"):
             comparar_manifestos(gl, vk)
+
+    def test_rejeita_rgb_variavel_no_loader_cpu(self):
+        gl, vk = modelos()
+        vk["auditoria_rgba_gpu_sem_overdraw"]["cpu"]["64"]["sha256_rgb"] = "0" * 64
+        with self.assertRaisesRegex(ValueError, "Canais RGB"):
+            comparar_manifestos(gl, vk)
+
+    def test_rejeita_amostras_erradas_no_pipeline_sintetico(self):
+        gl, vk = modelos()
+        vk["auditoria_rgba_gpu_sem_overdraw"]["gpu"]["4"]["amostras"] = 1
+        with self.assertRaisesRegex(ValueError, "Pipeline sintético"):
+            comparar_manifestos(gl, vk)
+
+    def test_relatorio_aceita_diferenca_gpu_sem_esconder(self):
+        gl, vk = modelos()
+        vk["auditoria_rgba_gpu_sem_overdraw"]["gpu"]["4"]["controles"]["64"][
+            "pixels_rgb_diferentes_de_a128"
+        ] = 4
+        resultado = comparar_manifestos(gl, vk)
+        self.assertEqual(
+            resultado["auditoria_rgba_gpu_sem_overdraw"]["gpu"]["4"][
+                "controles"]["64"]["pixels_rgb_diferentes_de_a128"
+            ], 4,
+        )
 
     def test_nao_testavel_sem_driver_gl_4x(self):
         gl, vk = modelos()
