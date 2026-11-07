@@ -226,6 +226,17 @@ jobs:
             --json "${RUNNER_TEMP}/phong-a2c-mapa-ci.json" \
             --png "${RUNNER_TEMP}/phong-a2c-mapa-ci.png"
 
+      - name: Mapear diferenças isoladas da escrita Z, OpenGL e Vulkan
+        run: |
+          python -m unittest discover -s makehumano/testes \
+            -p test_mapear_diferenca_depth_a2c_wgpu.py -v
+          python -u makehumano/testes/mapear_diferenca_depth_a2c.py \
+            --opengl "${RUNNER_TEMP}/phong-a2c-opengl-ci.json" \
+            --vulkan "${RUNNER_TEMP}/phong-a2c-vulkan-ci.json" \
+            --json "${RUNNER_TEMP}/phong-a2c-depth-diferencas-ci.json" \
+            --png-gl "${RUNNER_TEMP}/phong-a2c-depth-gl-ci.png" \
+            --png-vk "${RUNNER_TEMP}/phong-a2c-depth-vk-ci.png"
+
       - name: Publicar diagnóstico RGB A2C OpenGL e comparação entre backends
         if: always()
         uses: actions/upload-artifact@v4
@@ -239,6 +250,9 @@ jobs:
             ${{ runner.temp }}/phong-a2c-mapa-ci.json
             ${{ runner.temp }}/phong-a2c-mapa-ci.png
             ${{ runner.temp }}/phong-a2c-mapa-ci-isolado.png
+            ${{ runner.temp }}/phong-a2c-depth-diferencas-ci.json
+            ${{ runner.temp }}/phong-a2c-depth-gl-ci.png
+            ${{ runner.temp }}/phong-a2c-depth-vk-ci.png
           if-no-files-found: warn
 
       - name: Diagnosticar par Phong bruto e normalizações somente de teste
