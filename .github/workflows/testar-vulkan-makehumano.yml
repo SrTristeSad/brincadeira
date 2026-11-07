@@ -154,8 +154,10 @@ jobs:
           python -u makehumano/testes/diagnosticar_pareamento_phong.py \
             --opengl "${RUNNER_TEMP}/phong-referencia-opengl-ci.png" \
             --opengl-sem-especular "${RUNNER_TEMP}/phong-referencia-opengl-ci-specular-off.png" \
+            --opengl-sem-sombras "${RUNNER_TEMP}/phong-referencia-opengl-ci-shadows-off.png" \
             --vulkan "${RUNNER_TEMP}/phong-diffuse-ci.png" \
             --vulkan-sem-especular "${RUNNER_TEMP}/phong-diffuse-ci-specular-off.png" \
+            --vulkan-sem-sombras "${RUNNER_TEMP}/phong-diffuse-ci-shadows-off.png" \
             --manifesto-opengl "${RUNNER_TEMP}/phong-referencia-opengl-ci.json" \
             --manifesto-vulkan "${RUNNER_TEMP}/phong-diffuse-ci.json" \
             --json "${RUNNER_TEMP}/phong-pareamento-ci.json" \

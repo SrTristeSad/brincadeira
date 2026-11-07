@@ -89,11 +89,14 @@ def executar(raiz, python, saida_json, saida_png, logfile, limite):
 
     registro = json.loads(saida_json.read_text(encoding="utf-8"))
     png_sem_especular = saida_png.with_name(saida_png.stem + "-specular-off.png")
+    png_sem_sombras = saida_png.with_name(saida_png.stem + "-shadows-off.png")
     if (registro.get("estado") != "CAPTURADO"
             or registro.get("dimensoes_imagem") != [1024, 768]
             or registro.get("captura_especular_desligado") is not True
+            or registro.get("captura_sombras_desligadas") is not True
             or not saida_png.is_file()
-            or not png_sem_especular.is_file()):
+            or not png_sem_especular.is_file()
+            or not png_sem_sombras.is_file()):
         raise RuntimeError(
             "Captura de referência OpenGL não válida: "
             + json.dumps(registro, ensure_ascii=False)[:2000]

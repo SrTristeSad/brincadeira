@@ -55,7 +55,8 @@ def _camera_igual(a, b, eps=1e-5):
 
 
 def avaliar(ref_png, vulkan_png, ref_meta, vulkan_meta, saida, diretorio_diff=None,
-           ref_sem_especular=None, vk_sem_especular=None):
+           ref_sem_especular=None, vk_sem_especular=None,
+           ref_sem_sombras=None, vk_sem_sombras=None):
     registro_ref = json.loads(Path(ref_meta).read_text(encoding="utf-8"))
     registro_vk = json.loads(Path(vulkan_meta).read_text(encoding="utf-8"))
     if registro_ref.get("estado") != "CAPTURADO":
@@ -108,6 +109,26 @@ def avaliar(ref_png, vulkan_png, ref_meta, vulkan_meta, saida, diretorio_diff=No
                 trocar_vermelho_azul(no_ref), decodificar_srgb_rgb(no_vk)
             )
         })
+    if (ref_sem_sombras is None) != (vk_sem_sombras is None):
+        raise ValueError("Controles sem sombra precisam ser fornecidos em par")
+    if ref_sem_sombras is not None:
+        if not (registro_ref.get("captura_sombras_desligadas") is True
+                and registro_vk.get("captura_sombras_desligadas") is True):
+            raise ValueError("Manifestos não confirmam controles sem sombra")
+        ref_estado = registro_ref.get("material_sem_sombras", {})
+        vk_estado = registro_vk.get("estado_material_phong_sem_sombras", {})
+        if (ref_estado.get("receiveShadows") is not False
+                or vk_estado.get("receiveShadows") is not False):
+            raise ValueError("Controles de sombra exigem receiveShadows=False")
+        no_ref, no_vk = pixels(Path(ref_sem_sombras)), pixels(Path(vk_sem_sombras))
+        if no_ref.shape != ref.shape or no_vk.shape != vk.shape:
+            raise ValueError("Controles sem sombra têm resolução inválida")
+        variantes.update({
+            "sem_sombras_bruto": (no_ref, no_vk),
+            "sem_sombras_gl_rb_e_vk_linear": (
+                trocar_vermelho_azul(no_ref), decodificar_srgb_rgb(no_vk)
+            )
+        })
     metricas = {}
     for nome, (a,b) in variantes.items():
         m = comparar_pixels(a, b, tolerancia=8, fracao_maxima=0.02)
@@ -132,6 +153,11 @@ def avaliar(ref_png, vulkan_png, ref_meta, vulkan_meta, saida, diretorio_diff=No
             salvar_mapa_diferencas(
                 a, b, diretorio_diff / "phong-sem-especular-normalizacoes-diff.png"
             )
+        if "sem_sombras_gl_rb_e_vk_linear" in variantes:
+            a, b = variantes["sem_sombras_gl_rb_e_vk_linear"]
+            salvar_mapa_diferencas(
+                a, b, diretorio_diff / "phong-sem-sombras-normalizacoes-diff.png"
+            )
     condicoes = {
         "camera": camera,
         "camera_totalmente_igual": camera_igual,
@@ -153,6 +179,7 @@ def avaliar(ref_png, vulkan_png, ref_meta, vulkan_meta, saida, diretorio_diff=No
         "paridade_com_original_homologada": False,
         "fontes_nao_modificadas": True,
         "controle_sem_especular_presente": ref_sem_especular is not None,
+        "controle_sem_sombras_presente": ref_sem_sombras is not None,
         "motivo_normalizacoes": [
             "O upstream usa glReadPixels GL_RGBA mas inverte R/B no array retornado.",
             "O framebuffer Vulkan offscreen foi observado em rgba8unorm-srgb.",
@@ -179,10 +206,13 @@ def main():
     p.add_argument("--diff-dir", type=Path)
     p.add_argument("--opengl-sem-especular", type=Path)
     p.add_argument("--vulkan-sem-especular", type=Path)
+    p.add_argument("--opengl-sem-sombras", type=Path)
+    p.add_argument("--vulkan-sem-sombras", type=Path)
     args = p.parse_args()
     avaliar(args.opengl, args.vulkan, args.manifesto_opengl,
             args.manifesto_vulkan, args.json, args.diff_dir,
-            args.opengl_sem_especular, args.vulkan_sem_especular)
+            args.opengl_sem_especular, args.vulkan_sem_especular,
+            args.opengl_sem_sombras, args.vulkan_sem_sombras)
 
 
 if __name__ == "__main__":

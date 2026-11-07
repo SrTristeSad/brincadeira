@@ -72,7 +72,7 @@ def descrever_material(material):
         "name", "shader", "shaderConfig", "shaderDefines",
         "shaderParameters", "diffuseColor", "ambientColor",
         "specularColor", "emissiveColor", "shininess", "opacity",
-        "transparent", "alphaToCoverage",
+        "transparent", "alphaToCoverage", "receiveShadows", "castShadows",
     )
     resultado = {}
     for campo in campos:

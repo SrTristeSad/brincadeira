@@ -33,6 +33,7 @@ def load(app):
     png_on = Path(os.environ["MAKEHUMANO_HARNESS_FORMATO_PNG"])
     png_off = png_on.with_name(png_on.stem + "-diffuse-off.png")
     png_sem_especular = png_on.with_name(png_on.stem + "-specular-off.png")
+    png_sem_sombras = png_on.with_name(png_on.stem + "-shadows-off.png")
     png_sint_on = png_on.with_name(png_on.stem + "-sintetico-on.png")
     png_sint_off = png_on.with_name(png_on.stem + "-sintetico-off.png")
     observacao = destino.with_name(destino.stem + "-observacao.json")
@@ -51,6 +52,7 @@ def load(app):
         diffuse_original = None
         textura_original = None
         especular_original = None
+        sombras_original = None
         try:
             import mh
             import numpy as np
@@ -63,6 +65,7 @@ def load(app):
             diffuse_original = bool(material.shaderConfig.get("diffuse", False))
             textura_original = material.diffuseTexture
             especular_original = tuple(material.specularColor.values)
+            sombras_original = bool(material.receiveShadows)
             objetos_corpo = [
                 obj for obj in G.world
                 if getattr(obj, "material", None) is material
@@ -95,6 +98,12 @@ def load(app):
                     img_sem_especular = mh.renderToBuffer(1024, 768)
                 finally:
                     material.specularColor = especular_original
+                try:
+                    material.receiveShadows = False
+                    estado_sem_sombras = descrever_material(material)
+                    img_sem_sombras = mh.renderToBuffer(1024, 768)
+                finally:
+                    material.receiveShadows = sombras_original
                 material.configureShading(diffuse=False)
                 estado_off = descrever_material(material)
                 is_textured_off = bool(corpo.isTextured)
@@ -125,8 +134,11 @@ def load(app):
 
             dados_on, dados_off = np.asarray(img_on.data), np.asarray(img_off.data)
             dados_sem_especular = np.asarray(img_sem_especular.data)
+            dados_sem_sombras = np.asarray(img_sem_sombras.data)
             if dados_sem_especular.shape != dados_on.shape or dados_sem_especular.dtype != np.uint8:
                 raise RuntimeError("Imagem Vulkan sem especular inválida")
+            if dados_sem_sombras.shape != dados_on.shape or dados_sem_sombras.dtype != np.uint8:
+                raise RuntimeError("Imagem Vulkan sem sombras inválida")
             if dados_on.shape != (768, 1024, 3) or dados_off.shape != dados_on.shape:
                 raise RuntimeError(f"RGB inesperado: on={dados_on.shape}, off={dados_off.shape}")
             if dados_on.dtype != np.uint8 or dados_off.dtype != np.uint8:
@@ -150,6 +162,7 @@ def load(app):
             img_on.save(str(png_on))
             img_off.save(str(png_off))
             img_sem_especular.save(str(png_sem_especular))
+            img_sem_sombras.save(str(png_sem_sombras))
             img_sint_on.save(str(png_sint_on))
             img_sint_off.save(str(png_sint_off))
             evidencia = json.loads(observacao.read_text(encoding="utf-8"))
@@ -166,6 +179,7 @@ def load(app):
                 "G_windowHeight": int(G.windowHeight),
                 "estado_material_phong_on": estado_on,
                 "estado_material_phong_sem_especular": estado_sem_especular,
+                "estado_material_phong_sem_sombras": estado_sem_sombras,
                 "estado_material_phong_off": estado_off,
                 "estado_material_sintetico_on": estado_sint_on,
                 "estado_material_sintetico_off": estado_sint_off,
@@ -198,11 +212,14 @@ def load(app):
                 "sha256_rgb_off": _sha_imagem(dados_off),
                 "arquivos_png": [
                     str(png_on), str(png_off), str(png_sem_especular),
+                    str(png_sem_sombras),
                     str(png_sint_on), str(png_sint_off),
                 ],
                 "sha256_png_on": hashlib.sha256(png_on.read_bytes()).hexdigest(),
                 "sha256_png_sem_especular": hashlib.sha256(png_sem_especular.read_bytes()).hexdigest(),
                 "captura_especular_desligado": True,
+                "captura_sombras_desligadas": True,
+                "sha256_png_sem_sombras": hashlib.sha256(png_sem_sombras.read_bytes()).hexdigest(),
                 "sha256_png_off": hashlib.sha256(png_off.read_bytes()).hexdigest(),
                 "sha256_png_sint_on": hashlib.sha256(png_sint_on.read_bytes()).hexdigest(),
                 "sha256_png_sint_off": hashlib.sha256(png_sint_off.read_bytes()).hexdigest(),
@@ -218,8 +235,8 @@ def load(app):
                 raise RuntimeError("Matrizes da camera mudaram durante o teste controlado")
             if evidencia["estado"] != "OBSERVADO":
                 raise RuntimeError("Captura real 1024x768 não observada")
-            if len(evidencia["texturas_offscreen_observadas"]) != 5:
-                raise RuntimeError("Esperados cinco alvos 1024x768")
+            if len(evidencia["texturas_offscreen_observadas"]) != 6:
+                raise RuntimeError("Esperados seis alvos 1024x768")
             destino.parent.mkdir(parents=True, exist_ok=True)
             destino.write_text(
                 json.dumps(evidencia, ensure_ascii=False, indent=2) + "\n",
@@ -253,6 +270,8 @@ def load(app):
                     material.diffuseTexture = textura_original
                     if especular_original is not None:
                         material.specularColor = especular_original
+                    if sombras_original is not None:
+                        material.receiveShadows = sombras_original
                     material.shader = shader_original
                     material.configureShading(diffuse=diffuse_original)
                 except Exception:
