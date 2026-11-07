@@ -576,3 +576,17 @@ test("WorldClock still supports finite negative timeScale", () => {
     assert.equal(clock.time, 0.75);
     assert.deepEqual(child.updates, [-0.5, 0.25]);
 });
+
+test("WorldClock rejects negative infinity instead of treating it as automatic time", () => {
+    const clock = new WorldClock();
+    const child = animatable();
+    clock.add(child);
+    // Make the automatic-time fallback observably nonzero if it is used.
+    clock._systemTime -= 5;
+    clock.advanceTime(-Infinity);
+    assert.equal(clock.time, 0);
+    assert.deepEqual(child.updates, []);
+    clock.advanceTime(0.25);
+    assert.equal(clock.time, 0.25);
+    assert.deepEqual(child.updates, [0.25]);
+});

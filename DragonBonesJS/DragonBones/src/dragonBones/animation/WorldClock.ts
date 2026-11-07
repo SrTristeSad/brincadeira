@@ -136,7 +136,9 @@ namespace dragonBones {
 
             const currentTime = Date.now() * 0.001;
 
-            if (passedTime < 0.0) {
+            // Negative finite values request automatic elapsed time.
+            // -Infinity is invalid and must not trigger an automatic update.
+            if (passedTime < 0.0 && isFinite(passedTime)) {
                 passedTime = currentTime - this._systemTime;
             }
 
