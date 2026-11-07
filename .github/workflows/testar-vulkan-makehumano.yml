@@ -125,6 +125,33 @@ jobs:
             ${{ runner.temp }}/phong-diffuse-ci.log
           if-no-files-found: warn
 
+      - name: Diagnosticar RGB/MSAA/A2C Vulkan sem mudar produção
+        env:
+          WGPU_BACKEND_TYPE: Vulkan
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          QT_X11_NO_MITSHM: "1"
+        run: |
+          python -m unittest discover -s makehumano/testes \\
+            -p test_diagnosticar_a2c_msaa_wgpu.py -v
+          python -m py_compile makehumano/testes/harness_plugin_a2c_vulkan_gui.py
+          xvfb-run -a -s "-screen 0 1280x800x24" \\
+            python -u makehumano/testes/executar_harness_formato_gui.py \\
+              --plugin-source makehumano/testes/harness_plugin_a2c_vulkan_gui.py \\
+              --json "${RUNNER_TEMP}/phong-a2c-vulkan-ci.json" \\
+              --png "${RUNNER_TEMP}/phong-a2c-vulkan-ci.png" \\
+              --log "${RUNNER_TEMP}/phong-a2c-vulkan-ci.log"
+
+      - name: Publicar capturas A2C Vulkan (diagnóstico, não paridade)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phong-a2c-vulkan-ci
+          path: |
+            ${{ runner.temp }}/phong-a2c-vulkan-ci.json
+            ${{ runner.temp }}/phong-a2c-vulkan-ci*.png
+            ${{ runner.temp }}/phong-a2c-vulkan-ci.log
+          if-no-files-found: warn
+
       - name: Obter upstream OpenGL pinado em checkout EXTERNO de referência
         run: |
           git clone --quiet https://github.com/makehumancommunity/makehuman.git \
