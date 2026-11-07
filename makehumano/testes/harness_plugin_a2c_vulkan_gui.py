@@ -307,6 +307,15 @@ def load(app):
                     capturar("4x_com_a2c_repeticao_apos_sombras",
                              amostras=4, transparencia=True, a2c=True)
 
+            auditoria_geometrica_z = {"estado": "NAO_TESTAVEL_MSAA_4X"}
+            if suporte["disponivel"]:
+                from auditar_auto_sobreposicao_malha import auditar_corpo
+                auditoria_geometrica_z = auditar_corpo(
+                    corpo, G.cameras[corpo.cameraMode],
+                    imagens["4x_sem_a2c_sem_blend_sem_z"],
+                    imagens["4x_sem_a2c_sem_blend_com_z"],
+                )
+
             # Prova independente do corpo/Phong: mesmo loader, sampler e
             # recurso de textura, mas um triângulo sem overdraw. Mantém
             # blending OFF e A2C OFF em 1× e 4×.
@@ -362,6 +371,7 @@ def load(app):
                 "auditoria_sintetica_sobreposicao": auditoria_depth,
                 "auditoria_sintetica_coplanares": auditoria_coplanares,
                 "auditoria_sintetica_cruzamento": auditoria_cruzamento,
+                "auditoria_auto_sobreposicao_z": auditoria_geometrica_z,
                 "amostras_iniciais": amostras_originais,
                 "suporte_msaa": suporte,
                 "controles": registros,
