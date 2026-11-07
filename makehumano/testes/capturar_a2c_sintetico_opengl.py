@@ -8,7 +8,9 @@ from pathlib import Path
 
 import numpy as np
 
-from auditar_cobertura_a2c_sintetica import CASOS, registrar_rgb, salvar_png_rgb
+from auditar_cobertura_a2c_sintetica import (
+    CASOS, geometria_do_caso, registrar_rgb, salvar_png_rgb, vertices_do_caso,
+)
 
 
 VS = """
@@ -116,9 +118,8 @@ def capturar_sintetico_opengl(destino_json):
             GL.glClear(GL.GL_COLOR_BUFFER_BIT)
             GL.glUniform1f(uniform_alpha, alfa / 255.0)
             GL.glBegin(GL.GL_TRIANGLES)
-            GL.glVertex2f(-1.0, -1.0)
-            GL.glVertex2f(3.0, -1.0)
-            GL.glVertex2f(-1.0, 3.0)
+            for x, y in vertices_do_caso(nome):
+                GL.glVertex2f(x, y)
             GL.glEnd()
             if amostras == 4:
                 resolve, res_rb = criar_framebuffer(GL, 1)
@@ -143,6 +144,7 @@ def capturar_sintetico_opengl(destino_json):
             controles[nome] = {
                 **registrar_rgb(rgb),
                 "alfa_u8": alfa,
+                "geometria": geometria_do_caso(nome),
                 "amostras": amostras,
                 "amostras_fbo_observadas": amostras_observadas,
                 "a2c_ativo": a2c,
