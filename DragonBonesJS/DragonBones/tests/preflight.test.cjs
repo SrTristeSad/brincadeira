@@ -59,3 +59,15 @@ test('every Node regression test file has valid JavaScript syntax', () => {
         assert.equal(result.status, 0, `${name}: ${result.stderr || result.error || ''}`);
     }
 });
+
+test('module adapter reuses the global declared by the core bundle', () => {
+    const core = fs.readFileSync(
+        path.join(projectRoot, 'src', 'dragonBones', 'core', 'DragonBones.ts'), 'utf8');
+    const adapter = fs.readFileSync(
+        path.join(projectRoot, 'src', 'dragonBones', 'core', 'ModuleExports.ts'), 'utf8');
+
+    assert.match(core, /\bvar\s+global\b/,
+        'the core must provide the global variable used by the module adapter');
+    assert.doesNotMatch(adapter, /\bdeclare\s+(?:var|let|const)\s+global\b/,
+        'a second global declaration may conflict with the core under TypeScript');
+});

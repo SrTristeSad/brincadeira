@@ -25,8 +25,8 @@
 declare var exports: any;
 declare var module: any;
 declare var define: any;
-// Node's global object is not declared by the ES5 + DOM TypeScript libs.
-declare var global: typeof globalThis;
+// DragonBones.ts already declares 'global' for the browser fallback.
+// Do not redeclare it here: ambient types can conflict with that variable.
 if (typeof exports === "object" && typeof module === "object") {
     module.exports = dragonBones;
 }
