@@ -37,6 +37,147 @@ def dilatar_um_pixel(mask):
     return out
 
 
+
+def erodir_mascara(mask, *, pixels=5):
+    """Erosão 8-conexa, sem SciPy (a CI só precisa de NumPy)."""
+    m = np.asarray(mask)
+    if m.ndim != 2 or m.dtype != bool or pixels < 0:
+        raise ValueError("Máscara booleana 2D e erosão >= 0 necessárias")
+    resultado = m.copy()
+    h, w = m.shape
+    for _ in range(pixels):
+        padded = np.pad(resultado, 1, constant_values=False)
+        erodida = np.ones_like(resultado)
+        for dy in (-1, 0, 1):
+            for dx in (-1, 0, 1):
+                erodida &= padded[1 + dy:1 + dy + h, 1 + dx:1 + dx + w]
+        resultado = erodida
+    return resultado
+
+
+def deslocar_mascara(mask, dx, dy):
+    """Deslocamento INTEIRO sem wraparound; fora do quadro vale False."""
+    m = np.asarray(mask)
+    if m.ndim != 2 or m.dtype != bool:
+        raise ValueError("Máscara booleana 2D necessária")
+    if not isinstance(dx, int) or not isinstance(dy, int):
+        raise ValueError("Deslocamentos precisam ser inteiros")
+    h, w = m.shape
+    resultado = np.zeros_like(m)
+    y0, y1 = max(0, dy), min(h, h + dy)
+    x0, x1 = max(0, dx), min(w, w + dx)
+    if y0 < y1 and x0 < x1:
+        resultado[y0:y1, x0:x1] = m[y0 - dy:y1 - dy, x0 - dx:x1 - dx]
+    return resultado
+
+
+def decompor_efeito_a2c(off_gl, on_gl, off_vk, on_vk, *,
+                         tolerancia=8, limiar_fundo=10, erosao_pixels=5,
+                         busca_deslocamento=2):
+    """Auditoria espacial, SEM corrigir imagem, geometria ou cor dos backends.
+
+    A região estimada de corpo é inferida separadamente pelo RGB do quadro
+    A2C OFF menos a cor do canto: não é ground truth de silhueta/visibilidade.
+    Os deltas intrabackend preservam diferenças de sRGB nos valores absolutos.
+    """
+    imgs = [np.asarray(v) for v in (off_gl, on_gl, off_vk, on_vk)]
+    if not all(v.dtype == np.uint8 and v.ndim == 3 and v.shape == imgs[0].shape
+               and v.shape[2] == 3 for v in imgs):
+        raise ValueError("Quatro imagens RGB uint8 HxWx3 idênticas requeridas")
+    if limiar_fundo < 0 or erosao_pixels < 0 or busca_deslocamento < 0:
+        raise ValueError("Parâmetros espaciais inválidos")
+    mg = mascara_efeito(off_gl, on_gl, tolerancia=tolerancia)
+    mv = mascara_efeito(off_vk, on_vk, tolerancia=tolerancia)
+    fundo_gl = imgs[0][0, 0].tolist()
+    fundo_vk = imgs[2][0, 0].tolist()
+
+    resultados_borda = {}
+    for nome, indice, mudou in (("opengl", 0, mg), ("vulkan", 2, mv)):
+        referencia = imgs[indice].astype(np.int16)
+        fundo = referencia[0, 0]
+        corpo_estimado = np.any(np.abs(referencia - fundo) > limiar_fundo, axis=2)
+        interior = erodir_mascara(corpo_estimado, pixels=erosao_pixels)
+        total = int(mudou.sum())
+        zona_borda = int(np.count_nonzero(mudou & ~interior))
+        resultados_borda[nome] = {
+            "pixels_corpo_estimado": int(corpo_estimado.sum()),
+            "pixels_efeito_fora_do_corpo_estimado":
+                int(np.count_nonzero(mudou & ~corpo_estimado)),
+            "pixels_efeito_na_borda_ou_exterior": zona_borda,
+            "pixels_efeito_no_interior_estimado": int(np.count_nonzero(mudou & interior)),
+            "fracao_efeito_na_borda_ou_exterior":
+                float(zona_borda / total) if total else 0.0,
+            "limiar_rgb_ao_fundo": int(limiar_fundo),
+            "largura_erosao_px": int(erosao_pixels),
+        }
+
+    uniao = mg | mv
+    inter = mg & mv
+    iou_zero = float(inter.sum() / uniao.sum()) if uniao.any() else 1.0
+    melhor_iou, melhor_dx, melhor_dy = iou_zero, 0, 0
+    for dy in range(-busca_deslocamento, busca_deslocamento + 1):
+        for dx in range(-busca_deslocamento, busca_deslocamento + 1):
+            if not dx and not dy:
+                continue
+            transladada = deslocar_mascara(mg, int(dx), int(dy))
+            u = np.count_nonzero(transladada | mv)
+            i = np.count_nonzero(transladada & mv)
+            valor = float(i / u) if u else 1.0
+            if valor > melhor_iou + 1e-12:
+                melhor_iou, melhor_dx, melhor_dy = valor, dx, dy
+
+    deltas_gl = imgs[1].astype(np.int16) - imgs[0].astype(np.int16)
+    deltas_vk = imgs[3].astype(np.int16) - imgs[2].astype(np.int16)
+    vetores_gl, vetores_vk = deltas_gl[inter].astype(float), deltas_vk[inter].astype(float)
+    if len(vetores_gl):
+        produto = np.einsum("ij,ij->i", vetores_gl, vetores_vk)
+        norma = np.linalg.norm(vetores_gl, axis=1) * np.linalg.norm(vetores_vk, axis=1)
+        cos = produto / np.maximum(norma, 1e-12)
+        estatisticas_delta = {
+            "pixels_suporte_conjunto": int(len(cos)),
+            "fracao_deltas_rgb_mesma_direcao_cos_gt_0_5": float(np.mean(cos > 0.5)),
+            "fracao_deltas_rgb_direcao_oposta_cos_lt_menos_0_5":
+                float(np.mean(cos < -0.5)),
+            "cosseno_mediano_dos_deltas_rgb": float(np.median(cos)),
+        }
+    else:
+        estatisticas_delta = {
+            "pixels_suporte_conjunto": 0,
+            "fracao_deltas_rgb_mesma_direcao_cos_gt_0_5": None,
+            "fracao_deltas_rgb_direcao_oposta_cos_lt_menos_0_5": None,
+            "cosseno_mediano_dos_deltas_rgb": None,
+        }
+    metade = mg.shape[1] // 2
+    return {
+        "metodo": "limiar intrabackend ON-OFF; fundo inferido do canto; borda estimada, não geometria",
+        "fundo_rgb_off_opengl": [int(x) for x in fundo_gl],
+        "fundo_rgb_off_vulkan": [int(x) for x in fundo_vk],
+        "borda_corpo_estimados": resultados_borda,
+        "efeito_metade_esquerda_direita": {
+            "opengl": [int(mg[:, :metade].sum()), int(mg[:, metade:].sum())],
+            "vulkan": [int(mv[:, :metade].sum()), int(mv[:, metade:].sum())],
+            "somente_opengl": [
+                int(np.count_nonzero((mg & ~mv)[:, :metade])),
+                int(np.count_nonzero((mg & ~mv)[:, metade:])),
+            ],
+            "somente_vulkan": [
+                int(np.count_nonzero((mv & ~mg)[:, :metade])),
+                int(np.count_nonzero((mv & ~mg)[:, metade:])),
+            ],
+        },
+        "busca_translacao_inteira_diagnostica": {
+            "raio_px": int(busca_deslocamento),
+            "iou_sem_deslocamento": iou_zero,
+            "iou_melhor": float(melhor_iou),
+            "melhor_deslocamento_gl_para_vk_xy": [int(melhor_dx), int(melhor_dy)],
+            "ganho_iou": float(melhor_iou - iou_zero),
+            "nota": "A busca não desloca nem corrige os PNGs usados na medição original.",
+        },
+        "direcao_dos_deltas_na_intersecao": estatisticas_delta,
+        "nao_homologado": True,
+    }
+
+
 def analisar_efeitos(off_gl, on_gl, off_vk, on_vk, *, tolerancia=8):
     mg = mascara_efeito(off_gl, on_gl, tolerancia=tolerancia)
     mv = mascara_efeito(off_vk, on_vk, tolerancia=tolerancia)
@@ -119,6 +260,7 @@ def main():
         ]
         metrica, mg, mv = analisar_efeitos(*entradas)
         doc.update(metrica)
+        doc["decomposicao"] = decompor_efeito_a2c(*entradas)
         doc["estado"] = "MEDIDO_SEM_HOMOLOGACAO"
         from PIL import Image
         args.png.parent.mkdir(parents=True, exist_ok=True)
