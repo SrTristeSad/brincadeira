@@ -64,3 +64,9 @@ Validado em reprodução TypeScript 5.8.3 (`outFile`, ES5) com três arquivos de
 ## Ordenação de ossos e referências inválidas
 
 `ArmatureData.sortBones()` agora verifica se uma volta completa na lista não conseguiu ordenar nenhum osso. Em esqueletos válidos, preserva a ordem determinada pelas relações entre pais e restrições; em dados inválidos (ciclos ou referências ausentes), lança um erro identificável e **restaura a ordem original dos ossos** antes de interromper. Isso substitui um laço potencialmente infinito sem alterar a API. Quatro testes foram adicionados para hierarquias válidas e dependências impossíveis.
+
+## Limpeza reentrante de WorldClock
+
+`WorldClock.clear()` agora mantém os índices estáveis enquanto desconecta objetos, mesmo com setters de relógio reentrantes. O método remove entradas desconectadas por compactação em `finally`, sem perder objetos novos registrados durante a própria limpeza. Uma exceção em um setter não deixa lacunas permanentes nem exclui automaticamente os outros objetos pendentes. A compactação também foi centralizada em um método privado compartilhado com `advanceTime()`.
+
+Cinco cenários de regressão foram adicionados. A lógica correspondente foi compilada isoladamente para ES5 com TypeScript 5.8.3 e passou em 5/5 testes Node.js 22. A suíte completa do motor continua pendente.

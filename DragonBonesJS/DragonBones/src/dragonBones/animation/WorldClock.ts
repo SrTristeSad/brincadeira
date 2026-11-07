@@ -69,6 +69,19 @@ namespace dragonBones {
         // Keep additions and removals safe during nested update callbacks.
         private _advancingDepth: number = 0;
         private _needsCompaction: boolean = false;
+
+        private _compactAnimatables(): void {
+            let writeIndex = 0;
+            for (let readIndex = 0; readIndex < this._animatebles.length; ++readIndex) {
+                const animatable = this._animatebles[readIndex];
+                if (animatable !== null) {
+                    this._animatebles[writeIndex++] = animatable;
+                }
+            }
+
+            this._animatebles.length = writeIndex;
+            this._needsCompaction = false;
+        }
         /**
          * - Creating a Worldclock instance. Typically, you do not need to create Worldclock instance.
          * When multiple Worldclock instances are running at different speeds, can achieving some specific animation effects, such as bullet time.
@@ -140,16 +153,7 @@ namespace dragonBones {
                 // Compact only after the outermost update finishes. This prevents
                 // reentrant updates from shifting entries under the active loop.
                 if (this._advancingDepth === 0 && this._needsCompaction) {
-                    let writeIndex = 0;
-                    for (let readIndex = 0; readIndex < this._animatebles.length; ++readIndex) {
-                        const animatable = this._animatebles[readIndex];
-                        if (animatable !== null) {
-                            this._animatebles[writeIndex++] = animatable;
-                        }
-                    }
-
-                    this._animatebles.length = writeIndex;
-                    this._needsCompaction = false;
+                    this._compactAnimatables();
                 }
             }
         }
@@ -254,21 +258,27 @@ namespace dragonBones {
          * @language zh_CN
          */
         public clear(): void {
-            // Mark entries before detaching; a child's clock setter may call remove().
-            // Preserve indices while advanceTime() is running.
-            for (let i = 0, l = this._animatebles.length; i < l; ++i) {
-                const animatable = this._animatebles[i];
-                this._animatebles[i] = null;
-                if (animatable !== null) {
-                    animatable.clock = null;
+            // Treat clear as an active traversal. Reentrant clock setters must
+            // not shift the indices we are currently visiting.
+            this._advancingDepth++;
+            try {
+                for (let i = 0, l = this._animatebles.length; i < l; ++i) {
+                    const animatable = this._animatebles[i];
+                    this._animatebles[i] = null;
+                    if (animatable !== null) {
+                        animatable.clock = null;
+                    }
                 }
             }
-
-            if (this._advancingDepth === 0) {
-                this._animatebles.length = 0;
-            }
-            else {
+            finally {
+                this._advancingDepth--;
+                // Discard entries detached by this call, but preserve any new
+                // animatables added by a clock setter during the traversal.
+                // Also remove holes when a setter throws before clear finishes.
                 this._needsCompaction = true;
+                if (this._advancingDepth === 0) {
+                    this._compactAnimatables();
+                }
             }
         }
         /**

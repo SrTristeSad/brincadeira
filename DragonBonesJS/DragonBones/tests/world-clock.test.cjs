@@ -321,3 +321,116 @@ test("WorldClock.contains preserves normal descendant and self behavior", () => 
     assert.equal(root.clock, null);
     assert.equal(grandchild.clock, child);
 });
+
+test("WorldClock.clear retains newly added members from a clock setter", () => {
+    const clock = new WorldClock();
+    const replacement = animatable();
+    const original = {
+        _owner: null,
+        updates: [],
+        get clock() { return this._owner; },
+        set clock(value) {
+            this._owner = value;
+            if (value === null) {
+                clock.add(replacement);
+            }
+        },
+        advanceTime(time) { this.updates.push(time); }
+    };
+
+    clock.add(original);
+    clock.clear();
+    assert.equal(original.clock, null);
+    assert.equal(replacement.clock, clock);
+    clock.advanceTime(0.25);
+    assert.deepEqual(original.updates, []);
+    assert.deepEqual(replacement.updates, [0.25]);
+});
+
+test("WorldClock.clear compacts entries after a clock setter fails", () => {
+    const clock = new WorldClock();
+    const first = {
+        _owner: null,
+        get clock() { return this._owner; },
+        set clock(value) {
+            this._owner = value;
+            if (value === null) {
+                throw new Error("detach failure");
+            }
+        },
+        advanceTime() {}
+    };
+    const second = animatable();
+    clock.add(first);
+    clock.add(second);
+
+    assert.throws(() => clock.clear(), /detach failure/);
+    assert.equal(first.clock, null);
+    assert.equal(second.clock, clock);
+    assert.equal(clock.contains(second), true);
+    clock.advanceTime(0.2);
+    assert.deepEqual(second.updates, [0.2]);
+    clock.remove(second);
+    assert.equal(clock._animatebles.length, 0);
+});
+
+test("WorldClock.clear during an update preserves new members for the next frame", () => {
+    const clock = new WorldClock();
+    const replacement = animatable();
+    const original = {
+        _owner: null,
+        get clock() { return this._owner; },
+        set clock(value) {
+            this._owner = value;
+            if (value === null) {
+                clock.add(replacement);
+            }
+        },
+        advanceTime() { clock.clear(); }
+    };
+
+    clock.add(original);
+    clock.advanceTime(0.2);
+    assert.deepEqual(replacement.updates, []);
+    clock.advanceTime(0.3);
+    assert.deepEqual(replacement.updates, [0.3]);
+});
+
+test("nested WorldClock.clear detaches existing members without losing new ones", () => {
+    const clock = new WorldClock();
+    const second = animatable();
+    const replacement = animatable();
+    const original = {
+        _owner: null,
+        get clock() { return this._owner; },
+        set clock(value) {
+            this._owner = value;
+            if (value === null) {
+                clock.clear();
+                clock.add(replacement);
+            }
+        },
+        advanceTime() {}
+    };
+
+    clock.add(original);
+    clock.add(second);
+    clock.clear();
+    assert.equal(original.clock, null);
+    assert.equal(second.clock, null);
+    assert.equal(replacement.clock, clock);
+    clock.advanceTime(0.1);
+    assert.deepEqual(replacement.updates, [0.1]);
+});
+
+test("WorldClock.clear continues releasing all ordinary members", () => {
+    const clock = new WorldClock();
+    const first = animatable();
+    const second = animatable();
+    clock.add(first);
+    clock.add(second);
+    clock.clear();
+    assert.equal(first.clock, null);
+    assert.equal(second.clock, null);
+    assert.equal(clock._animatebles.length, 0);
+});
