@@ -238,6 +238,7 @@ jobs:
             ${{ runner.temp }}/phong-a2c-backends-ci.json
             ${{ runner.temp }}/phong-a2c-mapa-ci.json
             ${{ runner.temp }}/phong-a2c-mapa-ci.png
+            ${{ runner.temp }}/phong-a2c-mapa-ci-isolado.png
           if-no-files-found: warn
 
       - name: Diagnosticar par Phong bruto e normalizações somente de teste
