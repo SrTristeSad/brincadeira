@@ -213,6 +213,24 @@ def salvar_mapa_categorias(mask_gl, mask_vk, png):
     }
 
 
+def mascaras_direcao_rgb(gl, vk):
+    """Separa direção da diferença: primeiro R, usando B só se R empata.
+
+    São máscaras exclusivas por pixel; cores de frente/fundo podem ser
+    complementares, mas não representam efeitos separados de Z.
+    """
+    if not (
+        isinstance(gl, np.ndarray) and isinstance(vk, np.ndarray)
+        and gl.shape == (64, 64, 3) and vk.shape == gl.shape
+        and gl.dtype == np.uint8 and vk.dtype == np.uint8
+    ):
+        raise ValueError("Duas imagens RGB8 64x64 necessárias")
+    delta_r = gl[:, :, 0].astype(np.int16) - vk[:, :, 0].astype(np.int16)
+    delta_b = gl[:, :, 2].astype(np.int16) - vk[:, :, 2].astype(np.int16)
+    direcao = np.where(delta_r != 0, delta_r, delta_b)
+    return direcao > 0, direcao < 0
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--opengl", type=Path, required=True)
@@ -236,10 +254,18 @@ def main():
     # e efeito da chave Z ON/OFF *dentro* de cada backend.
     g = imagens_gl["on_z_on_vermelho_primeiro"]
     v = imagens_vk["on_z_on_vermelho_primeiro"]
+    gl_mais_forte, vk_mais_forte = mascaras_direcao_rgb(g, v)
+    mapa_absoluto = salvar_mapa_categorias(
+        gl_mais_forte, vk_mais_forte, args.png_z_on
+    )
+    mapa_absoluto["legenda"] = {
+        "vermelho": "Componente R maior no GL (ou B em empate de R)",
+        "ciano": "Componente R maior no Vulkan (ou B em empate de R)",
+        "preto": "RGB idêntico entre backends",
+        "cinza": "não utilizado no mapa direcional",
+    }
     rel["mapas"] = {
-        "diferenca_absoluta_a2c_z_on": salvar_mapa_categorias(
-            np.any(g > v, axis=2), np.any(v > g, axis=2), args.png_z_on
-        ),
+        "diferenca_absoluta_a2c_z_on": mapa_absoluto,
         "efeito_z_on_off_a2c": salvar_mapa_categorias(
             masks[("OpenGL", "on")], masks[("Vulkan", "on")],
             args.png_z_off,
