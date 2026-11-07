@@ -9,7 +9,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from auditar_cobertura_a2c_sintetica import (
-    CASOS, registrar_rgb, salvar_png_rgb,
+    CASOS, geometria_do_caso, registrar_rgb, salvar_png_rgb, vertices_do_caso,
 )
 from comparar_a2c_sintetico_gpu import comparar_sintetico
 
@@ -29,7 +29,21 @@ class TesteSinteticoGPU(unittest.TestCase):
                 64 if alfa == 64 else
                 128 if alfa == 128 else 192
             )
-            imagem = np.full((64, 64, 3), valor, np.uint8)
+            if nome.startswith("aresta_"):
+                cobertura = np.zeros((64, 64), np.uint8)
+                cobertura[11:53, 12:53] = 255
+                if amostras == 4:
+                    cobertura[11, 12:53] = 128
+                    cobertura[11:53, 12] = 128
+                if not a2c:
+                    canal = cobertura
+                else:
+                    canal = np.rint(
+                        cobertura.astype(np.float64) * alfa / 255
+                    ).astype(np.uint8)
+                imagem = np.repeat(canal[:, :, None], 3, axis=2)
+            else:
+                imagem = np.full((64, 64, 3), valor, np.uint8)
             png = Path(self.tmp.name) / (nome + ".png")
             metrica = registrar_rgb(imagem)
             controles[nome] = {
@@ -38,6 +52,8 @@ class TesteSinteticoGPU(unittest.TestCase):
                 "amostras_fbo_observadas": amostras if amostras == 4 else 0,
                 "a2c_ativo": a2c, "blend_ativo": False,
                 "profundidade_ativa": False,
+                "geometria": geometria_do_caso(nome),
+                "vertices_ndc": [list(pt) for pt in vertices_do_caso(nome)],
                 "png": str(png),
                 "sha256_png": salvar_png_rgb(imagem, png),
             }
@@ -58,6 +74,37 @@ class TesteSinteticoGPU(unittest.TestCase):
         self.assertEqual(
             rel["resultados"]["4x_a128_a2c_on"]["pixels_rgb_distintos"], 0
         )
+
+    def test_aresta_real_identica_em_dois_backends(self):
+        resultado = comparar_sintetico(self.gl, self.vk)
+        self.assertEqual(
+            resultado["resultados"]["aresta_4x_a128_a2c_on"][
+                "pixels_rgb_distintos"
+            ], 0,
+        )
+        self.assertGreater(
+            resultado["analise_aresta"]["pixels_borda_parcial_gl"], 0,
+        )
+        self.assertEqual(resultado["analise_aresta"]["iou_efeito_a2c"], 1.0)
+
+    def test_rejeita_vertices_distintos_na_aresta(self):
+        self.vk["controles"]["aresta_4x_a128_a2c_on"][
+            "vertices_ndc"
+        ][0][0] += 0.1
+        with self.assertRaisesRegex(ValueError, "Estados sintéticos"):
+            comparar_sintetico(self.gl, self.vk)
+
+    def test_rejeita_aresta_sem_cobertura_parcial(self):
+        nome = "aresta_4x_a255_a2c_off"
+        rgb = np.zeros((64, 64, 3), np.uint8)
+        rgb[11:53, 12:53] = 255
+        caminho = Path(self.tmp.name) / "sem-parcial.png"
+        doc = self.vk["controles"][nome]
+        doc.update(registrar_rgb(rgb))
+        doc["png"] = str(caminho)
+        doc["sha256_png"] = salvar_png_rgb(rgb, caminho)
+        with self.assertRaisesRegex(ValueError, "cobertura parcial"):
+            comparar_sintetico(self.gl, self.vk)
 
     def test_rejeita_amostras_fbo_gl_falsas(self):
         self.gl["controles"]["4x_a128_a2c_on"]["amostras_fbo_observadas"] = 0
