@@ -179,6 +179,8 @@ jobs:
 
       - name: Comparar máscara ALFA real da API Phong OpenGL e Vulkan
         run: |
+          # Dependência somente do comparador de testes; NÃO das requirements do produto.
+          python -m pip install --disable-pip-version-check "Pillow>=10,<13"
           python -m unittest discover -s makehumano/testes \
             -p test_registrar_mascara_paridade_wgpu.py -v
           python -u makehumano/testes/comparar_mascara_paridade.py \

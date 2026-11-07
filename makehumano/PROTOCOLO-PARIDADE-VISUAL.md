@@ -412,3 +412,25 @@ Foi corrigida a nomenclatura do JSON de diagnósticos: `limites_rgb_propostos_sa
 **Critérios de interpretação:** se o teste registrar PNG válido, a máscara alfa da **API Phong** foi realmente avaliada. A CI pode concluir `success` mesmo que os limiares de paridade alfa sejam reprovados; usar os números, não o exit code. Mesmo que a máscara passe, isso não homologa transparência de outros materiais/presets, blending e alpha-to-coverage, nem dispensa corrigir/decidir contrato de cor e luz da produção.
 
 **Status:** instrumentação implementada e cinco testes CPU aprovados localmente; execução real da GUI e métricas ainda pendentes para esta revisão. **Windows e Linux** no escopo, sem macOS.
+
+### Resultado efetivo da primeira execução pareada de alfa
+
+**Fonte:** [GitHub Actions 42333196092](https://github.com/SrTristeSad/brincadeira/actions/runs/42333196092), commit `91a548a957e16e2f43e241bac851c25422d5cd1f`. Os dois harnesses produziram máscaras RGBA 1024×768 via `mh.renderAlphaMask`, com checksums de canal A e PNG conferidos manualmente após baixar os artefatos `phong-referencia-opengl-ci` e `phong-diffuse-on-off-ci`. O step automático da comparação falhou **por ausência de Pillow no ambiente de CI**, não por divergência visual; os PNGs e manifestos são válidos.
+
+A análise local independente com Pillow e NumPy, lendo os arquivos **exatos** publicados pelos dois harnesses e verificando os hashes, calculou:
+
+| Métrica de alfa da API | Valor |
+| --- | ---: |
+| Pixels totais | 786.432 |
+| Pixels divergentes além de 8 níveis | **36** (**0,00457764%**) |
+| IoU real de cobertura `A>0` | **0,9992035046** |
+| Erro médio absoluto de alfa | **0,01167297** |
+| Erro máximo de alfa | **255** |
+| Cobertura OpenGL / Vulkan | **45.178 / 45.182** |
+| Interseção / união | **45.162 / 45.198** |
+| Alfa intermediário OpenGL / Vulkan | **0 / 0** |
+| Limiares provisórios alfa (IoU ≥0,995; até 0,5% divergente) | **Atendidos neste caso** |
+
+SHA-256 alfa OpenGL `9bdb92051bc6ddd683186daf2af842bb3e3b5df191af292b6a2548a45b430006`; Vulkan `a11aee4ad9768515228efa83cf7301f90e4133cbf5ce6aae64c5fc5cafbfaf8c`. A diferença máxima de 255 representa cobertura diversa em parte dos 36 pixels, e as máscaras NÃO são idênticas. Os dois backends não produziram alfa parcial neste Phong de corpo sem material transparente.
+
+**Acompanhamento:** somente a ação CI foi atualizada para instalar `Pillow>=10,<13` antes do teste Python/relatório, sem alterar requirements de produção. A nova execução deve confirmar essas métricas e anexar `phong-alfa-api-ci.json` e `phong-alfa-api-diff-ci.png`. Mesmo quando o teste automático passar, não equivale à homologação dos demais shaders, materiais transparentes ou blending.
