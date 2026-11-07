@@ -317,6 +317,10 @@ def load(app):
             if suporte["testavel"]:
                 from capturar_coplanares_depth_opengl import capturar_coplanares_opengl
                 auditoria_coplanares = capturar_coplanares_opengl(destino)
+            auditoria_cruzamento = {"estado": "NAO_TESTAVEL_MSAA_4X"}
+            if suporte["testavel"]:
+                from capturar_cruzamento_depth_opengl import capturar_cruzamento_depth_opengl
+                auditoria_cruzamento = capturar_cruzamento_depth_opengl(destino)
             comparacoes = {}
             if suporte["testavel"]:
                 for nome, a, b in (
@@ -353,6 +357,7 @@ def load(app):
                 "auditoria_sintetica_a2c": auditoria_sintetica,
                 "auditoria_sintetica_sobreposicao": auditoria_depth,
                 "auditoria_sintetica_coplanares": auditoria_coplanares,
+                "auditoria_sintetica_cruzamento": auditoria_cruzamento,
                 "texturas_varredura": {
                     str(alfa): meta for alfa, (_path, meta) in
                     sorted(texturas_varredura.items())
