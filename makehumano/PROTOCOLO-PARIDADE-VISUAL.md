@@ -753,3 +753,44 @@ A normalização aumenta a IoU **em ~1,61 ponto percentual** e reduz a quantidad
 **Interpretação:** o sistema de sombras Vulkan explica a dependência RGB do alfa (seção 30), **mas não a maior parte da discrepância espacial A2C GL/Vulkan**. A pequena melhora em IoU não autoriza remover as sombras de produção nem afirmar equivalência de sRGB, iluminação, rasterização, amostras individuais ou geometria sobreposta. A própria métrica é sensível ao limiar (seção 27) e mede apenas suporte de mudança RGB. O próximo eixo técnico é a diferença residual de cobertura/ordenação/projeção e o contrato de cor; qualquer decisão de oferecer um modo legado sem sombras cabe ao criador.
 
 **Escopo:** esta etapa adicionou controles e testes em `makehumano/testes/`, um passo no workflow e documentação. Nenhum shader, asset, framebuffer ou arquivo em `makehumano/codigo/` foi alterado. O PR #11 permanece **DRAFT, sem merge**; a `main` foi preservada.
+
+## 32. Resíduo A2C após normalizar sombras: proximidade, magnitude e espelho
+
+**Objetivo:** a seção 31 mediu **1.070 pixels exclusivos** nas máscaras A2C OpenGL/Vulkan com sombras desabilitadas somente no corpo Vulkan, mas não distinguiu diferença de contorno, deslocamento local e intensidade de cor próxima ao limiar. Esta etapa mede **distâncias entre máscaras RGB intrabackend**, não distâncias entre superfícies geométricas e não usa GL/VK RGB absoluto. Não altera coordenadas, projeta novamente o personagem, reescreve shader nem força sample masks.
+
+**Ferramenta:** `testes/diagnosticar_residuo_a2c.py` recebe manifestos já pareados pela comparação GL/Vulkan, revalida estados de A2C, blend, escrita Z e `receiveShadows`, e relê os seis PNGs com confirmação de hashes SHA-256 **do arquivo e dos pixels RGB**. Para cada limiar `any(abs(RGB_ON-RGB_OFF)>limiar)`, os pixels alterados por só um backend são `somente_gl=mask_gl & ~mask_vk` e `somente_vk=mask_vk & ~mask_gl`. Para cada pixel exclusivo, aplica **distância de Chebyshev** (vizinhança de oito pixels, sem wraparound) de raio 1, 2 ou 5 em relação a **qualquer** pixel com efeito no backend oposto. Valores abaixo do limiar no backend oposto são classificados separadamente por intensidade zero, 1–4, 5–8. O novo mapa RGB codifica efeitos coincidentes em cinza, exclusivos próximos em vermelho/azul escuros e os exclusivos **mais distantes de 5 px** em vermelho/ciano vivos. Não é um mapa de fragmentos MSAA.
+
+**CI:** [42352214140](https://github.com/SrTristeSad/brincadeira/actions/runs/42352214140) executou a primeira versão e passou nos dois jobs. [42352468234](https://github.com/SrTristeSad/brincadeira/actions/runs/42352468234) repetiu o experimento com teste de **espelho horizontal exato**, também com ambos os jobs **success**. Sete testes CPU exercitam limites, distâncias, espelho, exceções e interpretação de deltas. O artefato `phong-a2c-opengl-pareado-ci` (ID `13566087892`) contém `phong-a2c-residuo-ci.json`, `phong-a2c-residuo-com-ci.png` e `phong-a2c-residuo-sem-ci.png`; ambos PNGs tiveram seus hashes do manifesto verificados, respectivamente `aada03241004f4402320dd359797456f26b08e199a95dd65c62c4525a687cb83` e `89f366c69e27a3540c49bb08c0e3c55c8da6800a84c0ec4109eb6c44ec467ee5`.
+
+### 32.1 Onde estão os pixels exclusivos (limiar RGB 8)
+
+| Comparação espacial A2C GL × VK | Vulkan com sombras | Vulkan sem receber sombras |
+| --- | ---: | ---: |
+| IoU de máscaras | **0,61302** | **0,62976** |
+| Pixels exclusivos GL / Vulkan | **536 / 623** | **552 / 518** |
+| Exclusivos totais | **1.159** | **1.070** |
+| Exclusivos a até 1 px do efeito no outro | 651 | 644 |
+| Exclusivos a até 2 px | 893 | 873 |
+| Exclusivos a até 5 px | **1.099** | **1.053** |
+| Exclusivos a mais de 5 px | **60** (5 GL, 55 VK) | **17** (8 GL, 9 VK) |
+
+Ao normalizar sombras, os exclusivos mais afastados de cinco pixels caíram **60→17** nesta execução. A redução maior das discrepâncias afastadas do que do total é um indício útil para escolher regiões de diagnóstico, mas **não** prova diferenças de cobertura, amostragem subpixel ou causa de implementação. A ferramenta não aproxima/mescla pixels para melhorar artificialmente a IoU; apenas informa a vizinhança do suporte binário.
+
+**Espelho horizontal:** ao espelhar somente a posição `x' = largura-1-x` do conjunto de exclusivos *distantes*, **7** pixels GL sem sombras têm equivalentes VK no mesmo `y`, e há **1 GL** e **2 VK** sem par nessa condição. Com sombras foram 5 pares (0 GL/50 VK sem par). O espelho não implica erro na matriz do modelo, pois o corpo e o enquadramento podem apresentar regiões anatomicamente simétricas; é somente uma regularidade observada na máscara.
+
+**Intensidade abaixo do limiar:** entre os 1.070 exclusivos sem sombras, o backend oposto apresentou delta máximo RGB igual a zero em **589** pixels, delta 1–4 em **317** e delta 5–8 em **164**. Assim **481** pixels exclusivos ainda têm mudança RGB no outro backend, mas abaixo da tolerância 8. Na execução de referência [42351003629](https://github.com/SrTristeSad/brincadeira/actions/runs/42351003629), foram 478 nesse grupo e 16 pixels distantes; a variação pequena entre execuções reforça a necessidade de registrar condições e hashes em vez de tornar uma contagem exata constante universal.
+
+### 32.2 Varredura de tolerância: não confundir melhora de limiar com paridade
+
+| Limiar RGB | IoU com sombras | IoU sem sombras | Pixels exclusivos a mais de 5 px: com / sem sombras |
+| ---: | ---: | ---: | ---: |
+| 2 | 0,37898 | **0,65678** | 1.512 / 18 |
+| 4 | 0,53661 | **0,65545** | 419 / 17 |
+| 8 | 0,61302 | **0,62976** | 60 / 17 |
+| 12 | **0,51049** | 0,50392 | 335 / 361 |
+| 16 | **0,64104** | 0,63088 | 203 / 203 |
+| 24 | **0,62946** | 0,52875 | 146 / 147 |
+
+A normalização de sombras **não melhora a IoU para todos os limiares**. A medida pode inclusive se inverter conforme a intensidade da mudança. Isso não valida/desvalida o algoritmo de sombras; mostra que **suporte de mudança RGB sob limiar** é uma métrica insuficiente para definir paridade visual e de cobertura. A etapa mais útil a seguir é construir um controle sintético de fragmentos, iluminação fixa e dados de amostras por pixel (se possível no backend), para separar resultados de rasterização, composição e codificação sRGB, sem modificar a política de sombras de produção.
+
+**Estado do projeto:** foram adicionados somente `testes/diagnosticar_residuo_a2c.py`, `testes/test_diagnosticar_residuo_a2c_wgpu.py`, o passo correspondente no workflow e esta seção documental. Nenhum arquivo em `makehumano/codigo/` foi alterado. PR #11 em **DRAFT**, sem merge, e `main` preservada.
