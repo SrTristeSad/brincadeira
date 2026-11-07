@@ -304,6 +304,42 @@ def main():
         Image.fromarray(criar_mapa(mascara_gl, mascara_vk), mode="RGB").save(
             isolado_png
         )
+        varredura = {}
+        for alfa in (64, 128, 192):
+            if alfa == 128:
+                casos = ("4x_sem_a2c_sem_blend_com_z", "4x_com_a2c")
+            else:
+                casos = (
+                    f"4x_a{alfa:03d}_sem_a2c_sem_blend_com_z",
+                    f"4x_a{alfa:03d}_com_a2c",
+                )
+            imagens = [
+                ler_captura(m["controles"][nome])
+                for m in (gl, vk)
+                for nome in casos
+            ]
+            metrica_alfa, mg_alfa, mv_alfa = analisar_efeitos(*imagens)
+            nome_png = args.png.with_name(
+                args.png.stem + f"-alfa{alfa:03d}.png"
+            )
+            Image.fromarray(
+                criar_mapa(mg_alfa, mv_alfa), mode="RGB"
+            ).save(nome_png)
+            varredura[str(alfa)] = {
+                **metrica_alfa,
+                "controles": list(casos),
+                "mapa_png": str(nome_png),
+                "sha256_png": hashlib.sha256(nome_png.read_bytes()).hexdigest(),
+            }
+        doc["varredura_alfa_4x"] = {
+            "estado": "MEDIDO_APOS_VALIDAR_PAREAMENTO",
+            "niveis": varredura,
+            "nao_homologado": True,
+            "limite": (
+                "Comparação mede suporte da diferença RGB após resolver MSAA 4×, "
+                "não observa diretamente a quantidade de amostras cobertas."
+            ),
+        }
         doc["isolamento_a2c_4x"] = {
             **metrica_isolada,
             "tipo": "COBERTURA_A2C_COM_BLEND_DESLIGADO_E_Z_LIGADO",
