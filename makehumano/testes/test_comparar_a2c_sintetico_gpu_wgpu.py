@@ -9,7 +9,8 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from auditar_cobertura_a2c_sintetica import (
-    CASOS, geometria_do_caso, registrar_rgb, salvar_png_rgb, vertices_do_caso,
+    CASOS, DESLOCAMENTOS_SUBPIXEL, deslocamento_do_caso,
+    geometria_do_caso, registrar_rgb, salvar_png_rgb, vertices_do_caso,
 )
 from comparar_a2c_sintetico_gpu import comparar_sintetico, mapa_diferenca_rgb
 
@@ -54,6 +55,7 @@ class TesteSinteticoGPU(unittest.TestCase):
                 "profundidade_ativa": False,
                 "geometria": geometria_do_caso(nome),
                 "vertices_ndc": [list(pt) for pt in vertices_do_caso(nome)],
+                "deslocamento_px_ndc": list(deslocamento_do_caso(nome)),
                 "png": str(png),
                 "sha256_png": salvar_png_rgb(imagem, png),
             }
@@ -119,6 +121,49 @@ class TesteSinteticoGPU(unittest.TestCase):
         self.assertEqual(mapa[0, 0].tolist(), [0, 0, 0])
         with self.assertRaises(ValueError):
             mapa_diferenca_rgb(gl, vk[:, :, :2])
+
+    def test_deslocamentos_iguais_e_quarto_de_pixel_ndc(self):
+        nome = "aresta_dx_p025_4x_a255_a2c_off"
+        original = vertices_do_caso("aresta_4x_a255_a2c_off")
+        deslocado = vertices_do_caso(nome)
+        self.assertEqual(len(DESLOCAMENTOS_SUBPIXEL), 4)
+        self.assertAlmostEqual(deslocado[0][0] - original[0][0], 0.25 * 2 / 64)
+        self.assertEqual(deslocado[0][1], original[0][1])
+        self.assertEqual(deslocamento_do_caso(nome), (0.25, 0.0))
+        self.assertEqual(deslocamento_do_caso("aresta_4x_a128_a2c_on"), (0.0, 0.0))
+        self.assertEqual(len(CASOS), 22)
+
+    def test_relatorio_aceita_diferencas_dependentes_do_deslocamento(self):
+        nome = "aresta_dx_p025_4x_a255_a2c_off"
+        c = self.vk["controles"][nome]
+        from PIL import Image
+        with Image.open(c["png"]) as imagem:
+            rgb = np.asarray(imagem).copy()
+        rgb[11, 20] = (191, 191, 191)
+        arquivo = Path(self.tmp.name) / "alteracao-subpixel.png"
+        c.update(registrar_rgb(rgb))
+        c["png"] = str(arquivo)
+        c["sha256_png"] = salvar_png_rgb(rgb, arquivo)
+        rel = comparar_sintetico(self.gl, self.vk)["varredura_subpixel"]
+        self.assertEqual(rel["estado"], "MEDIDO_SEM_HOMOLOGACAO")
+        self.assertEqual(set(rel["posicoes"]), {
+            "origem", "dx_m025", "dx_p025", "dy_m025", "dy_p025"
+        })
+        self.assertEqual(rel["posicoes"]["dx_p025"]["msaa_puro"][
+            "pixels_diferentes"
+        ], 1)
+        self.assertEqual(rel["posicoes"]["origem"]["msaa_puro"][
+            "pixels_diferentes"
+        ], 0)
+        self.assertEqual(rel["posicoes"]["dx_p025"]["msaa_puro"][
+            "pixels_diferentes_na_borda_subpixel"
+        ], 1)
+
+    def test_rejeita_metadados_deslocamento_incorretos(self):
+        nome = "aresta_dy_m025_4x_a128_a2c_on"
+        self.vk["controles"][nome]["deslocamento_px_ndc"] = [0.0, 0.25]
+        with self.assertRaisesRegex(ValueError, "Estados sintéticos"):
+            comparar_sintetico(self.gl, self.vk)
 
     def test_rejeita_amostras_fbo_gl_falsas(self):
         self.gl["controles"]["4x_a128_a2c_on"]["amostras_fbo_observadas"] = 0
