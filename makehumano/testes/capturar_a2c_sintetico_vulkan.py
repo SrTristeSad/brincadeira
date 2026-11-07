@@ -8,8 +8,7 @@ from pathlib import Path
 
 import numpy as np
 
-from auditar_alpha_textura_gpu import renderizar_amostra_sintetica  # reference only
-from auditar_cobertura_a2c_sintetica import CASOS, registrar_rgb
+from auditar_cobertura_a2c_sintetica import CASOS, registrar_rgb, salvar_png_rgb
 
 
 VERTICE = """
@@ -28,7 +27,6 @@ def capturar_sintetico_vulkan(cena, destino_json):
     wgpu, dev = cena.wgpu, cena.device
     destino_json = Path(destino_json)
     controles = {}
-    from PIL import Image
 
     for nome, amostras, a2c, alfa in CASOS:
         shader = dev.create_shader_module(
@@ -85,7 +83,7 @@ def capturar_sintetico_vulkan(cena, destino_json):
             raise RuntimeError("Framebuffer sintético Vulkan RGBA8 inesperado")
         rgb = np.ascontiguousarray(rgba[:, :, :3])
         png = destino_json.with_name(destino_json.stem + "-sintetico-" + nome + ".png")
-        Image.fromarray(rgb, mode="RGB").save(png)
+        hash_png = salvar_png_rgb(rgb, png)
         controles[nome] = {
             **registrar_rgb(rgb),
             "alfa_u8": alfa,
@@ -94,7 +92,7 @@ def capturar_sintetico_vulkan(cena, destino_json):
             "blend_ativo": False,
             "profundidade_ativa": False,
             "png": str(png),
-            "sha256_png": hashlib.sha256(png.read_bytes()).hexdigest(),
+            "sha256_png": hash_png,
         }
     return {
         "backend": "Vulkan",
