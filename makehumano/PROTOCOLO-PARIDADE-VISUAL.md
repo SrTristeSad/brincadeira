@@ -377,3 +377,24 @@ Dois controles adicionais em harnesses efêmeros, sem alterações em shaders/fr
 **Contraprova agora preparada:** o script CPU `testes/compensar_luz_eye_legacy.py` resolve `view @ P_world = GL_LIGHT0_eye` sem alterar o renderer. Dentro do harness Vulkan **efêmero**, a única luz é temporariamente reposicionada para essa `P_world` compatível com o estado GLSL medido (esperada aproximadamente `[-10.99, 20.11924934, 32.25118277]`). São gerados dois PNGs adicionais (Phong normal e só difuso), os valores e hashes são registrados, a posição original da luz é restaurada sempre. O comparador verifica `view @ P_world` contra o GL real antes de calcular as métricas. Outros testes CPU cobrem identidade, translação e matriz singular.
 
 **Critério e restrição:** essa posição modificada serve APENAS para entender a fonte do erro, não é material da cena oficialmente alterado, nem aprovação de portar uma peculiaridade OpenGL. Verificar se cai a fração de pixels fora de 8 e o erro regional, além de inspecionar os PNGs. Qualquer decisão sobre reproduzir ou não a semântica legada em Vulkan fica com o criador. Resultados deste controle ainda pendentes na revisão inicial.
+
+## 18. Contraprova concluída — incompatibilidade de espaço de luz é dominante
+
+**Execução pareada da mesma revisão:** [GitHub Actions 42330678073](https://github.com/SrTristeSad/brincadeira/actions/runs/42330678073), commit `7aa8b293085a9042ef5828f30ee2f51a25790e86`. Quatro workflows concluídos com sucesso (CI Vulkan PR e push, smoke GUI, deformações Python). JSONs e capturas originais nos artefatos `phong-referencia-opengl-ci`, `phong-diffuse-on-off-ci`, `phong-pareamento-ci`. Os três hashes de geometria são idênticos; iluminação e material coincidem antes do controle; os nove alvos 1024×768 foram realmente observados na GUI Vulkan. O controle foi aplicado **somente no processo temporário Vulkan**.
+
+### Posição de luz medida, sem inferência
+
+GL `glGetLightfv(GL_LIGHT0, GL_POSITION)` observou luz em espaço de câmera `(-10,98999977; 20,0; 20,0; 1,0)`. O cálculo padrão de Vulkan a partir de uma luz em mundo `(-10,99; 20; 20)` resulta em posição de câmera `(-10,99; 19,88075066; 7,74881723; 1)`. A contraprova converte a luz *eye-space* realmente armazenada no GL para mundo usando `P_world = inverse(view) @ GL_LIGHT0_eye`, produzindo `(-10,99; 20,11924934; 32,25118277)` para o cenário pareado. O comparador valida `view @ P_world == GL_LIGHT0_eye` dentro da tolerância e rejeita qualquer controle sem correspondência. Nada está hardcoded no renderizador de produção.
+
+| Cenário, somente depois das duas normalizações analíticas R/B no GL e sRGB→linear no Vulkan | Fração >8 antes da compensação | Fração >8 com luz compensada | Pixels divergentes com compensação | Erro médio RGB com compensação | Erro RGB médio na região heurística do corpo |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Phong completo | **4,1879018%** | **0,2314250%** | **1.820 / 786.432** | **0,1354811** | **2,3573** |
+| Phong apenas difuso (ambiente/especular/sombras zerados) | **4,2063%** | **0,0261943%** | **206 / 786.432** | **0,0398670** | **0,6937** |
+
+Os controles compensados passam os dois *limites RGB provisórios* (fração até 2%, erro médio RGB até 3) neste par Phong. A contraprova confirma fortemente que a transformação da posição efetiva da luz é a fonte dominante da divergência de iluminação. Os pixels residuais do Phong completo se concentram principalmente em especular, bordas e diferenças de rasterização; a causa pixel a pixel dessas sobras NÃO foi definitivamente isolada.
+
+**Isto NÃO é paridade visual homologada:** o teste exige reinterpretação de R/B da referência OpenGL, decodificação sRGB do Vulkan e compensação de luz aplicada fora da produção. A máscara alfa real não foi capturada (os PNGs são RGB; IoU alfa 1 é trivial). Não houve decisão do criador sobre reproduzir a posição eye-space legada versus preservar iluminação mundial semanticamente corrigida. LitSphere, skin, toon, normalmap e demais configurações ainda exigem suas próprias capturas pareadas.
+
+Foi corrigida a nomenclatura do JSON de diagnósticos: `limites_rgb_propostos_satisfeitos` pode ser true, mas `limites_propostos_todos_satisfeitos` permanece **false** e `alfa_real_avaliado=false`, precisamente para impedir homologação acidental por RGBA opaco sintético. O campo legado `aprovado` do comparador significa apenas a fração de pixels dentro do limiar escolhido.
+
+**Próxima decisão reservada ao criador:** (A) preservar a aparência/captura histórica do GLSL, modelando explicitamente a semântica de luz eye-space na compatibilidade Vulkan, com patch separado e regressões pré/pós; ou (B) manter a semântica mundo do backend moderno e documentar a diferença visual deliberada. Independentemente disso, decidir em separado o contrato de cor offscreen e a conversão de canais da ferramenta de referência. Não modificar shaders/viewport/offscreen/câmera de produção nem fazer merge sem aprovação.

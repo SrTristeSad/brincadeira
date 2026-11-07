@@ -192,13 +192,19 @@ def avaliar(ref_png, vulkan_png, ref_meta, vulkan_meta, saida, diretorio_diff=No
         m = comparar_pixels(a, b, tolerancia=8, fracao_maxima=0.02)
         alpha_mismatch = m["pixels_alfa_diferente"] / m["pixels_total"]
         m["alpha_divergencia_fracao"] = alpha_mismatch
-        m["limites_propostos_todos_satisfeitos"] = bool(
+        m["limites_rgb_propostos_satisfeitos"] = bool(
             m["fracao_divergente"] <= .02
             and m["erro_medio_rgb"] <= 3.
-            and m["intersecao_uniao_cobertura_alfa"] >= .995
-            and alpha_mismatch <= .005
         )
-        m["alerta_alfa"] = "Ambos os PNGs são RGB; alfa preenchido artificialmente em 255"
+        # Comparar PNGs RGB convertidos para RGBA opaco fornece alpha IoU=1
+        # TRIVIAL. Não autoriza concluir que todos os limites do protocolo
+        # (incluindo alpha verdadeiro) foram satisfeitos.
+        m["alfa_real_avaliado"] = False
+        m["limites_propostos_todos_satisfeitos"] = False
+        m["alerta_alfa"] = (
+            "Ambos os PNGs são RGB; alfa preenchido artificialmente em 255. "
+            "Campo 'aprovado' do comparador avalia apenas fração de pixels."
+        )
         if nome in ("gl_troca_rb_e_vk_srgb_para_linear",
                      "so_difusa_gl_rb_e_vk_linear",
                      "vk_luz_eye_legacy_normalizado",
