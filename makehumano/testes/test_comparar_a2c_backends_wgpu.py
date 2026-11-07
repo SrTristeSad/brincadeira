@@ -113,6 +113,17 @@ def modelos():
             m["comparacao"][f"somente_a2c_4x_alfa{alfa}"] = {
                 "pixels_divergentes": 7,
             }
+        repeticao = "4x_a128_repeticao_sem_a2c_sem_blend_com_z"
+        m["controles"][repeticao] = copy.deepcopy(
+            m["controles"]["4x_sem_a2c_sem_blend_com_z"]
+        )
+        for chave in (
+            "repeticao_a128_off", "alfa64_vs128_off", "alfa192_vs128_off",
+            "alfa64_vs128_on", "alfa192_vs128_on",
+        ):
+            m["comparacao"][chave] = {
+                "pixels_divergentes": 0 if chave.endswith("_off") else 250,
+            }
     return gl, vk
 
 
@@ -130,6 +141,8 @@ class TesteContratoA2C(unittest.TestCase):
                          "CAPTURADA_COM_ESTADOS_FIXOS")
         self.assertEqual(set(doc["varredura_alfa_4x"]["niveis"]),
                          {"64", "128", "192"})
+        self.assertIn("repeticao_a128_off",
+                      doc["controle_negativo_alpha_sem_a2c"]["opengl"])
 
     def test_rejeita_blend_incorreto_no_controle_intermediario(self):
         gl, vk = modelos()
@@ -153,6 +166,12 @@ class TesteContratoA2C(unittest.TestCase):
         gl, vk = modelos()
         vk["controles"]["4x_sem_a2c_sem_blend_sem_z"]["rastros_pipeline_corpo"][0]["a2c_calculado"] = True
         with self.assertRaisesRegex(ValueError, "Vulkan previsto"):
+            comparar_manifestos(gl, vk)
+
+    def test_rejeita_repeticao_com_pipeline_a2c_ativo(self):
+        gl, vk = modelos()
+        vk["controles"]["4x_a128_repeticao_sem_a2c_sem_blend_com_z"]["pipeline_a2c_observado"] = True
+        with self.assertRaisesRegex(ValueError, "Repetição"):
             comparar_manifestos(gl, vk)
 
     def test_rejeita_hash_alpha_diferente(self):
