@@ -186,6 +186,43 @@ jobs:
               --png "${RUNNER_TEMP}/phong-referencia-opengl-ci.png" \
               --log "${RUNNER_TEMP}/phong-referencia-opengl-ci.log"
 
+      - name: Capturar A2C RGB OpenGL original com MSAA solicitado e verificado
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          GALLIUM_DRIVER: llvmpipe
+          QT_X11_NO_MITSHM: "1"
+        run: |
+          python -m py_compile makehumano/testes/harness_plugin_a2c_opengl_referencia.py \
+            makehumano/testes/executar_harness_a2c_opengl_referencia.py
+          xvfb-run -a -s "-screen 0 1280x800x24" \
+            python -u makehumano/testes/executar_harness_a2c_opengl_referencia.py \
+              --repo "${RUNNER_TEMP}/makehuman-original" \
+              --python "${RUNNER_TEMP}/makehuman-opengl-venv/bin/python" \
+              --json "${RUNNER_TEMP}/phong-a2c-opengl-ci.json" \
+              --png "${RUNNER_TEMP}/phong-a2c-opengl-ci.png" \
+              --log "${RUNNER_TEMP}/phong-a2c-opengl-ci.log"
+
+      - name: Comparar controles reais RGB A2C GL/Vulkan (sem homologar)
+        run: |
+          python -m unittest discover -s makehumano/testes \
+            -p test_comparar_a2c_backends_wgpu.py -v
+          python -u makehumano/testes/comparar_a2c_backends.py \
+            --opengl "${RUNNER_TEMP}/phong-a2c-opengl-ci.json" \
+            --vulkan "${RUNNER_TEMP}/phong-a2c-vulkan-ci.json" \
+            --json "${RUNNER_TEMP}/phong-a2c-backends-ci.json"
+
+      - name: Publicar diagnóstico RGB A2C OpenGL e comparação entre backends
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phong-a2c-opengl-pareado-ci
+          path: |
+            ${{ runner.temp }}/phong-a2c-opengl-ci.json
+            ${{ runner.temp }}/phong-a2c-opengl-ci*.png
+            ${{ runner.temp }}/phong-a2c-opengl-ci.log
+            ${{ runner.temp }}/phong-a2c-backends-ci.json
+          if-no-files-found: warn
+
       - name: Diagnosticar par Phong bruto e normalizações somente de teste
         run: |
           python -u makehumano/testes/diagnosticar_pareamento_phong.py \
