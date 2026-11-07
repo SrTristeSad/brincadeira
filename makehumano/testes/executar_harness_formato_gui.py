@@ -21,8 +21,11 @@ FONTE_PLUGIN = Path(__file__).with_name("harness_plugin_formato_gui.py")
 PLUGIN_TEMPORARIO = PLUGINS / "99_diagnostico_formato_ci.py"
 
 
-def executar(destino, png, logfile, timeout):
+def executar(destino, png, logfile, timeout, fonte_plugin=None):
     destino, png, logfile = (Path(x).resolve() for x in (destino, png, logfile))
+    fonte = Path(fonte_plugin).resolve() if fonte_plugin else FONTE_PLUGIN
+    if fonte.parent != Path(__file__).resolve().parent or not fonte.is_file():
+        raise ValueError('Plugin diagnóstico deve existir no diretório testes')
     for arquivo in (destino, png, logfile):
         arquivo.parent.mkdir(parents=True, exist_ok=True)
     if PLUGIN_TEMPORARIO.exists():
@@ -52,7 +55,7 @@ def executar(destino, png, logfile, timeout):
         ambiente.pop("MAKEHUMANO_SMOKE_FUNCTIONAL_FILE", None)
         ambiente.pop("MAKEHUMANO_SMOKE_READY_FILE", None)
         processo = None
-        shutil.copyfile(FONTE_PLUGIN, PLUGIN_TEMPORARIO)
+        shutil.copyfile(fonte, PLUGIN_TEMPORARIO)
         try:
             with logfile.open("wb") as log:
                 processo = subprocess.Popen(
@@ -116,8 +119,10 @@ def main():
     parser.add_argument("--png", type=Path, required=True)
     parser.add_argument("--log", type=Path, required=True)
     parser.add_argument("--timeout", type=int, default=100)
+    parser.add_argument("--plugin-source", type=Path,
+                        help="Plugin de teste efêmero em makehumano/testes")
     args = parser.parse_args()
-    executar(args.json, args.png, args.log, args.timeout)
+    executar(args.json, args.png, args.log, args.timeout, args.plugin_source)
 
 
 if __name__ == "__main__":

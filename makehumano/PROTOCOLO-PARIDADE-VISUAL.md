@@ -231,3 +231,17 @@ salvar_estado(
 **Critério:** arquivos `estado-material-opengl.json` e `estado-material-vulkan.json` do mesmo par, com checksums de textura, shader, defines, material e iluminação. Comparar nomes lógicos e hashes, não presumir igualdade de caminhos absolutos entre diferentes instalações. Só depois de uma diferença controlada no material, medir novos PNGs e todas as métricas do protocolo. Ainda **não** há snapshots dos dois processos nesta revisão.
 
 **Limite:** a campanha e o código do produto continuam restritos a Windows e Linux, sem alterações visuais ou de backend nesta fase.
+
+## 10. Experimento controlado de textura Phong na GUI Vulkan (ainda não executado no momento da escrita)
+
+**Objetivo:** distinguir uma configuração DIFFUSE habilitada/desabilitada do estado de textura efetivamente usado no renderizador, sem modificar shaders ou framebuffers de produção. O plugin diagnóstico `testes/harness_plugin_material_phong_gui.py` é copiado apenas para um processo transitório pelo runner de CI. A própria instalação de CI remove o plugin ao terminar.
+
+A sequência ocorre dentro de um único processo MakeHumano e com a mesma câmera e cena: atribuir o preset existente `shaders/glsl/phong`, habilitar `material.configureShading(diffuse=True)`, registrar o estado do material e capturar `mh.renderToBuffer(1024,768)`; desabilitar `diffuse=False`, registrar novamente e fazer a segunda captura. A câmera é comparada pelas matrizes de view/projeção antes e depois. O ambiente de teste é destruído, e o estado do material é restaurado em `finally`.
+
+O relatório registra `formato_cena_inicial`, duas texturas 1024×768, `shaderConfig`, `shaderDefines`, `diffuseTexture` e hashes, `isTextured` real do objeto, iluminação, RGB do canto da imagem, hashes RGB/PNG, fração de pixels diferentes acima de 8 níveis, erro médio RGB, erro máximo RGB e estabilidade de câmera. Os PNGs e o JSON são anexados ao artefato `phong-diffuse-on-off-ci` no workflow Vulkan.
+
+**Aceitação restrita:** a CI só confirma se o runner/câmera funcionaram e se o controle `isTextured` acompanhou `diffuse=True/False`. Se não houver asset difuso, a imagem não mudar não prova erro; os campos de textura devem ser inspecionados. Uma diferença de pixels neste experimento **não equivale** a paridade com OpenGL, nem demonstra a causa exata do contraste pele azul/bege no par externo. Não usar o exit code, sozinho, como aprovação de qualquer tolerância do protocolo.
+
+**Fonte de referência:** `Object3D.isTextured` devolve `self.object.shaderConfig['diffuse']` no código do candidato. O WGSL usa esse valor em `dados.flags.y`; o GLSL original só lê `diffuseTexture` com `#ifdef DIFFUSE`. Assim, a hipótese de que Vulkan sempre ignora `shaderConfig.diffuse` não é sustentada por leitura estática — exige observação dos dados reais e do par externo.
+
+Este trabalho continua exclusivo de diagnóstico. Não altera Python de produção, materiais de usuários, interface, drivers, fallback ou escopo (apenas Windows/Linux).

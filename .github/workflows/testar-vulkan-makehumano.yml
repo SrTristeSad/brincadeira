@@ -90,6 +90,31 @@ jobs:
             ${{ runner.temp }}/formato-cena-gui.log
           if-no-files-found: warn
 
+      - name: Comparar Phong com difusa ligada/desligada na GUI isolada
+        env:
+          WGPU_BACKEND_TYPE: Vulkan
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          QT_X11_NO_MITSHM: "1"
+        run: |
+          python -m py_compile makehumano/testes/harness_plugin_material_phong_gui.py
+          xvfb-run -a -s "-screen 0 1280x800x24" \
+            python -u makehumano/testes/executar_harness_formato_gui.py \
+              --plugin-source makehumano/testes/harness_plugin_material_phong_gui.py \
+              --json "${RUNNER_TEMP}/phong-diffuse-ci.json" \
+              --png "${RUNNER_TEMP}/phong-diffuse-ci.png" \
+              --log "${RUNNER_TEMP}/phong-diffuse-ci.log"
+
+      - name: Publicar experimento Phong de CI (não pareado com OpenGL)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phong-diffuse-on-off-ci
+          path: |
+            ${{ runner.temp }}/phong-diffuse-ci.json
+            ${{ runner.temp }}/phong-diffuse-ci*.png
+            ${{ runner.temp }}/phong-diffuse-ci.log
+          if-no-files-found: warn
+
   vulkan-gui-sem-opengl:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
