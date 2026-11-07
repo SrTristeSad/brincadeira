@@ -245,6 +245,46 @@ def comparar_manifestos(gl, vk):
             "especialmente sob sobreposição de triângulos."
         ),
     }
+    auditoria = vk.get("auditoria_rgba_gpu_sem_overdraw")
+    _assert(isinstance(auditoria, dict),
+            "Ausente controle sintético Vulkan de upload RGBA")
+    _assert(
+        auditoria.get("tipo") ==
+        "AUDITORIA_RGBA_CPU_GPU_TRIANGULO_SEM_SOBREPOSICAO",
+        "Controle sintético Vulkan com tipo inesperado",
+    )
+    _assert(set(auditoria.get("cpu", {})) == {"64", "128", "192"},
+            "Faltam níveis do loader CPU RGBA")
+    rgb_digests = set()
+    for alfa in (64, 128, 192):
+        cpu = auditoria["cpu"][str(alfa)]
+        metadata = vk["texturas_varredura"][str(alfa)]
+        _assert(cpu["sha256_rgba"] == metadata["sha256_rgba"],
+                "RGBA do loader CPU difere do fixture: " + str(alfa))
+        _assert(cpu["alfa_min"] == cpu["alfa_max"] == alfa,
+                "Alfa diferente na textura CPU: " + str(alfa))
+        rgb_digests.add(cpu["sha256_rgb"])
+    _assert(len(rgb_digests) == 1,
+            "Canais RGB do loader variaram conforme o alpha")
+    _assert(set(auditoria.get("gpu", {})) == {"1", "4"},
+            "Controle sintético GPU não cobriu 1× e 4×")
+    for amostras in (1, 4):
+        gpu = auditoria["gpu"][str(amostras)]
+        _assert(gpu["amostras"] == amostras and
+                gpu["pipeline_blend_habilitado"] is False and
+                gpu["pipeline_a2c_habilitado"] is False and
+                gpu["uma_superficie_sem_sobreposicao"] is True and
+                gpu["dimensoes"] == [64, 64],
+                "Pipeline sintético GPU inválido")
+        _assert(set(gpu["controles"]) == {"64", "128", "192"},
+                "Níveis sintéticos GPU incompletos")
+        for alfa in (64, 128, 192):
+            m = gpu["controles"][str(alfa)]
+            _assert(len(m["sha256_rgb"]) == 64 and len(m["sha256_rgba"]) == 64,
+                    "Hash GPU ausente")
+            _assert(0 <= m["pixels_rgb_diferentes_de_a128"] <= 4096,
+                    "Contagem inválida no framebuffer 64×64")
+    relatorio["auditoria_rgba_gpu_sem_overdraw"] = auditoria
     repetir = "4x_a128_repeticao_sem_a2c_sem_blend_com_z"
     for backend, manifesto in (("OpenGL", gl), ("Vulkan", vk)):
         c = manifesto["controles"].get(repetir)
