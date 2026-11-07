@@ -272,3 +272,15 @@ Com a imagem sintética, `corpo.texture` expôs um objeto `Image`. O shader/pipe
 Foi acrescentada validação de regressão no harness: exigir define DIFFUSE ativo/inativo nos respectivos controles, ao menos um pixel Phong alterado pela textura sintética, matrizes idênticas e quatro texturas 1024×768 observadas. Resultado de CI da revisão com a nova asserção deve ser consultado separadamente.
 
 **Conclusão limitada:** a diferença de pele azul lisa (referência OpenGL) versus bege/texturizada (par externo) ainda não está explicada. Nesta CI a pele `DefaultSkin` não tinha `diffuseTexture`. A comparação pareada dos dois estados de material e do original segue necessária. Não houve autorização ou modificação do renderizador de produção.
+
+## 11. Referência OpenGL upstream em ambiente CI isolado — execução pendente
+
+Para não depender somente dos arquivos no ambiente externo `/home/claude/srtristesad/`, foi preparado um segundo harness de referência em `testes/harness_plugin_opengl_referencia.py`, que só é **copiado para um clone temporário** do MakeHuman upstream, fixado no commit completo `a8bc2d54ff0ac92e78ff71431b1023eda42bf482`. O MakeHumano modernizado não incorpora esse plugin nem passa a aceitar OpenGL.
+
+O runner `testes/executar_harness_opengl_referencia.py` inicia um processo independente no Xvfb com Mesa llvmpipe e um ambiente Python virtual exclusivo com **NumPy 1.26.4 + PyQt5 + PyOpenGL**. A captura usa a GUI original e `mh.renderToBuffer(1024,768)` e registra PNG/JSON/log; remove o plugin transitório no encerramento.
+
+Ambos os harnesses de diagnóstico, OpenGL e Vulkan, agora usam os mesmos números de câmera de `testes/configurar_camera_paridade.py`: FOV 90, centro `(0, 0.11924934387207031, 0)`, raio `12.251182769327169`, inclinações/rotações nulas, zoom 1 e sem reescala automática; **projeção original preservada e registrada**, com matrizes, near/far e dimensões de viewport. Se o checkout/estado de câmera divergir, a comparação deve ser considerada inválida.
+
+**Primeiro objetivo restrito:** verificar que o upstream inicia e produz um PNG Phong com seu material e iluminação registrados, no Windows/Linux visados (runner desta fase: Linux). Não declarar equivalência até conferir que câmera, modelo, shaders, assets, iluminação e métodos de captura estão alinhados e então executar o comparador com todas as métricas. A CI de referência é teste externo; não é fallback no produto final.
+
+**Status inicial:** scripts preparados na branch, execução do original na CI e inspeção dos resultados ainda pendentes. Nenhuma alteração de produção autorizada ou executada.

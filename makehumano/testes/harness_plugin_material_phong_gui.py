@@ -27,6 +27,7 @@ def load(app):
         sys.path.insert(0, pasta_testes)
     from observar_formato_cena_vulkan import observar_captura_offscreen
     from registrar_estado_material import descrever_material, descrever_iluminacao
+    from configurar_camera_paridade import fixar_camera, manifesto_camera
 
     destino = Path(destino_str)
     png_on = Path(os.environ["MAKEHUMANO_HARNESS_FORMATO_PNG"])
@@ -68,7 +69,10 @@ def load(app):
             if not objetos_corpo:
                 raise RuntimeError("Material do corpo não encontrado entre objetos G.world")
             corpo = max(objetos_corpo, key=lambda obj: len(obj.primitives))
-            camera = G.cameras[corpo.cameraMode]
+            camera = fixar_camera(app)
+            if camera is not G.cameras[corpo.cameraMode]:
+                raise RuntimeError("Camera do corpo difere da câmera modelCamera")
+            parametros_camera = manifesto_camera(camera)
             proj_antes, view_antes = camera.getMatrices(0)
 
             # Apenas no processo efêmero de CI: alternar o mesmo preset
@@ -144,6 +148,9 @@ def load(app):
                 "numpy": np.__version__,
                 "cenario": "Mesmo processo, cena e camera; shader Phong; alternancia diffuse",
                 "camara_matrizes_iguais": camera_igual,
+                "camera": parametros_camera,
+                "G_windowWidth": int(G.windowWidth),
+                "G_windowHeight": int(G.windowHeight),
                 "estado_material_phong_on": estado_on,
                 "estado_material_phong_off": estado_off,
                 "estado_material_sintetico_on": estado_sint_on,

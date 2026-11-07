@@ -115,6 +115,51 @@ jobs:
             ${{ runner.temp }}/phong-diffuse-ci.log
           if-no-files-found: warn
 
+      - name: Obter upstream OpenGL pinado em checkout EXTERNO de referência
+        run: |
+          git clone --quiet https://github.com/makehumancommunity/makehuman.git \
+            "${RUNNER_TEMP}/makehuman-original"
+          git -C "${RUNNER_TEMP}/makehuman-original" checkout --quiet \
+            a8bc2d54ff0ac92e78ff71431b1023eda42bf482
+          test "$(git -C "${RUNNER_TEMP}/makehuman-original" rev-parse HEAD)" = \
+            "a8bc2d54ff0ac92e78ff71431b1023eda42bf482"
+
+      - name: Python separado para OpenGL upstream (NumPy 1.26.4)
+        run: |
+          python -m venv "${RUNNER_TEMP}/makehuman-opengl-venv"
+          "${RUNNER_TEMP}/makehuman-opengl-venv/bin/python" -m pip install \
+            "numpy==1.26.4" "PyQt5>=5.12.8" "PyOpenGL>=3.1.0"
+          "${RUNNER_TEMP}/makehuman-opengl-venv/bin/python" -c \
+            "import numpy, OpenGL.GL; from PyQt5 import QtOpenGL; assert numpy.__version__ == '1.26.4'"
+
+      - name: Capturar Phong no MakeHuman OpenGL upstream, processo isolado
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          GALLIUM_DRIVER: llvmpipe
+          QT_X11_NO_MITSHM: "1"
+        run: |
+          python -m py_compile makehumano/testes/harness_plugin_opengl_referencia.py \
+            makehumano/testes/executar_harness_opengl_referencia.py \
+            makehumano/testes/configurar_camera_paridade.py
+          xvfb-run -a -s "-screen 0 1280x800x24" \
+            python -u makehumano/testes/executar_harness_opengl_referencia.py \
+              --repo "${RUNNER_TEMP}/makehuman-original" \
+              --python "${RUNNER_TEMP}/makehuman-opengl-venv/bin/python" \
+              --json "${RUNNER_TEMP}/phong-referencia-opengl-ci.json" \
+              --png "${RUNNER_TEMP}/phong-referencia-opengl-ci.png" \
+              --log "${RUNNER_TEMP}/phong-referencia-opengl-ci.log"
+
+      - name: Publicar referência OpenGL externa à aplicação final
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phong-referencia-opengl-ci
+          path: |
+            ${{ runner.temp }}/phong-referencia-opengl-ci.json
+            ${{ runner.temp }}/phong-referencia-opengl-ci.png
+            ${{ runner.temp }}/phong-referencia-opengl-ci.log
+          if-no-files-found: warn
+
   vulkan-gui-sem-opengl:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
