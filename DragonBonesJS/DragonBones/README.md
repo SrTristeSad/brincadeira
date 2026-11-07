@@ -70,3 +70,7 @@ Validado em reprodução TypeScript 5.8.3 (`outFile`, ES5) com três arquivos de
 `WorldClock.clear()` agora mantém os índices estáveis enquanto desconecta objetos, mesmo com setters de relógio reentrantes. O método remove entradas desconectadas por compactação em `finally`, sem perder objetos novos registrados durante a própria limpeza. Uma exceção em um setter não deixa lacunas permanentes nem exclui automaticamente os outros objetos pendentes. A compactação também foi centralizada em um método privado compartilhado com `advanceTime()`.
 
 Cinco cenários de regressão foram adicionados. A lógica correspondente foi compilada isoladamente para ES5 com TypeScript 5.8.3 e passou em 5/5 testes Node.js 22. A suíte completa do motor continua pendente.
+
+## Fila de ações em Armature.advanceTime()
+
+A execução das ações pendentes da armadura agora retira cada ação da fila **antes** de chamar `fadeIn()`. Ações adicionadas por callbacks (no início ou no fim) são executadas em sequência sem repetir uma entrada já processada. A devolução ao pool ocorre em `finally`: se o callback falhar, a ação já consumida não é repetida, e as demais permanecem disponíveis para o frame seguinte. O tratamento de tipos, a API e o formato original das animações são preservados. Cinco testes de regressão foram adicionados em `armature-update.test.cjs`. Uma reprodução isolada compilada para ES5 com TypeScript 5.8.3 passou em 5/5 testes; o build completo permanece pendente.

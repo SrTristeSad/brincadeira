@@ -95,3 +95,104 @@ test("nested animation updates remain blocked while the outer update runs", () =
     assert.equal(calls, 1);
     assert.equal(armature._lockUpdate, false);
 });
+
+function queuedAction(name, released, type = 0) {
+    return {
+        actionData: { name, type },
+        slot: null,
+        bone: null,
+        returnToPool() {
+            released.push(name);
+            this.actionData = null;
+        }
+    };
+}
+
+test("a failing fadeIn releases only the processed action and keeps later actions", () => {
+    const armature = makeArmature();
+    const played = [];
+    const released = [];
+    const first = queuedAction("first", released);
+    const pending = queuedAction("pending", released);
+    armature._actions.push(first, pending);
+    armature._animation.fadeIn = name => {
+        played.push(name);
+        if (name === "first") throw new Error("fadeIn failed");
+    };
+
+    assert.throws(() => armature.advanceTime(0.1), /fadeIn failed/);
+    assert.equal(armature._lockUpdate, false);
+    assert.deepEqual(armature._actions, [pending]);
+    assert.deepEqual(released, ["first"]);
+    armature.advanceTime(0.2);
+    assert.deepEqual(played, ["first", "pending"]);
+    assert.deepEqual(released, ["first", "pending"]);
+    assert.deepEqual(armature._actions, []);
+});
+
+test("actions inserted at the front during playback run without repeats", () => {
+    const armature = makeArmature();
+    const played = [];
+    const released = [];
+    armature._actions.push(queuedAction("first", released), queuedAction("last", released));
+    armature._animation.fadeIn = name => {
+        played.push(name);
+        if (name === "first") {
+            armature._bufferAction(queuedAction("urgent", released), false);
+        }
+    };
+
+    armature.advanceTime(0.1);
+    assert.deepEqual(played, ["first", "urgent", "last"]);
+    assert.deepEqual(released, ["first", "urgent", "last"]);
+    assert.deepEqual(armature._actions, []);
+});
+
+test("actions appended during playback run in the same frame", () => {
+    const armature = makeArmature();
+    const played = [];
+    const released = [];
+    armature._actions.push(queuedAction("first", released));
+    armature._animation.fadeIn = name => {
+        played.push(name);
+        if (name === "first") {
+            armature._bufferAction(queuedAction("added", released), true);
+        }
+    };
+
+    armature.advanceTime(0.1);
+    assert.deepEqual(played, ["first", "added"]);
+    assert.deepEqual(released, ["first", "added"]);
+});
+
+test("a failed returnToPool does not replay the action on the next frame", () => {
+    const armature = makeArmature();
+    const played = [];
+    const released = [];
+    const failed = queuedAction("failed", released);
+    failed.returnToPool = () => {
+        released.push("failed");
+        throw new Error("pool failed");
+    };
+    armature._actions.push(failed, queuedAction("pending", released));
+    armature._animation.fadeIn = name => played.push(name);
+
+    assert.throws(() => armature.advanceTime(0.1), /pool failed/);
+    assert.deepEqual(armature._actions.map(action => action.actionData.name), ["pending"]);
+    armature.advanceTime(0.2);
+    assert.deepEqual(played, ["failed", "pending"]);
+    assert.deepEqual(released, ["failed", "pending"]);
+});
+
+test("non-play actions are still returned to the pool", () => {
+    const armature = makeArmature();
+    const released = [];
+    let faded = 0;
+    armature._animation.fadeIn = () => faded++;
+    armature._actions.push(queuedAction("sound", released, 11));
+
+    armature.advanceTime(0.1);
+    assert.equal(faded, 0);
+    assert.deepEqual(released, ["sound"]);
+    assert.deepEqual(armature._actions, []);
+});

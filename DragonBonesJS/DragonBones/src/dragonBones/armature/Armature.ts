@@ -349,9 +349,11 @@ namespace dragonBones {
                         this._slots[i].update(this._cacheFrameIndex);
                     }
                 }
-                // Do actions.
-                if (this._actions.length > 0) {
-                    for (const action of this._actions) {
+                // Do actions. Consume each entry before invoking animation
+                // callbacks, which may prepend or append more actions.
+                while (this._actions.length > 0) {
+                    const action = this._actions.shift() as EventObject;
+                    try {
                         const actionData = action.actionData;
                         if (actionData !== null) {
                             if (actionData.type === ActionType.Play) {
@@ -376,11 +378,12 @@ namespace dragonBones {
                                 }
                             }
                         }
-
+                    }
+                    finally {
+                        // Even when fadeIn() fails, do not replay this action
+                        // or keep it in the queue until the next frame.
                         action.returnToPool();
                     }
-
-                    this._actions.length = 0;
                 }
 
             }
