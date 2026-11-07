@@ -517,6 +517,7 @@ test("WorldClock.add does not retain a member when its setter throws after assig
 
     assert.throws(() => clock.add(rejected), /after assignment/);
     assert.equal(clock._animatebles.length, 0);
+    assert.equal(rejected.clock, null);
     clock.advanceTime(0.25);
     assert.equal(updates, 0);
 });
@@ -616,4 +617,33 @@ test("WorldClock protects accumulated time with a finite negative timeScale", ()
     clock.advanceTime(0.25);
     assert.equal(clock.time, 0.25);
     assert.deepEqual(child.updates, [-0.25]);
+});
+
+test("WorldClock.add can retry after a setter throws following assignment", () => {
+    const clock = new WorldClock();
+    let fail = true;
+    let updates = 0;
+    const child = {
+        owner: null,
+        get clock() { return this.owner; },
+        set clock(value) {
+            this.owner = value;
+            if (value !== null && fail) {
+                throw new Error("transient attachment failure");
+            }
+        },
+        advanceTime() { updates++; }
+    };
+
+    assert.throws(() => clock.add(child), /transient attachment failure/);
+    assert.equal(child.clock, null);
+    assert.equal(clock._animatebles.length, 0);
+
+    fail = false;
+    clock.add(child);
+    assert.equal(child.clock, clock);
+    clock.advanceTime(0.25);
+    assert.equal(updates, 1);
+    clock.remove(child);
+    assert.equal(child.clock, null);
 });

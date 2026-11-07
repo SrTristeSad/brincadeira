@@ -256,6 +256,17 @@ namespace dragonBones {
                     // Never advance an entry that does not belong to this clock.
                     if (!attached) {
                         this._removeAnimatableReference(value);
+                        // A setter may have changed its owner before throwing.
+                        // Undo the stale back-reference without masking the
+                        // original exception if the cleanup setter also fails.
+                        try {
+                            if (value.clock === this) {
+                                value.clock = null;
+                            }
+                        }
+                        catch (_cleanupError) {
+                            // Preserve the registration error.
+                        }
                     }
                 }
             }
