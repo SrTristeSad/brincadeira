@@ -40,6 +40,24 @@ class TestarMascaraAlfa(unittest.TestCase):
         self.assertEqual(m["fracao_alfa_fora_tolerancia_8"], 0.)
         self.assertTrue(m["limiares_mascara_propostos_atendidos"])
 
+    def test_alfa_parcial_igual(self):
+        a = self.array[:, :, 0].copy()
+        a[a == 255] = 128
+        met = metricas_alfa(a, a.copy())
+        self.assertEqual(met["pixels_alfa_parciais_opengl"], 200000)
+        self.assertEqual(met["pixels_alfa_parciais_vulkan"], 200000)
+        self.assertEqual(met["fracao_alfa_fora_tolerancia_8"], 0.)
+
+    def test_alfa_parcial_diferente_detectado(self):
+        a = self.array[:, :, 0].copy()
+        b = a.copy()
+        a[a == 255] = 128
+        b[b == 255] = 192
+        met = metricas_alfa(a, b)
+        self.assertEqual(met["iou_cobertura_alfa_real"], 1.)
+        self.assertGreater(met["fracao_alfa_fora_tolerancia_8"], 0.)
+        self.assertFalse(met["limiares_mascara_propostos_atendidos"])
+
     def test_deslocamento_muda_iou(self):
         a = self.array[:, :, 0]
         b = np.roll(a, 60, axis=1)

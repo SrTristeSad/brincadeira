@@ -183,13 +183,18 @@ jobs:
           python -m pip install --disable-pip-version-check "Pillow>=10,<13"
           python -m unittest discover -s makehumano/testes \
             -p test_registrar_mascara_paridade_wgpu.py -v
+          python -m unittest discover -s makehumano/testes \
+            -p test_textura_alpha_controle_wgpu.py -v
           python -u makehumano/testes/comparar_mascara_paridade.py \
             --opengl "${RUNNER_TEMP}/phong-referencia-opengl-ci-alpha-api.png" \
             --vulkan "${RUNNER_TEMP}/phong-diffuse-ci-alpha-api.png" \
+            --opengl-parcial "${RUNNER_TEMP}/phong-referencia-opengl-ci-alpha-parcial-api.png" \
+            --vulkan-parcial "${RUNNER_TEMP}/phong-diffuse-ci-alpha-parcial-api.png" \
             --manifesto-opengl "${RUNNER_TEMP}/phong-referencia-opengl-ci.json" \
             --manifesto-vulkan "${RUNNER_TEMP}/phong-diffuse-ci.json" \
             --json "${RUNNER_TEMP}/phong-alfa-api-ci.json" \
-            --diff "${RUNNER_TEMP}/phong-alfa-api-diff-ci.png"
+            --diff "${RUNNER_TEMP}/phong-alfa-api-diff-ci.png" \
+            --diff-parcial "${RUNNER_TEMP}/phong-alfa-parcial-diff-ci.png"
 
       - name: Publicar métricas pareadas (sem homologação)
         if: always()
@@ -200,6 +205,7 @@ jobs:
             ${{ runner.temp }}/phong-pareamento-ci.json
             ${{ runner.temp }}/phong-alfa-api-ci.json
             ${{ runner.temp }}/phong-alfa-api-diff-ci.png
+            ${{ runner.temp }}/phong-alfa-parcial-diff-ci.png
             ${{ runner.temp }}/phong-pareamento-diffs/
           if-no-files-found: warn
 

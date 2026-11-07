@@ -19,6 +19,8 @@ def load(app):
     png_sem_sombras = png.with_name(png.stem + "-shadows-off.png")
     png_so_difusa = png.with_name(png.stem + "-diffuse-only.png")
     png_mascara = png.with_name(png.stem + "-alpha-api.png")
+    png_parcial_rgb = png.with_name(png.stem + "-alpha-parcial-rgb.png")
+    png_parcial_mascara = png.with_name(png.stem + "-alpha-parcial-api.png")
     pasta_testes = os.environ["MAKEHUMANO_HARNESS_TESTES_DIR"]
     if pasta_testes not in sys.path:
         sys.path.insert(0, pasta_testes)
@@ -26,6 +28,7 @@ def load(app):
     from configurar_camera_paridade import fixar_camera, manifesto_camera
     from registrar_geometria_paridade import descrever_geometria
     from registrar_mascara_paridade import registrar_mascara
+    from textura_alpha_controle import construir_textura_alfa_parcial
 
     iniciado = False
 
@@ -106,6 +109,33 @@ def load(app):
                 material.receiveShadows = sombras_original
             # Máscara real do contrato original, NÃO canal alfa inferido do PNG RGB.
             imagem_mascara = mh.renderAlphaMask(1024, 768)
+
+            # Só neste checkout descartável: alpha=128 na textura,
+            # opacity=1 e A2C desligado. Isola semântica da textura.
+            textura_original = material.diffuseTexture
+            opacidade_original = float(material.opacity)
+            transparencia_original = bool(material.transparent)
+            a2c_original = bool(material.alphaToCoverage)
+            config_difusa_original = bool(material.shaderConfig.get("diffuse", False))
+            textura_parcial, metadados_textura = construir_textura_alfa_parcial()
+            try:
+                material.diffuseTexture = textura_parcial
+                material.configureShading(diffuse=True)
+                material.opacity = 1.0
+                material.transparent = True
+                material.alphaToCoverage = False
+                estado_parcial = descrever_material(material)
+                if estado_parcial.get("define_diffuse_ativo") is not True:
+                    raise RuntimeError("OpenGL sem DIFFUSE no controle parcial")
+                imagem_parcial_rgb = mh.renderToBuffer(1024, 768)
+                imagem_parcial_mascara = mh.renderAlphaMask(1024, 768)
+            finally:
+                material.diffuseTexture = textura_original
+                material.configureShading(diffuse=config_difusa_original)
+                material.opacity = opacidade_original
+                material.transparent = transparencia_original
+                material.alphaToCoverage = a2c_original
+
             pixels = np.asarray(imagem.data)
             pixels_sem_especular = np.asarray(imagem_sem_especular.data)
             pixels_sem_sombras = np.asarray(imagem_sem_sombras.data)
@@ -126,6 +156,10 @@ def load(app):
             imagem_sem_sombras.save(str(png_sem_sombras))
             imagem_so_difusa.save(str(png_so_difusa))
             info_mascara = registrar_mascara(imagem_mascara, png_mascara)
+            imagem_parcial_rgb.save(str(png_parcial_rgb))
+            info_mascara_parcial = registrar_mascara(
+                imagem_parcial_mascara, png_parcial_mascara
+            )
             resultado = {
                 "estado": "CAPTURADO",
                 "origem": "MakeHuman upstream OpenGL isolado",
@@ -139,6 +173,14 @@ def load(app):
                 "material_so_difusa": estado_so_difusa,
                 "captura_mascara_api": True,
                 "mascara_alfa": info_mascara,
+                "captura_mascara_parcial_api": True,
+                "mascara_alfa_parcial": info_mascara_parcial,
+                "controle_alfa_parcial": {
+                    "textura": metadados_textura,
+                    "material": estado_parcial,
+                    "sha256_png_rgb": hashlib.sha256(png_parcial_rgb.read_bytes()).hexdigest(),
+                    "arquivo_png_rgb": str(png_parcial_rgb),
+                },
                 "geometria": geometria,
                 "estado_gl_luz": estado_gl_luz,
                 "iluminacao": descrever_iluminacao(app.scene),

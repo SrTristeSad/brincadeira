@@ -31,6 +31,7 @@ def load(app):
     from registrar_geometria_paridade import descrever_geometria
     from compensar_luz_eye_legacy import posicao_mundo_para_luz_eye_legacy
     from registrar_mascara_paridade import registrar_mascara
+    from textura_alpha_controle import construir_textura_alfa_parcial
 
     destino = Path(destino_str)
     png_on = Path(os.environ["MAKEHUMANO_HARNESS_FORMATO_PNG"])
@@ -43,6 +44,8 @@ def load(app):
     png_sint_on = png_on.with_name(png_on.stem + "-sintetico-on.png")
     png_sint_off = png_on.with_name(png_on.stem + "-sintetico-off.png")
     png_mascara = png_on.with_name(png_on.stem + "-alpha-api.png")
+    png_parcial_rgb = png_on.with_name(png_on.stem + "-alpha-parcial-rgb.png")
+    png_parcial_mascara = png_on.with_name(png_on.stem + "-alpha-parcial-api.png")
     observacao = destino.with_name(destino.stem + "-observacao.json")
     iniciado = False
 
@@ -190,6 +193,31 @@ def load(app):
                 # Este teste não gera alpha opaco artificial de um PNG RGB.
                 img_mascara = mh.renderAlphaMask(1024, 768)
 
+                # Mesmo RGBA alpha=128 do upstream. O opacity do material
+                # permanece 1 para isolar a transparência da textura difusa.
+                textura_parcial, metadados_textura = construir_textura_alfa_parcial()
+                opacidade_original = float(material.opacity)
+                transparencia_original = bool(material.transparent)
+                a2c_original = bool(material.alphaToCoverage)
+                config_difusa_original = bool(material.shaderConfig.get("diffuse", False))
+                try:
+                    material.diffuseTexture = textura_parcial
+                    material.configureShading(diffuse=True)
+                    material.opacity = 1.0
+                    material.transparent = True
+                    material.alphaToCoverage = False
+                    estado_parcial = descrever_material(material)
+                    if estado_parcial.get("define_diffuse_ativo") is not True:
+                        raise RuntimeError("Vulkan sem DIFFUSE no controle parcial")
+                    img_parcial_rgb = mh.renderToBuffer(1024, 768)
+                    img_parcial_mascara = mh.renderAlphaMask(1024, 768)
+                finally:
+                    material.diffuseTexture = textura_original
+                    material.configureShading(diffuse=config_difusa_original)
+                    material.opacity = opacidade_original
+                    material.transparent = transparencia_original
+                    material.alphaToCoverage = a2c_original
+
             dados_on, dados_off = np.asarray(img_on.data), np.asarray(img_off.data)
             dados_sem_especular = np.asarray(img_sem_especular.data)
             dados_sem_sombras = np.asarray(img_sem_sombras.data)
@@ -240,6 +268,10 @@ def load(app):
             img_sint_on.save(str(png_sint_on))
             img_sint_off.save(str(png_sint_off))
             info_mascara = registrar_mascara(img_mascara, png_mascara)
+            img_parcial_rgb.save(str(png_parcial_rgb))
+            info_mascara_parcial = registrar_mascara(
+                img_parcial_mascara, png_parcial_mascara
+            )
             evidencia = json.loads(observacao.read_text(encoding="utf-8"))
             evidencia.update({
                 "origem": "GUI Vulkan efemera CI: phong diffuse on/off",
@@ -254,6 +286,14 @@ def load(app):
                 "G_windowHeight": int(G.windowHeight),
                 "captura_mascara_api": True,
                 "mascara_alfa": info_mascara,
+                "captura_mascara_parcial_api": True,
+                "mascara_alfa_parcial": info_mascara_parcial,
+                "controle_alfa_parcial": {
+                    "textura": metadados_textura,
+                    "material": estado_parcial,
+                    "sha256_png_rgb": hashlib.sha256(png_parcial_rgb.read_bytes()).hexdigest(),
+                    "arquivo_png_rgb": str(png_parcial_rgb),
+                },
                 "estado_material_phong_on": estado_on,
                 "estado_material_phong_sem_especular": estado_sem_especular,
                 "estado_material_phong_sem_sombras": estado_sem_sombras,
@@ -327,8 +367,8 @@ def load(app):
                 raise RuntimeError("Matrizes da camera mudaram durante o teste controlado")
             if evidencia["estado"] != "OBSERVADO":
                 raise RuntimeError("Captura real 1024x768 não observada")
-            if len(evidencia["texturas_offscreen_observadas"]) != 10:
-                raise RuntimeError("Esperados dez alvos 1024x768 (incluindo máscara alfa)")
+            if len(evidencia["texturas_offscreen_observadas"]) != 12:
+                raise RuntimeError("Esperados doze alvos 1024x768 (incluindo transparência parcial)")
             destino.parent.mkdir(parents=True, exist_ok=True)
             destino.write_text(
                 json.dumps(evidencia, ensure_ascii=False, indent=2) + "\n",
