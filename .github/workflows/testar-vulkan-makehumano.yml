@@ -139,6 +139,8 @@ jobs:
           python -m py_compile makehumano/testes/capturar_a2c_sintetico_vulkan.py \
             makehumano/testes/auditar_cobertura_a2c_sintetica.py
           python -m py_compile makehumano/testes/capturar_a2c_sintetico_vulkan.py
+          python -m py_compile makehumano/testes/contrato_sobreposicao_depth_sintetica.py \
+            makehumano/testes/capturar_sobreposicao_depth_vulkan.py
           python -m py_compile makehumano/testes/harness_plugin_a2c_vulkan_gui.py
           xvfb-run -a -s "-screen 0 1280x800x24" \
             python -u makehumano/testes/executar_harness_formato_gui.py \
@@ -200,6 +202,7 @@ jobs:
         run: |
           python -m py_compile makehumano/testes/capturar_a2c_sintetico_opengl.py
           python -m py_compile makehumano/testes/auditar_cobertura_a2c_sintetica.py
+          python -m py_compile makehumano/testes/capturar_sobreposicao_depth_opengl.py
           python -m py_compile makehumano/testes/harness_plugin_a2c_opengl_referencia.py \
             makehumano/testes/executar_harness_a2c_opengl_referencia.py
           xvfb-run -a -s "-screen 0 1280x800x24" \
@@ -230,6 +233,18 @@ jobs:
             --json "${RUNNER_TEMP}/phong-a2c-sintetico-gpu-ci.json" \
             --png-msaa "${RUNNER_TEMP}/phong-a2c-aresta-msaa-ci.png" \
             --png-a2c-128 "${RUNNER_TEMP}/phong-a2c-aresta-a2c-ci.png"
+
+      - name: Comparar duas faces com escrita Z e A2C sintéticos GL/Vulkan
+        run: |
+          python -m py_compile makehumano/testes/comparar_sobreposicao_depth_sintetica.py
+          python -m unittest discover -s makehumano/testes \
+            -p test_comparar_sobreposicao_depth_wgpu.py -v
+          python -u makehumano/testes/comparar_sobreposicao_depth_sintetica.py \
+            --opengl "${RUNNER_TEMP}/phong-a2c-opengl-ci.json" \
+            --vulkan "${RUNNER_TEMP}/phong-a2c-vulkan-ci.json" \
+            --json "${RUNNER_TEMP}/phong-a2c-sobreposicao-depth-ci.json" \
+            --png-msaa "${RUNNER_TEMP}/phong-a2c-sobreposicao-msaa-ci.png" \
+            --png-a2c "${RUNNER_TEMP}/phong-a2c-sobreposicao-a2c-ci.png"
 
       - name: Mapear interseção espacial A2C entre OpenGL e Vulkan
         run: |
@@ -294,6 +309,9 @@ jobs:
             ${{ runner.temp }}/phong-a2c-opengl-ci.log
             ${{ runner.temp }}/phong-a2c-backends-ci.json
             ${{ runner.temp }}/phong-a2c-sintetico-gpu-ci.json
+            ${{ runner.temp }}/phong-a2c-sobreposicao-depth-ci.json
+            ${{ runner.temp }}/phong-a2c-sobreposicao-msaa-ci.png
+            ${{ runner.temp }}/phong-a2c-sobreposicao-a2c-ci.png
             ${{ runner.temp }}/phong-a2c-aresta-msaa-ci.png
             ${{ runner.temp }}/phong-a2c-aresta-a2c-ci.png
             ${{ runner.temp }}/phong-a2c-mapa-ci.json
