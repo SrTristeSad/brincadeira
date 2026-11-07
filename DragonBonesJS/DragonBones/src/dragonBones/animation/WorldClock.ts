@@ -82,6 +82,25 @@ namespace dragonBones {
             this._animatebles.length = writeIndex;
             this._needsCompaction = false;
         }
+
+        // Unlink an entry without invoking its clock setter. Also used to
+        // roll back registrations when external setters throw or reject them.
+        private _removeAnimatableReference(value: IAnimatable): boolean {
+            const index = this._animatebles.indexOf(value);
+            if (index < 0) {
+                return false;
+            }
+
+            if (this._advancingDepth > 0) {
+                this._animatebles[index] = null;
+                this._needsCompaction = true;
+            }
+            else {
+                this._animatebles.splice(index, 1);
+            }
+
+            return true;
+        }
         /**
          * - Creating a Worldclock instance. Typically, you do not need to create Worldclock instance.
          * When multiple Worldclock instances are running at different speeds, can achieving some specific animation effects, such as bullet time.
@@ -214,8 +233,21 @@ namespace dragonBones {
                     value.clock.remove(value);
                 }
 
+                // Reserve a slot before calling the setter: WorldClock.clock
+                // can synchronously call add() on this same owner.
                 this._animatebles.push(value);
-                value.clock = this;
+                let attached = false;
+                try {
+                    value.clock = this;
+                    attached = value.clock === this;
+                }
+                finally {
+                    // An external IAnimatable may throw or reject ownership.
+                    // Never advance an entry that does not belong to this clock.
+                    if (!attached) {
+                        this._removeAnimatableReference(value);
+                    }
+                }
             }
         }
         /**
@@ -231,20 +263,8 @@ namespace dragonBones {
          * @language zh_CN
          */
         public remove(value: IAnimatable): void {
-            const index = this._animatebles.indexOf(value);
-            if (index >= 0) {
-                if (this._advancingDepth > 0) {
-                    this._animatebles[index] = null;
-                    this._needsCompaction = true;
-                }
-                else {
-                    // No active frame: release the reference immediately.
-                    this._animatebles.splice(index, 1);
-                }
-
-                if (value.clock === this) {
-                    value.clock = null;
-                }
+            if (this._removeAnimatableReference(value) && value.clock === this) {
+                value.clock = null;
             }
         }
         /**

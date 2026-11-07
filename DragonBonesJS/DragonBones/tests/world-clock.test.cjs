@@ -434,3 +434,89 @@ test("WorldClock.clear continues releasing all ordinary members", () => {
     assert.equal(second.clock, null);
     assert.equal(clock._animatebles.length, 0);
 });
+
+test("WorldClock.add rolls back members whose clock setter throws", () => {
+    const clock = new WorldClock();
+    let updates = 0;
+    const rejected = {
+        owner: null,
+        get clock() { return this.owner; },
+        set clock(value) {
+            if (value !== null) {
+                throw new Error("cannot attach");
+            }
+            this.owner = null;
+        },
+        advanceTime() { updates++; }
+    };
+
+    assert.throws(() => clock.add(rejected), /cannot attach/);
+    assert.equal(clock._animatebles.length, 0);
+    clock.advanceTime(0.2);
+    assert.equal(updates, 0);
+});
+
+test("WorldClock.add does not track members that refuse ownership", () => {
+    const clock = new WorldClock();
+    let updates = 0;
+    const refused = {
+        get clock() { return null; },
+        set clock(value) { /* Ignore rejected ownership. */ },
+        advanceTime() { updates++; }
+    };
+
+    clock.add(refused);
+    assert.equal(clock._animatebles.length, 0);
+    clock.advanceTime(0.5);
+    assert.equal(updates, 0);
+});
+
+test("WorldClock.add rolls back failed registrations during advanceTime", () => {
+    const clock = new WorldClock();
+    let updates = 0;
+    let attempt = true;
+    const rejected = {
+        get clock() { return null; },
+        set clock(value) {
+            if (value !== null) {
+                throw new Error("failed during frame");
+            }
+        },
+        advanceTime() { updates++; }
+    };
+    const trigger = {
+        clock: null,
+        advanceTime() {
+            if (attempt) {
+                attempt = false;
+                clock.add(rejected);
+            }
+        }
+    };
+    clock.add(trigger);
+    assert.throws(() => clock.advanceTime(0.1), /failed during frame/);
+    assert.deepEqual(clock._animatebles, [trigger]);
+    clock.advanceTime(0.2);
+    assert.equal(updates, 0);
+});
+
+test("WorldClock.add does not retain a member when its setter throws after assignment", () => {
+    const clock = new WorldClock();
+    let updates = 0;
+    const rejected = {
+        owner: null,
+        get clock() { return this.owner; },
+        set clock(value) {
+            this.owner = value;
+            if (value !== null) {
+                throw new Error("after assignment");
+            }
+        },
+        advanceTime() { updates++; }
+    };
+
+    assert.throws(() => clock.add(rejected), /after assignment/);
+    assert.equal(clock._animatebles.length, 0);
+    clock.advanceTime(0.25);
+    assert.equal(updates, 0);
+});
