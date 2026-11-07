@@ -28,7 +28,9 @@ def registrar_rgb(rgb):
     if a.dtype != np.uint8 or a.shape != (64, 64, 3):
         raise ValueError("RGB sintético exige uint8 64×64×3")
     rgb = np.ascontiguousarray(a)
-    valores, contagens = np.unique(rgb[:, :, 0], return_counts=True)
+    # Upstream MakeHuman pode substituir numpy.unique por uma versão
+    # sem return_counts; usar bincount evita a incompatibilidade no legado.
+    contagens = np.bincount(rgb[:, :, 0].ravel(), minlength=256)
     if not np.array_equal(rgb[:, :, 0], rgb[:, :, 1]) or not np.array_equal(
         rgb[:, :, 0], rgb[:, :, 2]
     ):
@@ -36,7 +38,7 @@ def registrar_rgb(rgb):
     return {
         "sha256_rgb": hashlib.sha256(rgb.tobytes()).hexdigest(),
         "histograma_r": {
-            str(int(v)): int(n) for v, n in zip(valores, contagens)
+            str(i): int(n) for i, n in enumerate(contagens) if n
         },
         "media_r": float(np.mean(rgb[:, :, 0])),
         "pixels": int(rgb.shape[0] * rgb.shape[1]),
