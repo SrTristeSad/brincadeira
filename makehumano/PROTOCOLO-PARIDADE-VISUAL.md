@@ -896,3 +896,46 @@ A união da borda parcialmente coberta, calculada a partir da imagem A2C OFF/Z O
 **Interpretação e limite:** na geometria sintética de **duas faces**, OpenGL e Vulkan executaram de forma consistente a habilitação de escrita Z, a preservação de samples em Z ON e a inversão de ordem. **Não foi encontrada divergência adicional de profundidade neste controle**, além da cobertura de borda que já existia com MSAA puro. Isso **não resolve** o efeito GL-only de 478 pixels na malha do humano (seção 28), que envolve muitos triângulos, iluminação, possíveis faces coplanares e ordenação distinta. Os PNGs são imagens **resolvidas**; não fornecem sample masks individuais, nem demonstram conformidade normativa de uma implementação. Não alterar culling, depth bias, sample positions, buffers ou sombras em produção com base nesses dados isolados.
 
 **Escopo:** novos arquivos `contrato_sobreposicao_depth_sintetica.py`, `capturar_sobreposicao_depth_opengl.py`, `capturar_sobreposicao_depth_vulkan.py`, `comparar_sobreposicao_depth_sintetica.py`, `test_comparar_sobreposicao_depth_wgpu.py`, integrações mínimas nos dois harnesses e workflow, mais esta seção. **Nenhum arquivo de `makehumano/codigo/` modificado; PR #11 DRAFT, sem merge, `main` preservada.** Próximo diagnóstico sugerido: **triângulos intersectantes/coplanares ou auto-overdraw**, com ordem e depth compare definidos, antes de qualquer intervenção no renderer real.
+
+## 37. Faces coincidentes e quase coincidentes: LESS/LEQUAL, Z-write, ordem e A2C
+
+**Objetivo:** a seção 36 demonstrou que duas superfícies com profundidades bem separadas responderam corretamente à escrita Z em OpenGL e Vulkan; o problema ainda não explicado no personagem é que alterar somente a escrita Z modificava **478 pixels >8 no OpenGL**, contra **zero no Vulkan** (seções 29–30). O teste anterior de duas superfícies afastadas não reproduzia auto-sobreposição, faces coplanares ou desníveis mínimos. Esta etapa testa condições de empate e desnível de profundidade em um cenário geométrico muito restrito e sem alterar o renderizador de produção.
+
+**Inspeção do renderer real:** o MakeHuman OpenGL upstream pinado em `a8bc2d54ff0ac92e78ff71431b1023eda42bf482`, `makehuman/lib/glmodule.py`, chama explicitamente **`glDepthFunc(GL_LEQUAL)`** ao renderizar cada objeto (aprox. linha 430). A função `configuracao_raster_vulkan` da aplicação em `makehumano/codigo/makehuman/lib/vulkan_scene.py` escolhe **`"less-equal"`** no pipeline normal de malhas (aprox. linha 318); `always` é reservado a casos `depthless`. Assim, **não se comprovou uma diferença LESS versus LEQUAL no produto**. A variação dessas funções no probe é deliberada, para aferir sua semântica sob condições controladas.
+
+### 37.1 Instrumentação de teste
+
+- `testes/contrato_coplanares_depth_sintetica.py`: 15 casos com dois triângulos **de exatamente mesmos vértices** (`VERTICES_ARESTA`, seção 34), cores planas **vermelha e azul**, mesmo depth normalizado **0,5**, e controles em que a face vermelha se aproxima do observador por **`2^-18 = 0,000003814697265625`**. Alterna **`LESS` / `LEQUAL`**, A2C vermelho com alfa128 ou sem A2C, escrita Z da face vermelha ON/OFF, ordem de desenho invertida e repetição do controle A2C. O fundo externo aos triângulos é preto. A saída é linear `rgba8unorm` **64×64**, MSAA **4×**, sem Phong, textura, sombras ou blending.
+- `testes/capturar_coplanares_depth_opengl.py`: contexto OpenGL upstream, GLSL 120, **FBO RGBA8 + depth24** com quatro amostras comprovadas por `GL_SAMPLES`; `glDepthFunc(GL_LESS/GL_LEQUAL)`; converte depth normalizado para coordenadas clip OpenGL com `2*z-1`; resolve por `glBlitFramebuffer`. O harness guarda `glGetIntegerv(GL_DEPTH_FUNC)`, `glGetBooleanv(GL_DEPTH_WRITEMASK)`, A2C e blend no momento de cada draw. Os estados globais são restaurados e os recursos de teste liberados ao final.
+- `testes/capturar_coplanares_depth_vulkan.py`: pipelines temporários WGPU com `depth24plus`, `depth_compare` solicitado, `depth_write_enabled` por face, A2C controlado e `sample_count=4`; resolve e readback RGBA8. O manifesto identifica **estados de criação dos pipelines**, sem alegar leitura direta do estado interno da GPU.
+- `testes/comparar_coplanares_depth_sintetica.py`: relê os **30 PNGs** (15 por backend), verifica SHA-256 do PNG e dos pixels RGB, valida os rastros e os centros de cor esperados, repetições idênticas e imagens iguais entre ordens quando a face vermelha está efetivamente mais próxima. Calcula as diferenças RGB GL/VK, a distribuição na borda MSAA e os contrastes dentro de cada backend. `testes/test_comparar_coplanares_depth_wgpu.py` inclui testes CPU para estados adulterados, diferenças de Z, hashes falsos, cor de centro incorreta e repetição divergente.
+
+**[CI 42400454611](https://github.com/SrTristeSad/brincadeira/actions/runs/42400454611): os dois jobs terminaram `success`.** Os artefatos `phong-a2c-opengl-pareado-ci` (ID **13585138247**) e `phong-a2c-vulkan-ci` (ID **13585013652**) trazem as capturas e os manifestos. O ZIP derivado `MakeHumano-Evidencias-Coplanares-GL-Vulkan-42400454611.zip` inclui os **30 PNGs conferidos por hash**, relatório `phong-a2c-coplanares-ci.json` e os mapas `phong-a2c-coplanares-a2c-ci.png` / `phong-a2c-coplanares-perto-ci.png`. O arquivo ZIP foi verificado integralmente.
+
+### 37.2 Resultados de GPU
+
+| Controle (mesmas duas faces; 4× MSAA) | Cor central em GL e Vulkan | Pixels RGB diferentes GL × Vulkan | Divergências fora da borda |
+| --- | --- | ---: | ---: |
+| Z igual, **LESS**, A2C OFF, vermelho primeiro | Vermelho | **58** | **0** |
+| Z igual, **LESS**, A2C OFF, azul primeiro | Azul | **58** | **0** |
+| Z igual, **LEQUAL**, A2C OFF, vermelho primeiro | Azul | **58** | **0** |
+| Z igual, **LEQUAL**, A2C OFF, azul primeiro | Vermelho | **58** | **0** |
+| Z igual, **LESS**, escrita Z vermelha OFF, vermelho primeiro | Azul | **58** | **0** |
+| Z igual, **LESS**, A2C ON/alfa128, vermelho primeiro | Misto vermelho/azul | **123** | **0** |
+| Z igual, **LESS**, A2C ON/alfa128, azul primeiro | Azul | **58** | **0** |
+| Z igual, **LEQUAL**, A2C ON, vermelho primeiro | Azul | **58** | **0** |
+| Z igual, **LEQUAL**, A2C ON, azul primeiro | Misto vermelho/azul | **123** | **0** |
+| Z próximo `2^-18`, **LESS**, A2C OFF, qualquer ordem | Vermelho | **58** | **0** |
+| Z próximo `2^-18`, **LESS**, A2C ON, qualquer ordem | Misto vermelho/azul | **123** | **0** |
+
+O caso A2C com `LESS` e vermelho primeiro repetido no final foi **identicamente reproduzido nos dois backends**, sem diferença RGB no respectivo backend. O delta máximo de um canal GL/VK é **64** quando a imagem final tem uma cor sólida na face e **128** quando preserva a mistura por A2C. Não houve divergência GL/VK fora da borda no conjunto de 15 controles.
+
+**A comparação depth realmente funciona:** ao trocar `LESS` por `LEQUAL`, inverter a ordem em empate de Z ou desligar escrita Z no primeiro draw, a região interna muda de cor em **1.544 pixels no OpenGL** e **1.541 no Vulkan** neste ambiente. Ao tornar a face vermelha `2^-18` mais próxima e desenhá-la depois da azul, essa diferença interna também se manifesta (**1.544/1.541 pixels**, respectivamente). Com A2C ligado na vermelha, esse contraste de coplanar para quase-coplanar altera **1.515 pixels no GL** e **1.509 no Vulkan**. Logo, o probe **é sensível** ao estado de profundidade e não mascara artificialmente diferenças; os dois backends respondem qualitativamente do mesmo modo.
+
+A discrepância absoluta entre backends continua igual à de MSAA geométrico observada nos controles anteriores: **58 pixels de borda com A2C OFF e 123 pixels de borda quando as duas faces coincidentes preservam vermelho e azul sob A2C ON**. Um valor de 123, diferente dos 98 do fundo azul fullscreen na seção 36, decorre da configuração geométrica distinta: neste experimento o segundo triângulo não preenche a tela inteira.
+
+### 37.3 Conclusões e próximas hipóteses
+
+O experimento confirmou o comportamento de `LESS`, `LEQUAL`, escrita Z, ordem de desenho e pequeno desnível em ambos os backends, **sem revelar uma diferença nova de profundidade no interior da imagem**. Portanto, esses controles não reproduzem os 478 pixels de efeito de escrita Z exclusivos da malha humana no OpenGL. O problema pode depender de **triângulos que se cruzam com profundidade variável, ordem de primitivas, variação de UV/Phong no mesmo objeto ou diferenças de geometria/projeção dos caminhos de desenho**. Não há ainda prova suficiente para modificar `depth_compare` nem introduzir `depth_bias` ou offsets de vértice no renderizador de produção.
+
+**Próxima investigação sugerida:** usar **duas faces que se cruzam em profundidade** (interpenetração) com gradiente Z por vértice, diferentes cores RGB e ordem controlada; isso introduz competição por amostra ao longo de uma faixa interna mesmo com geometria simples. Em paralelo, instrumentar o estado de comparação Z do draw real no harness do personagem. Qualquer mudança de produção depende de evidência mais específica, não de um ajuste visual para coincidir com o driver da CI. Esta etapa modificou somente `makehumano/testes/`, o workflow e esta documentação; **PR #11 DRAFT, sem merge, `main` preservada**.
