@@ -233,13 +233,21 @@ namespace dragonBones {
          * @internal
          */
         public cacheFrames(frameRate: number): void {
-            if (this.cacheFrameRate > 0.0) { // TODO clear cache.
+            if (this.cacheFrameRate > 0.0 || !(frameRate > 0.0) ||
+                !isFinite(frameRate) || !isFinite(this.scale) ||
+                !(this.duration >= 0.0) || !isFinite(this.duration)) {
                 return;
             }
 
-            this.cacheFrameRate = Math.max(Math.ceil(frameRate * this.scale), 1.0);
-            const cacheFrameCount = Math.ceil(this.cacheFrameRate * this.duration) + 1; // Cache one more frame.
+            const cacheFrameRate = Math.max(Math.ceil(frameRate * this.scale), 1.0);
+            const cacheFrameCount = Math.ceil(cacheFrameRate * this.duration) + 1; // Cache one more frame.
+            // Invalid animation metadata must not create an impossible array
+            // or mark the cache as initialized before allocation succeeds.
+            if (!isFinite(cacheFrameRate) || !isFinite(cacheFrameCount) || cacheFrameCount > 4294967295) {
+                return;
+            }
 
+            this.cacheFrameRate = cacheFrameRate;
             this.cachedFrames.length = cacheFrameCount;
             // Initialize every frame flag, not the parameter count of cacheFrames().
             for (let i = 0, l = this.cachedFrames.length; i < l; ++i) {

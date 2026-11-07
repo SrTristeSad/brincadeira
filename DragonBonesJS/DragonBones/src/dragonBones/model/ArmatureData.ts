@@ -279,7 +279,9 @@ namespace dragonBones {
          * @internal
          */
         public cacheFrames(frameRate: number): void {
-            if (this.cacheFrameRate > 0) { // TODO clear cache.
+            // A nonpositive or nonfinite rate must not initialize the
+            // armature and its animations with different cache rates.
+            if (this.cacheFrameRate > 0 || !(frameRate > 0) || !isFinite(frameRate)) {
                 return;
             }
 
