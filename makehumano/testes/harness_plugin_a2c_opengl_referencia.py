@@ -91,9 +91,17 @@ def load(app):
                 raise RuntimeError("Textura DIFFUSE não ficou ativa no corpo OpenGL")
             registros = {}
             imagens = {}
+            texturas_varredura = {128: (texture_path, textura_meta)}
 
             def captar(nome, *, amostras, transparente, a2c,
-                       sem_blend=False, escrever_z=False):
+                       sem_blend=False, escrever_z=False, alfa_textura=128):
+                if alfa_textura not in texturas_varredura:
+                    texturas_varredura[alfa_textura] = salvar_textura_alfa_parcial(
+                        destino.with_name(
+                            destino.stem + "-a2c-textura-a" + str(alfa_textura) + ".png"
+                        ), alfa=alfa_textura,
+                    )
+                material.diffuseTexture = texturas_varredura[alfa_textura][0]
                 material.transparent = transparente
                 material.alphaToCoverage = a2c
                 glmodule.have_multisample = amostras == 4
@@ -248,6 +256,8 @@ def load(app):
                     "escrita_z_observada": bool(depth_esperado),
                     "material_transparent": bool(transparente),
                     "opacity": float(material.opacity),
+                    "alfa_textura": int(alfa_textura),
+                    "sha256_textura_png": texturas_varredura[alfa_textura][1]["sha256_png"],
                     "nTransparentPrimitives": int(corpo.nTransparentPrimitives),
                     "a2c_elegivel": expected,
                     "pipeline_a2c_observado": observado,
@@ -283,6 +293,13 @@ def load(app):
                     captar("4x_sem_a2c_sem_blend_com_z",
                            amostras=4, transparente=True, a2c=False,
                            sem_blend=True, escrever_z=True)
+                    for alfa in (64, 192):
+                        capturar_base = "4x_a%03d_sem_a2c_sem_blend_com_z" % alfa
+                        capturar_a2c = "4x_a%03d_com_a2c" % alfa
+                        captar(capturar_base, amostras=4, transparente=True, a2c=False,
+                               sem_blend=True, escrever_z=True, alfa_textura=alfa)
+                        captar(capturar_a2c, amostras=4, transparente=True, a2c=True,
+                               alfa_textura=alfa)
 
             comparacoes = {}
             if suporte["testavel"]:
@@ -296,6 +313,10 @@ def load(app):
                      "4x_sem_a2c_sem_blend_com_z"),
                     ("somente_a2c_4x", "4x_sem_a2c_sem_blend_com_z",
                      "4x_com_a2c"),
+                    ("somente_a2c_4x_alfa64", "4x_a064_sem_a2c_sem_blend_com_z",
+                     "4x_a064_com_a2c"),
+                    ("somente_a2c_4x_alfa192", "4x_a192_sem_a2c_sem_blend_com_z",
+                     "4x_a192_com_a2c"),
                 ):
                     comparacoes[nome] = comparar_rgb(imagens[a], imagens[b])
             saida = {
@@ -305,6 +326,10 @@ def load(app):
                 "sha_upstream_esperado": "a8bc2d54ff0ac92e78ff71431b1023eda42bf482",
                 "camera": manifesto_camera(camera),
                 "textura_controle": textura_meta,
+                "texturas_varredura": {
+                    str(alfa): meta for alfa, (_path, meta) in
+                    sorted(texturas_varredura.items())
+                },
                 "dimensoes_imagem": [1024, 768],
                 "suporte_msaa": suporte,
                 "controles": registros,
