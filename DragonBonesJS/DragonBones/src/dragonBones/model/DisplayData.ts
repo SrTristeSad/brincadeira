@@ -39,7 +39,7 @@ namespace dragonBones {
             this.isShared = false;
             this.inheritDeform = false;
             this.offset = 0;
-            this.data = null as any;
+            this.data = null!;
             this.weight = null;
         }
 
@@ -73,7 +73,7 @@ namespace dragonBones {
             this.name = "";
             this.path = "";
             this.transform.identity();
-            this.parent = null as any; //
+            this.parent = null!; //
         }
     }
     /**

@@ -154,7 +154,7 @@ namespace dragonBones {
             this.rotated = false;
             this.name = "";
             this.region.clear();
-            this.parent = null as any; //
+            this.parent = null!; //
             this.frame = null;
         }
 

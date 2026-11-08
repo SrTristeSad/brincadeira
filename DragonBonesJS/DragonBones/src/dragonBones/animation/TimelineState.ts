@@ -869,7 +869,7 @@ namespace dragonBones {
         protected _onClear(): void {
             super._onClear();
 
-            this.displayFrame = null as any;
+            this.displayFrame = null!;
 
             this._deformCount = 0;
             this._deformOffset = 0;

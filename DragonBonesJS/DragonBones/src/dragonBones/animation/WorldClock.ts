@@ -134,7 +134,7 @@ namespace dragonBones {
                 passedTime = 0.0;
             }
 
-            const currentTime = Date.now() * 0.001;
+            const currentTime = (typeof Date.now === "function" ? Date.now() : new Date().getTime()) * 0.001;
 
             // Negative finite values request automatic elapsed time.
             // -Infinity is invalid and must not trigger an automatic update.

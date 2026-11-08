@@ -101,8 +101,8 @@ namespace dragonBones {
          * @internal
          */
         public _armatureData: ArmatureData;
-        private _animation: Animation = null as any; // Initial value.
-        private _proxy: IArmatureProxy = null as any; // Initial value.
+        private _animation: Animation = null!; // Initial value.
+        private _proxy: IArmatureProxy = null!; // Initial value.
         private _display: any;
         /**
          * @internal
@@ -169,13 +169,13 @@ namespace dragonBones {
             this._slots.length = 0;
             this._constraints.length = 0;
             this._actions.length = 0;
-            this._armatureData = null as any; //
-            this._animation = null as any; //
-            this._proxy = null as any; //
+            this._armatureData = null!; //
+            this._animation = null!; //
+            this._proxy = null!; //
             this._display = null;
             this._replaceTextureAtlasData = null;
             this._replacedTexture = null;
-            this._dragonBones = null as any; //
+            this._dragonBones = null!; //
             this._clock = null;
             this._parent = null;
         }

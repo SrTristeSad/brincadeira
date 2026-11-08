@@ -227,7 +227,7 @@ namespace dragonBones {
             // this.slotCachedFrameIndices.clear();
             this.actionTimeline = null;
             this.zOrderTimeline = null;
-            this.parent = null as any; //
+            this.parent = null!; //
         }
         /**
          * @internal

@@ -62,7 +62,7 @@ namespace dragonBones {
         private readonly _animations: Map<AnimationData> = Object.create(null);
         private readonly _blendStates: Map<Map<BlendState>> = Object.create(null);
         private _armature: Armature;
-        private _animationConfig: AnimationConfig = null as any; // Initial value.
+        private _animationConfig: AnimationConfig = null!; // Initial value.
         private _lastAnimationState: AnimationState | null;
 
         protected _onClear(): void {
@@ -94,8 +94,8 @@ namespace dragonBones {
             this._animationNames.length = 0;
             this._animationStates.length = 0;
             //this._animations.clear();
-            this._armature = null as any; //
-            this._animationConfig = null as any; //
+            this._armature = null!; //
+            this._animationConfig = null!; //
             this._lastAnimationState = null;
         }
 
